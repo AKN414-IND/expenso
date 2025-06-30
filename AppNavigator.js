@@ -8,7 +8,6 @@ import { useAuth } from "./context/AuthContext";
 import OnboardingScreen from './screens/OnboardingScreen';
 import AuthScreen from "./screens/AuthScreen";
 import DashboardScreen from "./screens/DashboardScreen";
-import ManualExpenseScreen from "./screens/ManualExpenseScreen";
 import AIExpenseScreen from './screens/AIExpenseScreen';
 import AllExpenses from './screens/AllExpenses';
 import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
@@ -73,8 +72,8 @@ export default function AppNavigator() {
         ) : session ? (
           <>
             <Stack.Screen name="Dashboard" component={DashboardScreen} />
-            <Stack.Screen name="AddExpense" component={ManualExpenseScreen} />
-            <Stack.Screen name="AIExpense" component={AIExpenseScreen} />
+            
+            <Stack.Screen name="AddExpense" component={AIExpenseScreen} />
             <Stack.Screen name="AllExpenses" component={AllExpenses} />
           </>
         ) : (
