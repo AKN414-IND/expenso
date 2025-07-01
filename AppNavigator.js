@@ -11,6 +11,7 @@ import DashboardScreen from "./screens/DashboardScreen";
 import AIExpenseScreen from './screens/AIExpenseScreen';
 import AllExpenses from './screens/AllExpenses';
 import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
+import BudgetScreen from './screens/BudgetScreen';
 
 import Toast from 'react-native-toast-message';
 
@@ -75,6 +76,8 @@ export default function AppNavigator() {
             
             <Stack.Screen name="AddExpense" component={AIExpenseScreen} />
             <Stack.Screen name="AllExpenses" component={AllExpenses} />
+            
+            <Stack.Screen name="BudgetScreen" component={BudgetScreen} />
           </>
         ) : (
           <>
