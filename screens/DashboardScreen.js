@@ -18,9 +18,84 @@ import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
 import { PieChart } from "react-native-chart-kit";
 import Alert from "../components/Alert";
-import { LogOut, Trash2 } from "lucide-react-native";
+import { LogOut, Trash2, User } from "lucide-react-native";
 
 const screenWidth = Dimensions.get("window").width;
+
+// Avatar component with initials fallback
+const Avatar = ({ name, email, size = 50, style, onPress }) => {
+  const getInitials = (name, email) => {
+    if (name && name.trim()) {
+      return name
+        .trim()
+        .split(" ")
+        .map((n) => n[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2);
+    }
+    if (email) {
+      return email.charAt(0).toUpperCase();
+    }
+    return "U";
+  };
+
+  const getAvatarColor = (text) => {
+    const colors = [
+      "#FF6B6B",
+      "#4ECDC4",
+      "#45B7D1",
+      "#96CEB4",
+      "#FECA57",
+      "#FF9FF3",
+      "#54A0FF",
+      "#5F27CD",
+    ];
+    let hash = 0;
+    for (let i = 0; i < text.length; i++) {
+      hash = text.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return colors[Math.abs(hash) % colors.length];
+  };
+
+  const initials = getInitials(name, email);
+  const backgroundColor = getAvatarColor(name || email || "User");
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      style={[
+        {
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          backgroundColor,
+          alignItems: "center",
+          justifyContent: "center",
+          elevation: 4,
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 4,
+          borderWidth: 2,
+          borderColor: "white",
+        },
+        style,
+      ]}
+    >
+      <Text
+        style={{
+          color: "white",
+          fontSize: size * 0.4,
+          fontWeight: "bold",
+          letterSpacing: 1,
+        }}
+      >
+        {initials}
+      </Text>
+    </TouchableOpacity>
+  );
+};
 
 const EXPENSE_CATEGORIES = [
   { name: "Food & Dining", icon: "🍽️", color: "#FF6B6B" },
@@ -48,14 +123,16 @@ const CHART_COLORS = [
 const BudgetBar = ({ label, spent, budget, color, icon }) => {
   const percent = budget > 0 ? Math.min((spent / budget) * 100, 100) : 0;
   const isOverBudget = spent > budget;
-  
+
   return (
     <View style={{ marginBottom: 16 }}>
       <View
         style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}
       >
         {icon && <Text style={{ marginRight: 8, fontSize: 16 }}>{icon}</Text>}
-        <Text style={{ fontWeight: "600", color: "#222", flex: 1, fontSize: 16 }}>
+        <Text
+          style={{ fontWeight: "600", color: "#222", flex: 1, fontSize: 16 }}
+        >
           {label}
         </Text>
         <Text
@@ -102,6 +179,7 @@ export default function DashboardScreen({ navigation }) {
   const { session } = useAuth();
   const [expenses, setExpenses] = useState([]);
   const [budgets, setBudgets] = useState([]);
+  const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
@@ -123,8 +201,46 @@ export default function DashboardScreen({ navigation }) {
     if (session && session.user) {
       fetchExpenses();
       fetchBudgets();
+      fetchProfile();
     }
   }, [session]);
+
+  const fetchProfile = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", session.user.id)
+        .single();
+
+      if (error && error.code !== "PGRST116") {
+        console.error("Error fetching profile:", error);
+      } else if (data) {
+        setProfile(data);
+      } else {
+        // Create initial profile if it doesn't exist
+        const { data: newProfile, error: createError } = await supabase
+          .from("profiles")
+          .insert([
+            {
+              id: session.user.id,
+              full_name: session.user.user_metadata?.full_name || "",
+              username: session.user.email?.split("@")[0] || "",
+              email: session.user.email,
+              created_at: new Date().toISOString(),
+            },
+          ])
+          .select()
+          .single();
+
+        if (!createError && newProfile) {
+          setProfile(newProfile);
+        }
+      }
+    } catch (err) {
+      console.error("Exception fetching profile:", err);
+    }
+  };
 
   const fetchExpenses = async () => {
     try {
@@ -356,12 +472,23 @@ export default function DashboardScreen({ navigation }) {
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.welcomeText}>Welcome back!</Text>
-          <TouchableOpacity
-            style={styles.logoutButton}
-            onPress={() => setShowLogoutAlert(true)}
-          >
-            <Text style={styles.logoutButtonText}>🚪 Logout</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+            {/* Profile Avatar */}
+            <Avatar
+              name={profile?.full_name}
+              email={profile?.email || session?.user?.email}
+              size={44}
+              onPress={() => navigation.navigate("Profile", { profile })}
+              style={{ marginRight: 8 }}
+            />
+            {/* Logout Button */}
+            <TouchableOpacity
+              style={styles.logoutButton}
+              onPress={() => setShowLogoutAlert(true)}
+            >
+              <Text style={styles.logoutButtonText}>🚪 Logout</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={styles.StatisticsContainer}>
@@ -434,7 +561,9 @@ export default function DashboardScreen({ navigation }) {
         {budgets.length > 0 && (
           <View style={{ paddingHorizontal: 20, marginTop: 24 }}>
             <View style={styles.sectionHeader}>
-              <Text style={{ fontWeight: "700", fontSize: 20, marginBottom: 10 }}>
+              <Text
+                style={{ fontWeight: "700", fontSize: 20, marginBottom: 10 }}
+              >
                 Budget Progress
               </Text>
               <TouchableOpacity
@@ -454,7 +583,7 @@ export default function DashboardScreen({ navigation }) {
                 icon="💰"
               />
             )}
-            
+
             {/* Per-category Budget Bars */}
             {budgetProgress.map((item) => (
               <BudgetBar
@@ -473,7 +602,9 @@ export default function DashboardScreen({ navigation }) {
         {budgets.length === 0 && (
           <View style={{ paddingHorizontal: 20, marginTop: 24 }}>
             <View style={styles.sectionHeader}>
-              <Text style={{ fontWeight: "700", fontSize: 20, marginBottom: 10 }}>
+              <Text
+                style={{ fontWeight: "700", fontSize: 20, marginBottom: 10 }}
+              >
                 Budget Progress
               </Text>
               <TouchableOpacity
@@ -598,7 +729,7 @@ export default function DashboardScreen({ navigation }) {
           </KeyboardAvoidingView>
         </Modal>
       </ScrollView>
-      
+
       {/* Taskbar */}
       <View style={styles.taskbarContainer}>
         <View style={styles.taskbar}>
@@ -631,7 +762,7 @@ export default function DashboardScreen({ navigation }) {
           </TouchableOpacity>
         </View>
       </View>
-      
+
       {/* Alerts  */}
       <Alert
         open={showDeleteAlert}
@@ -1057,9 +1188,5 @@ const styles = StyleSheet.create({
   actionButton2: {
     padding: 10,
 
-    // borderRadius: 12,
-    // backgroundColor: "#f8fafc",
-    // elevation: 2,
-    // marginRight: 8,
   },
 });
