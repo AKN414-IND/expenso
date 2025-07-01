@@ -14,7 +14,7 @@ const Alert = ({
   cancelText = "Cancel",
   icon = <LogOut color="#fff" size={40} />, // Pass an icon element (or null)
   iconBg = "#6366f1", // Pass background color for icon
-  confirmColor = "#6366f1", // Confirm button color
+  confirmColor = "#ef4444", // Confirm button color
   cancelColor = "#f1f5f9",  // Cancel button color
   confirmTextColor = "#fff", // Confirm text color
   cancelTextColor = "#334155", // Cancel text color
