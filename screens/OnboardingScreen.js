@@ -11,6 +11,7 @@ import {
   BackHandler,
   Alert,
   ScrollView,
+  Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,35 +20,32 @@ import { useFocusEffect } from '@react-navigation/native';
 const { width, height } = Dimensions.get('window');
 
 const onboardingData = [
-    {
-      id: 1,
-      icon: 'camera',
-      title: 'Scan Receipts with AI',
-      description: 'Upload or snap a bill. Our AI extracts merchant, amount, date, and more—automatically.',
-      gradient: ['#667eea', '#764ba2'],
-    },
-    {
-      id: 2,
-      icon: 'pie-chart',
-      title: 'Smart Categorization',
-      description: 'Expenses are auto-tagged into categories like Food, Travel, and Utilities—no effort needed.',
-      gradient: ['#764ba2', '#f093fb'],
-    },
-    {
-      id: 3,
-      icon: 'bar-chart',
-      title: 'Visual Spending Insights',
-      description: 'Track your budget, view monthly trends, and get breakdowns with clean charts.',
-      gradient: ['#48bb78', '#38a169'],
-    },
-    {
-      id: 4,
-      icon: 'lock-closed',
-      title: 'Private & Secure',
-      description: 'Your data is stored securely with Supabase. You control your information—always.',
-      gradient: ['#ed8936', '#dd6b20'],
-    },
-  ];
+  {
+    id: 1,
+    title: 'Meet Your Smart Money Sidekick',
+    description: 'Ever wished you had a clever buddy to handle your bills? Snap a picture of any receipt, and your AI sidekick will read, extract, and organize all your spending details—instantly! No more manual entry, just more time for you.',
+    image: require('../assets/onboarding1.png'), // Generate with prompt below
+  },
+  {
+    id: 2,
+    title: 'Your Personal Budget Planner',
+    description: 'Let’s make budgets easy! Set simple spending limits for things you care about—like food, shopping, and fun. Your AI assistant will give you a nudge before you overspend, so you’re always in control.',
+    image: require('../assets/onboarding2.png'), // Generate with prompt below
+  },
+  {
+    id: 3,
+    title: 'Say Goodbye to Late Fees',
+    description: 'Life gets busy, but your assistant’s got your back! Add any bill or subscription, and get playful reminders before payment dates. No more “oops, I forgot!” moments.',
+    image: require('../assets/onboarding3.png'), // Generate with prompt below
+  },
+  {
+    id: 4,
+    title: 'Your Money Journey, Visualized',
+    description: 'Get beautiful, easy-to-read reports that show exactly where your money goes. Spot trends, download summaries, and even share insights with friends or family—all in a tap.',
+    image: require('../assets/onboarding4.png'), // Generate with prompt below
+  },
+];
+
   
 export default function OnboardingScreen({ onFinish }) {
   const [activeSlide, setActiveSlide] = useState(0);
@@ -132,113 +130,96 @@ export default function OnboardingScreen({ onFinish }) {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#667eea" />
-      <LinearGradient
-        colors={['#667eea', '#764ba2']}
-        style={styles.gradient}
-      >
-        <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
-          {/* Header */}
-          <View style={styles.header}>
-            <Text style={styles.appName}>ExpenseTracker</Text>
-            <TouchableOpacity onPress={handleSkip} style={styles.skipButton}>
-              <Text style={styles.skipText}>Skip</Text>
+      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
+      
+      <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
+        {/* Header */}
+        <View style={styles.header}>
+          {activeSlide > 0 && (
+            <TouchableOpacity onPress={handlePrevious} style={styles.backButton}>
+              <Ionicons name="chevron-back" size={24} color="#ffffff" />
             </TouchableOpacity>
-          </View>
+          )}
+          
+          <View style={styles.spacer} />
+          
+          <TouchableOpacity onPress={handleSkip} style={styles.skipButton}>
+            <Text style={styles.skipText}>Skip</Text>
+          </TouchableOpacity>
+        </View>
 
-          {/* Slides Container */}
-          <View style={styles.slidesContainer}>
-            <ScrollView
-              ref={scrollViewRef}
-              horizontal
-              pagingEnabled
-              showsHorizontalScrollIndicator={false}
-              onMomentumScrollEnd={handleScroll}
-              scrollEventThrottle={16}
-              style={styles.scrollView}
-              contentContainerStyle={styles.scrollContent}
-            >
-              {onboardingData.map((item, index) => (
-                <View key={item.id} style={styles.slideContainer}>
-                  <View style={styles.slide}>
-                    <LinearGradient
-                      colors={item.gradient}
-                      style={styles.iconContainer}
-                    >
-                      <Ionicons name={item.icon} size={64} color="#FFF" />
-                    </LinearGradient>
-                    
+        {/* Slides Container */}
+        <View style={styles.slidesContainer}>
+          <ScrollView
+            ref={scrollViewRef}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onMomentumScrollEnd={handleScroll}
+            scrollEventThrottle={16}
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollContent}
+          >
+            {onboardingData.map((item, index) => (
+              <View key={item.id} style={styles.slideContainer}>
+                <View style={styles.slide}>
+                  {/* Image Container */}
+                  <View style={styles.imageContainer}>
+                    <Image
+                      source={item.image}
+                      style={styles.slideImage}
+                      resizeMode="contain"
+                    />
+                  </View>
+                  
+                  {/* Text Content */}
+                  <View style={styles.textContent}>
                     <Text style={styles.slideTitle}>{item.title}</Text>
                     <Text style={styles.slideDescription}>{item.description}</Text>
-                    
-                    <View style={styles.progressContainer}>
-                      <Text style={styles.progressText}>
-                        {index + 1} of {onboardingData.length}
-                      </Text>
-                    </View>
                   </View>
                 </View>
-              ))}
-            </ScrollView>
-            
-            {/* Pagination */}
-            <View style={styles.paginationContainer}>
-              {onboardingData.map((_, index) => (
-                <TouchableOpacity
-                  key={index}
-                  onPress={() => goToSlide(index)}
-                  style={[
-                    styles.paginationDot,
-                    {
-                      backgroundColor: index === activeSlide 
-                        ? '#FFF' 
-                        : 'rgba(255,255,255,0.4)',
-                      transform: [{ 
-                        scale: index === activeSlide ? 1 : 0.6 
-                      }],
-                    },
-                  ]}
-                />
-              ))}
-            </View>
-          </View>
+              </View>
+            ))}
+          </ScrollView>
+        </View>
 
-          {/* Footer */}
-          <View style={styles.footer}>
-            <View style={styles.navigationContainer}>
-              {/* Previous Button */}
-              {activeSlide > 0 && (
-                <TouchableOpacity 
-                  style={styles.prevButton} 
-                  onPress={handlePrevious}
-                >
-                  <Ionicons name="arrow-back" size={20} color="rgba(255,255,255,0.8)" />
-                  <Text style={styles.prevButtonText}>Back</Text>
-                </TouchableOpacity>
-              )}
-              
-              <View style={styles.spacer} />
-              
-              {/* Next/Get Started Button */}
-              <TouchableOpacity style={styles.nextButton} onPress={handleNext}>
-                <LinearGradient
-                  colors={['rgba(255,255,255,0.2)', 'rgba(255,255,255,0.1)']}
-                  style={styles.buttonGradient}
-                >
-                  <Text style={styles.nextButtonText}>
-                    {activeSlide === onboardingData.length - 1 ? 'Get Started' : 'Next'}
-                  </Text>
-                  <Ionicons 
-                    name={activeSlide === onboardingData.length - 1 ? 'checkmark' : 'arrow-forward'} 
-                    size={20} 
-                    color="#FFF" 
-                  />
-                </LinearGradient>
-              </TouchableOpacity>
+        {/* Pagination */}
+        <View style={styles.paginationContainer}>
+          {onboardingData.map((_, index) => (
+            <View
+              key={index}
+              style={[
+                styles.paginationDot,
+                {
+                  backgroundColor: index === activeSlide 
+                    ? '#6366f1' 
+                    : '#e5e7eb',
+                  width: index === activeSlide ? 24 : 8,
+                },
+              ]}
+            />
+          ))}
+        </View>
+
+        {/* Footer */}
+        <View style={styles.footer}>
+          <TouchableOpacity 
+            style={styles.nextButton} 
+            onPress={handleNext}
+          >
+            <View style={styles.buttonContent}>
+              <Text style={styles.nextButtonText}>
+                {activeSlide === onboardingData.length - 1 ? 'Get Started' : 'Next'}
+              </Text>
+              <Ionicons 
+                name="chevron-forward" 
+                size={20} 
+                color="#fff" 
+              />
             </View>
-          </View>
-        </Animated.View>
-      </LinearGradient>
+          </TouchableOpacity>
+        </View>
+      </Animated.View>
     </View>
   );
 }
@@ -246,40 +227,52 @@ export default function OnboardingScreen({ onFinish }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  gradient: {
-    flex: 1,
+    backgroundColor: '#ffffff',
   },
   content: {
     flex: 1,
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     paddingTop: 60,
     paddingBottom: 20,
     paddingHorizontal: 24,
+    height: 80,
   },
-  appName: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#FFF',
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#6366f1',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#6366f1',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  spacer: {
+    flex: 1,
   },
   skipButton: {
     paddingHorizontal: 16,
     paddingVertical: 8,
+    backgroundColor: '#6366f1',
     borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width:100,
+    height:40,
   },
   skipText: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.9)',
-    fontWeight: '500',
+    fontSize: 16,
+    color: '#ffffff',
+    fontWeight: '600',
   },
   slidesContainer: {
     flex: 1,
-    justifyContent: 'center',
   },
   scrollView: {
     flex: 1,
@@ -297,105 +290,77 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 24,
-    minHeight: 400,
+    flex: 1,
   },
-  iconContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+  imageContainer: {
+    width: width * 0.8,
+    height: height * 0.45,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 32,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8,
+    borderRadius: 24,
+    
+  },
+  slideImage: {
+    width: '100%',
+    height: '100%',
+  },
+  textContent: {
+    alignItems: 'center',
+    paddingHorizontal: 20,
   },
   slideTitle: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#FFF',
-    textAlign: 'center',
-    marginBottom: 16,
+    color: '#1f2937',
+    
+    marginBottom: 10,
+    lineHeight: 30,
   },
   slideDescription: {
     fontSize: 16,
-    color: 'rgba(255,255,255,0.9)',
-    textAlign: 'center',
+    color: '#6b7280',
+    
     lineHeight: 24,
-    paddingHorizontal: 20,
-    marginBottom: 20,
-  },
-  progressContainer: {
-    marginTop: 10,
-  },
-  progressText: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.6)',
-    fontWeight: '500',
+    paddingHorizontal: 5,
   },
   paginationContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 20,
+    paddingVertical: 30,
+    paddingHorizontal: 24,
   },
   paginationDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    height: 8,
+    borderRadius: 4,
     marginHorizontal: 4,
+    transition: 'all 0.3s ease',
   },
   footer: {
     paddingBottom: 40,
+    paddingTop: 20,
     paddingHorizontal: 24,
   },
-  navigationContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  prevButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-  },
-  prevButtonText: {
-    fontSize: 16,
-    color: 'rgba(255,255,255,0.8)',
-    marginLeft: 8,
-    fontWeight: '500',
-  },
-  spacer: {
-    flex: 1,
-  },
   nextButton: {
-    borderRadius: 16,
-    shadowColor: '#000',
+    backgroundColor: '#6366f1',
+    borderRadius: 25,
+    shadowColor: '#6366f1',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 8,
   },
-  buttonGradient: {
+  buttonContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 16,
     paddingHorizontal: 32,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-    minWidth: 140,
   },
   nextButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#FFF',
+    color: '#ffffff',
     marginRight: 8,
   },
 });
