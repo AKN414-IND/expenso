@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "ai-expense-tracker",
+    "name": "Expenso",
     "slug": "ai-expense-tracker",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -21,12 +21,13 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.clowntech.aiexpensetracker"
+      "package": "com.arun.expenso"
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "extra": {
+      "creator": "Arun",
       "eas": {
         "projectId": "7733932e-b98c-4491-8091-c1f84d6d7e16"
       }
