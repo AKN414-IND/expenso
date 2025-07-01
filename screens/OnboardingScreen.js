@@ -9,40 +9,42 @@ import {
   Animated,
   StatusBar,
   BackHandler,
-  Alert,
   ScrollView,
   Image,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
+import  Alert from '../components/Alert';
+import { LogOut, FastForward } from 'lucide-react-native'; 
 
 const { width, height } = Dimensions.get('window');
+
+
 
 const onboardingData = [
   {
     id: 1,
     title: 'Meet Your Smart Money Sidekick',
     description: 'Ever wished you had a clever buddy to handle your bills? Snap a picture of any receipt, and your AI sidekick will read, extract, and organize all your spending details—instantly! No more manual entry, just more time for you.',
-    image: require('../assets/onboarding1.png'), // Generate with prompt below
+    image: require('../assets/onboarding1.png'),
   },
   {
     id: 2,
     title: 'Your Personal Budget Planner',
     description: 'Let’s make budgets easy! Set simple spending limits for things you care about—like food, shopping, and fun. Your AI assistant will give you a nudge before you overspend, so you’re always in control.',
-    image: require('../assets/onboarding2.png'), // Generate with prompt below
+    image: require('../assets/onboarding2.png'), 
   },
   {
     id: 3,
     title: 'Say Goodbye to Late Fees',
     description: 'Life gets busy, but your assistant’s got your back! Add any bill or subscription, and get playful reminders before payment dates. No more “oops, I forgot!” moments.',
-    image: require('../assets/onboarding3.png'), // Generate with prompt below
+    image: require('../assets/onboarding3.png'), 
   },
   {
     id: 4,
     title: 'Your Money Journey, Visualized',
     description: 'Get beautiful, easy-to-read reports that show exactly where your money goes. Spot trends, download summaries, and even share insights with friends or family—all in a tap.',
-    image: require('../assets/onboarding4.png'), // Generate with prompt below
+    image: require('../assets/onboarding4.png'),
   },
 ];
 
@@ -51,27 +53,23 @@ export default function OnboardingScreen({ onFinish }) {
   const [activeSlide, setActiveSlide] = useState(0);
   const scrollViewRef = useRef(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const [showExitModal, setShowExitModal] = useState(false);
+  const [showSkipModal, setShowSkipModal] = useState(false);
 
-  // Handle Android back button
+
   useFocusEffect(
     React.useCallback(() => {
       const onBackPress = () => {
-        Alert.alert(
-          'Exit App',
-          'Are you sure you want to exit?',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Exit', onPress: () => BackHandler.exitApp() },
-          ]
-        );
+        setShowExitModal(true);   // <-- Show custom modal!
         return true;
       };
-
       const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
       return () => subscription?.remove();
     }, [])
   );
-
+  
+  // Handle Android back button
+  
   React.useEffect(() => {
     Animated.timing(fadeAnim, {
       toValue: 1,
@@ -108,15 +106,9 @@ export default function OnboardingScreen({ onFinish }) {
   };
 
   const handleSkip = () => {
-    Alert.alert(
-      'Skip Onboarding',
-      'Are you sure you want to skip the introduction?',
-      [
-        { text: 'Continue Tour', style: 'cancel' },
-        { text: 'Skip', onPress: handleFinish },
-      ]
-    );
-  };
+  setShowSkipModal(true);
+};
+
 
   const handleFinish = () => {
     Animated.timing(fadeAnim, {
@@ -219,6 +211,41 @@ export default function OnboardingScreen({ onFinish }) {
             </View>
           </TouchableOpacity>
         </View>
+
+        <Alert
+  open={showExitModal}
+  onConfirm={() => {
+    setShowExitModal(false);
+    BackHandler.exitApp();
+  }}
+  onCancel={() => setShowExitModal(false)}
+  title="Exit App"
+  message="Are you sure you want to exit the onboarding?"
+  confirmText="Exit"
+  cancelText="Stay"
+  icon={<LogOut color="#fff" size={40} />}
+  iconBg="#ef4444"
+/>
+<Alert
+  open={showSkipModal}
+  onConfirm={() => {
+    setShowSkipModal(false);
+    handleFinish();
+  }}
+  onCancel={() => setShowSkipModal(false)}
+  title="Skip Onboarding"
+  message="Are you sure you want to skip the introduction?"
+  confirmText="Skip"
+  cancelText="Continue Tour"
+  icon={<FastForward color="#fff" size={40} />}
+  iconBg="#f59e42"
+  confirmColor="#f59e42"
+  confirmTextColor="#fff"
+  cancelColor="#f1f5f9"
+  cancelTextColor="#334155"
+/>
+
+
       </Animated.View>
     </View>
   );
@@ -235,7 +262,7 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: 60,
+    paddingTop: 100,
     paddingBottom: 20,
     paddingHorizontal: 24,
     height: 80,
