@@ -12,10 +12,12 @@ import {
   ScrollView,
   RefreshControl,
   Dimensions,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
-import { PieChart } from "react-native-chart-kit";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
+import { PieChart } from "react-native-chart-kit";
 
 const screenWidth = Dimensions.get("window").width;
 
@@ -30,6 +32,16 @@ const EXPENSE_CATEGORIES = [
   { name: "Travel", icon: "✈️", color: "#5F27CD" },
   { name: "Groceries", icon: "🛒", color: "#00D2D3" },
   { name: "Other", icon: "📝", color: "#747D8C" },
+];
+
+// Chart colors
+const CHART_COLORS = [
+  "#FF6B6B",
+  "#4ECDC4",
+  "#45B7D1",
+  "#96CEB4",
+  "#FFEAA7",
+  "#DDA0DD",
 ];
 
 export default function DashboardScreen({ navigation }) {
@@ -56,13 +68,15 @@ export default function DashboardScreen({ navigation }) {
   // Statistics
   const [totalExpenses, setTotalExpenses] = useState(0);
   const [monthlyExpenses, setMonthlyExpenses] = useState(0);
-  const [topCategory, setTopCategory] = useState("");
+  
 
   useEffect(() => {
-    fetchExpenses();
-    fetchBudgets();
-  }, []);
-  const dailyfetchExpenses = async () => {};
+    if (session && session.user) {
+      fetchExpenses();
+      fetchBudgets();
+    }
+  }, [session]);
+
   const fetchExpenses = async () => {
     try {
       const { data, error } = await supabase
@@ -75,11 +89,9 @@ export default function DashboardScreen({ navigation }) {
         setExpenses(data);
         calculateStatistics(data);
       } else {
-        console.error("Error fetching expenses:", error);
         setExpenses([]);
       }
     } catch (err) {
-      console.error("Error in fetchExpenses:", err);
       setExpenses([]);
     } finally {
       setLoading(false);
@@ -98,7 +110,7 @@ export default function DashboardScreen({ navigation }) {
         setBudgets(data);
       }
     } catch (err) {
-      console.error("Error fetching budgets:", err);
+      // Ignore
     }
   };
 
@@ -109,7 +121,6 @@ export default function DashboardScreen({ navigation }) {
     );
     setTotalExpenses(total);
 
-    // Calculate monthly expenses (current month)
     const currentMonth = new Date().getMonth();
     const currentYear = new Date().getFullYear();
     const monthlyTotal = expenseData
@@ -122,16 +133,6 @@ export default function DashboardScreen({ navigation }) {
       })
       .reduce((sum, expense) => sum + parseFloat(expense.amount || 0), 0);
     setMonthlyExpenses(monthlyTotal);
-
-    // Find top category
-    const categoryMap = {};
-    expenseData.forEach((expense) => {
-      const category = expense.category || "Uncategorized";
-      categoryMap[category] =
-        (categoryMap[category] || 0) + parseFloat(expense.amount || 0);
-    });
-    const topCat = Object.entries(categoryMap).sort((a, b) => b[1] - a[1])[0];
-    setTopCategory(topCat ? topCat[0] : "None");
   };
 
   const onRefresh = () => {
@@ -140,41 +141,34 @@ export default function DashboardScreen({ navigation }) {
     fetchBudgets();
   };
 
-  const getPieData = (items) => {
+  const getPieChartData = (items) => {
     const categoryMap = {};
-    const colors = [
-      "#FF6B6B",
-      "#4ECDC4",
-      "#45B7D1",
-      "#96CEB4",
-      "#FFEAA7",
-      "#DDA0DD",
-      "#98D8C8",
-    ];
-
     items.forEach((item) => {
       const amount = parseFloat(item.amount);
       if (!item.category || isNaN(amount)) return;
       categoryMap[item.category] = (categoryMap[item.category] || 0) + amount;
     });
-
-    const pieData = Object.entries(categoryMap)
+    return Object.entries(categoryMap)
       .filter(([cat, amt]) => cat && amt > 0)
-      .map(([cat, amt], index) => ({
-        name: cat,
-        amount: parseFloat(amt.toFixed(2)),
-        color: colors[index % colors.length],
-        legendFontColor: "#333",
-        legendFontSize: 12,
-      }));
-
-    return pieData.length > 0 ? pieData : [];
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6) // Show top 6 only
+      .map(([category, amount], index) => {
+        const categoryObj = EXPENSE_CATEGORIES.find((c) => c.name === category);
+        return {
+          name: category,
+          amount: amount,
+          color:
+            categoryObj?.color || CHART_COLORS[index % CHART_COLORS.length],
+          legendFontColor: "#222",
+          legendFontSize: 14,
+          icon: categoryObj?.icon || "📝",
+        };
+      });
   };
 
   const getCategorySpending = (category) => {
     const currentMonth = new Date().getMonth();
     const currentYear = new Date().getFullYear();
-
     return expenses
       .filter((expense) => {
         const expenseDate = new Date(expense.date);
@@ -195,7 +189,6 @@ export default function DashboardScreen({ navigation }) {
       const categoryData = EXPENSE_CATEGORIES.find(
         (cat) => cat.name === budget.category
       );
-
       return {
         ...budget,
         spent,
@@ -248,7 +241,6 @@ export default function DashboardScreen({ navigation }) {
         Alert.alert("Error", "Failed to delete expense");
       }
     } catch (err) {
-      console.error("Error deleting expense:", err);
       Alert.alert("Error", "Failed to delete expense");
     }
   };
@@ -258,7 +250,6 @@ export default function DashboardScreen({ navigation }) {
       Alert.alert("Error", "Please fill in all required fields");
       return;
     }
-
     try {
       const { error } = await supabase
         .from("expenses")
@@ -278,7 +269,6 @@ export default function DashboardScreen({ navigation }) {
         Alert.alert("Error", "Failed to update expense");
       }
     } catch (err) {
-      console.error("Error updating expense:", err);
       Alert.alert("Error", "Failed to update expense");
     }
   };
@@ -288,15 +278,11 @@ export default function DashboardScreen({ navigation }) {
       Alert.alert("Error", "Please fill in all fields");
       return;
     }
-
     try {
-      // Check if budget already exists for this category
       const existingBudget = budgets.find(
         (b) => b.category === budgetForm.category
       );
-
       if (existingBudget) {
-        // Update existing budget
         const { error } = await supabase
           .from("budgets")
           .update({
@@ -311,7 +297,6 @@ export default function DashboardScreen({ navigation }) {
           Alert.alert("Success", "Budget updated successfully!");
         }
       } else {
-        // Create new budget
         const { error } = await supabase.from("budgets").insert([
           {
             user_id: session.user.id,
@@ -320,17 +305,14 @@ export default function DashboardScreen({ navigation }) {
             period: budgetForm.period,
           },
         ]);
-
         if (!error) {
           setBudgetModalVisible(false);
           fetchBudgets();
           Alert.alert("Success", "Budget created successfully!");
         }
       }
-
       setBudgetForm({ category: "", amount: "", period: "monthly" });
     } catch (err) {
-      console.error("Error saving budget:", err);
       Alert.alert("Error", "Failed to save budget");
     }
   };
@@ -347,7 +329,6 @@ export default function DashboardScreen({ navigation }) {
         Alert.alert("Success", "Budget deleted successfully!");
       }
     } catch (err) {
-      console.error("Error deleting budget:", err);
       Alert.alert("Error", "Failed to delete budget");
     }
   };
@@ -362,13 +343,16 @@ export default function DashboardScreen({ navigation }) {
   const performLogout = async () => {
     try {
       await supabase.auth.signOut();
-    } catch (error) {
-      console.error("Error logging out:", error);
-    }
+    } catch (error) {}
   };
 
-  const renderExpenseItem = ({ item }) => (
-    <View style={styles.expenseItem}>
+  const renderExpenseItem = ({ item, index }) => (
+    <View
+      style={[
+        styles.expenseItem,
+        { marginRight: index < 4 ? 8 : 0 }, // Add margin except last
+      ]}
+    >
       <View style={styles.expenseInfo}>
         <Text style={styles.expenseTitle}>{item.title || "Untitled"}</Text>
         <Text style={styles.expenseCategory}>
@@ -424,7 +408,6 @@ export default function DashboardScreen({ navigation }) {
           <Text style={styles.deleteBudgetText}>🗑️</Text>
         </TouchableOpacity>
       </View>
-
       <View style={styles.budgetProgress}>
         <View style={styles.progressBarContainer}>
           <View
@@ -446,7 +429,6 @@ export default function DashboardScreen({ navigation }) {
           {item.percentage.toFixed(0)}%
         </Text>
       </View>
-
       <View style={styles.budgetStats}>
         <Text style={styles.budgetSpent}>Spent: ₹{item.spent.toFixed(2)}</Text>
         <Text
@@ -466,18 +448,16 @@ export default function DashboardScreen({ navigation }) {
   );
 
   const recentExpenses = expenses.slice(0, 5);
-  const pieData = getPieData(expenses);
   const budgetProgress = getBudgetProgress();
-  const hasPieData = pieData.length > 0;
 
-  // 1. Calculate today's total expense (add this in your component logic)
+  // Calculate today's total expense
   const today = new Date();
   const todayString = today.toISOString().split("T")[0];
   const todaysTotal = expenses
     .filter((exp) => exp.date === todayString)
     .reduce((sum, exp) => sum + Number(exp.amount), 0);
 
-  if (loading) {
+  if (loading || !session || !session.user) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#4ECDC4" />
@@ -485,6 +465,7 @@ export default function DashboardScreen({ navigation }) {
       </View>
     );
   }
+  const pieData = getPieChartData(expenses);
 
   return (
     <>
@@ -502,20 +483,62 @@ export default function DashboardScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
-        {/* Statistics Cards */}
-        <View style={styles.statsContainer}>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>₹{totalExpenses.toFixed(2)}</Text>
-            <Text style={styles.statLabel}>Total Expenses</Text>
+        <View style={styles.StatisticsContainer}>
+          <View style={styles.statsContainer}>
+            <View style={[styles.statCard, { marginRight: 12 }]}>
+              <Text style={styles.statValue}>₹{totalExpenses.toFixed(2)}</Text>
+              <Text style={styles.statLabel}>Total Expenses</Text>
+            </View>
+            <View style={[styles.statCard, { marginRight: 12 }]}>
+              <Text style={styles.statValue}>
+                ₹{monthlyExpenses.toFixed(2)}
+              </Text>
+              <Text style={styles.statLabel}>This Month</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Text style={styles.statValue}>₹{todaysTotal.toFixed(2)}</Text>
+              <Text style={styles.statLabel}>Today's Total</Text>
+            </View>
           </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>₹{monthlyExpenses.toFixed(2)}</Text>
-            <Text style={styles.statLabel}>This Month</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>₹{todaysTotal.toFixed(2)}</Text>
-            <Text style={styles.statLabel}>Today's Total</Text>
-          </View>
+          {expenses.length > 0 && pieData.length > 0 && (
+            <View style={styles.chartsContainer}>
+              <View style={styles.chartCard}>
+                <PieChart
+                  data={pieData}
+                  width={screenWidth - 60}
+                  height={220}
+                  chartConfig={{
+                    backgroundColor: "#fff",
+                    backgroundGradientFrom: "#fff",
+                    backgroundGradientTo: "#fff",
+                    color: (opacity = 1) => `rgba(6,182,212,${opacity})`,
+                  }}
+                  accessor={"amount"}
+                  backgroundColor={"transparent"}
+                  paddingLeft={15}
+                  center={[10, 0]}
+                  absolute // Show absolute values, can remove for percent
+                  hasLegend={false} // Hide built-in legend, we'll show custom
+                />
+                {/* Custom legend with icons */}
+                <View style={styles.chartLegendGrid}>
+                  {pieData.map((item, idx) => (
+                    <View key={item.name} style={styles.legendGridItem}>
+                      <View
+                        style={[
+                          styles.legendColor,
+                          { backgroundColor: item.color },
+                        ]}
+                      />
+                      <Text style={styles.legendText}>
+                        {item.icon} {item.name}: ₹{item.amount}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            </View>
+          )}
         </View>
 
         {/* Budget Progress Section */}
@@ -536,32 +559,6 @@ export default function DashboardScreen({ navigation }) {
           </View>
         )}
 
-        {/* Charts Section */}
-        {hasPieData && (
-          <View style={styles.chartsContainer}>
-            <Text style={styles.sectionTitle}>Expense Analysis</Text>
-
-            {/* Category Breakdown */}
-            <View style={styles.chartCard}>
-              <Text style={styles.chartTitle}>Category Breakdown</Text>
-              <PieChart
-                data={pieData}
-                width={screenWidth - 60}
-                height={200}
-                accessor="amount"
-                backgroundColor="transparent"
-                paddingLeft="15"
-                absolute
-                hasLegend={true}
-                chartConfig={{
-                  color: () => "#000",
-                  labelColor: () => "#333",
-                }}
-              />
-            </View>
-          </View>
-        )}
-
         {/* Recent Expenses */}
         <View style={styles.recentSection}>
           <View style={styles.sectionHeader}>
@@ -572,7 +569,6 @@ export default function DashboardScreen({ navigation }) {
               <Text style={styles.seeAllText}>See All</Text>
             </TouchableOpacity>
           </View>
-
           {recentExpenses.length > 0 ? (
             <FlatList
               data={recentExpenses}
@@ -599,10 +595,12 @@ export default function DashboardScreen({ navigation }) {
           visible={editModalVisible}
           onRequestClose={() => setEditModalVisible(false)}
         >
-          <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView
+            style={styles.modalOverlay}
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+          >
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>Edit Expense</Text>
-
               <TextInput
                 style={styles.input}
                 placeholder="Expense Title"
@@ -611,7 +609,6 @@ export default function DashboardScreen({ navigation }) {
                   setEditForm({ ...editForm, title: text })
                 }
               />
-
               <TextInput
                 style={styles.input}
                 placeholder="Amount"
@@ -621,7 +618,6 @@ export default function DashboardScreen({ navigation }) {
                 }
                 keyboardType="numeric"
               />
-
               <TextInput
                 style={styles.input}
                 placeholder="Category"
@@ -630,7 +626,6 @@ export default function DashboardScreen({ navigation }) {
                   setEditForm({ ...editForm, category: text })
                 }
               />
-
               <TextInput
                 style={styles.input}
                 placeholder="Date (YYYY-MM-DD)"
@@ -639,7 +634,6 @@ export default function DashboardScreen({ navigation }) {
                   setEditForm({ ...editForm, date: text })
                 }
               />
-
               <View style={styles.modalButtons}>
                 <TouchableOpacity
                   style={[styles.modalButton, styles.cancelButton]}
@@ -647,7 +641,6 @@ export default function DashboardScreen({ navigation }) {
                 >
                   <Text style={styles.cancelButtonText}>Cancel</Text>
                 </TouchableOpacity>
-
                 <TouchableOpacity
                   style={[styles.modalButton, styles.saveButton]}
                   onPress={updateExpense}
@@ -656,7 +649,7 @@ export default function DashboardScreen({ navigation }) {
                 </TouchableOpacity>
               </View>
             </View>
-          </View>
+          </KeyboardAvoidingView>
         </Modal>
 
         {/* Budget Modal */}
@@ -666,10 +659,12 @@ export default function DashboardScreen({ navigation }) {
           visible={budgetModalVisible}
           onRequestClose={() => setBudgetModalVisible(false)}
         >
-          <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView
+            style={styles.modalOverlay}
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+          >
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>Set Budget</Text>
-
               <Text style={styles.inputLabel}>Category</Text>
               <View style={styles.categoryPickerContainer}>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -698,7 +693,6 @@ export default function DashboardScreen({ navigation }) {
                   ))}
                 </ScrollView>
               </View>
-
               <Text style={styles.inputLabel}>Budget Amount</Text>
               <TextInput
                 style={styles.input}
@@ -709,7 +703,6 @@ export default function DashboardScreen({ navigation }) {
                 }
                 keyboardType="numeric"
               />
-
               <Text style={styles.inputLabel}>Period</Text>
               <View style={styles.periodContainer}>
                 {["monthly", "weekly", "yearly"].map((period) => (
@@ -734,7 +727,6 @@ export default function DashboardScreen({ navigation }) {
                   </TouchableOpacity>
                 ))}
               </View>
-
               <View style={styles.modalButtons}>
                 <TouchableOpacity
                   style={[styles.modalButton, styles.cancelButton]}
@@ -749,7 +741,6 @@ export default function DashboardScreen({ navigation }) {
                 >
                   <Text style={styles.cancelButtonText}>Cancel</Text>
                 </TouchableOpacity>
-
                 <TouchableOpacity
                   style={[styles.modalButton, styles.saveButton]}
                   onPress={saveBudget}
@@ -758,13 +749,11 @@ export default function DashboardScreen({ navigation }) {
                 </TouchableOpacity>
               </View>
             </View>
-          </View>
+          </KeyboardAvoidingView>
         </Modal>
       </ScrollView>
-
       <View style={styles.taskbarContainer}>
         <View style={styles.taskbar}>
-          {/* Left Action - Set Budget */}
           <TouchableOpacity
             style={styles.actionButton}
             onPress={() => setBudgetModalVisible(true)}
@@ -775,8 +764,6 @@ export default function DashboardScreen({ navigation }) {
               Budget
             </Text>
           </TouchableOpacity>
-
-          {/* Center Add Button - Elevated */}
           <TouchableOpacity
             style={styles.addButton}
             onPress={() => navigation.navigate("AddExpense")}
@@ -784,8 +771,6 @@ export default function DashboardScreen({ navigation }) {
           >
             <Text style={styles.addIcon}>+</Text>
           </TouchableOpacity>
-
-          {/* Right Action - All Expenses */}
           <TouchableOpacity
             style={styles.actionButton}
             onPress={() => navigation.navigate("AllExpenses")}
@@ -803,7 +788,6 @@ export default function DashboardScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  // === CONTAINER STYLES ===
   container: {
     flex: 1,
     backgroundColor: "#f5f7fa",
@@ -820,8 +804,6 @@ const styles = StyleSheet.create({
     color: "#64748b",
     fontWeight: "500",
   },
-
-  // === HEADER STYLES ===
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -829,8 +811,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 60,
     paddingBottom: 24,
-    backgroundColor: "rgba(255, 255, 255, 0.9)",
-    backdropFilter: "blur(20px)",
+    backgroundColor: "#fff",
     borderBottomWidth: 1,
     borderBottomColor: "rgba(148, 163, 184, 0.1)",
   },
@@ -845,10 +826,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 25,
-    shadowColor: "#ef4444",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
     elevation: 6,
   },
   logoutButtonText: {
@@ -857,34 +834,30 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     letterSpacing: 0.2,
   },
-
-  // === STATISTICS STYLES ===
+  StatisticsContainer: {
+    flexDirection: "column",
+    gap: 1,
+  },
   statsContainer: {
     flexDirection: "row",
     paddingHorizontal: 20,
-    paddingVertical: 16,
-    gap: 12,
+    paddingTop: 10,
   },
   statCard: {
     flex: 1,
-    backgroundColor: "rgba(255, 255, 255, 0.9)",
-    backdropFilter: "blur(20px)",
+    backgroundColor: "#fff",
     padding: 10,
     borderRadius: 20,
     alignItems: "center",
-    shadowColor: "#1e293b",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.1,
-    shadowRadius: 24,
-    elevation: 8,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.2)",
     minHeight: 100,
+    borderStyle: "dashed",
+    borderWidth: 2,
+    borderColor: "rgba(6, 182, 212, 0.1)",
     justifyContent: "center",
   },
   statValue: {
-    fontSize: 15,
-    fontWeight: "800",
+    fontSize: 16,
+    fontWeight: "900",
     color: "#06b6d4",
     marginBottom: 8,
     letterSpacing: -0.3,
@@ -896,13 +869,11 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     lineHeight: 16,
   },
-
-  // === SECTION HEADERS ===
   sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 20,
+    marginBottom: 10,
     paddingHorizontal: 4,
   },
   sectionTitle: {
@@ -920,30 +891,23 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: "rgba(6, 182, 212, 0.1)",
   },
-
-  // === BUDGET STYLES ===
   budgetSection: {
     paddingHorizontal: 20,
     marginBottom: 24,
   },
   budgetItem: {
-    backgroundColor: "rgba(255, 255, 255, 0.95)",
-    backdropFilter: "blur(20px)",
+    backgroundColor: "#fff",
     borderRadius: 20,
     padding: 20,
     marginBottom: 16,
-    shadowColor: "#1e293b",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    elevation: 4,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.3)",
+    borderStyle: "dashed",
+    borderWidth: 2,
+    borderColor: "rgba(6, 182, 212, 0.1)",
   },
   overBudgetItem: {
     borderLeftWidth: 6,
     borderLeftColor: "#ef4444",
-    backgroundColor: "rgba(254, 242, 242, 0.9)",
+    backgroundColor: "#fef2f2",
   },
   budgetHeader: {
     flexDirection: "row",
@@ -987,10 +951,6 @@ const styles = StyleSheet.create({
   progressBar: {
     height: "100%",
     borderRadius: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
   },
   progressText: {
     fontSize: 14,
@@ -1005,7 +965,7 @@ const styles = StyleSheet.create({
   budgetStats: {
     flexDirection: "row",
     justifyContent: "space-between",
-    backgroundColor: "rgba(248, 250, 252, 0.8)",
+    backgroundColor: "#f8fafc",
     borderRadius: 12,
     padding: 12,
   },
@@ -1027,54 +987,59 @@ const styles = StyleSheet.create({
     color: "#1e293b",
     fontWeight: "600",
   },
-
-  // === CHART STYLES ===
   chartsContainer: {
-    paddingHorizontal: 20,
-    marginBottom: 24,
+    marginHorizontal:15,
+    marginVertical: 10,
+    flexDirection: "column",
+    flexWrap: "wrap",
   },
   chartCard: {
-    backgroundColor: "rgba(255, 255, 255, 0.95)",
-    backdropFilter: "blur(20px)",
-    borderRadius: 24,
-    padding: 24,
-    marginTop: 12,
-    shadowColor: "#1e293b",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.1,
-    shadowRadius: 24,
-    elevation: 8,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.3)",
+    backgroundColor: "#fff",
+    borderRadius: 25,
+    padding: 10,
+    borderStyle: "dashed",
+    borderWidth: 2,
+    borderColor: "rgba(6, 182, 212, 0.1)",
+    alignItems: "center",
+    
   },
-  chartTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#1e293b",
-    marginBottom: 16,
-    textAlign: "center",
-    letterSpacing: -0.2,
+  chartLegendGrid: {
+    flexDirection: "column",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    marginTop: 16,
   },
-
-  // === EXPENSE ITEM STYLES ===
+  legendGridItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginHorizontal: 10,
+    marginBottom: 10,
+    minWidth: "40%", // Responsive 2-column grid look
+  },
+  legendColor: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    marginRight: 8,
+  },
+  legendText: {
+    fontSize: 13,
+    color: "#64748b",
+    fontWeight: "600",
+  },
   recentSection: {
     paddingHorizontal: 20,
-    marginBottom: 100, // Space for taskbar
+    marginBottom: 100,
   },
   expenseItem: {
     flexDirection: "row",
-    backgroundColor: "rgba(255, 255, 255, 0.95)",
-    backdropFilter: "blur(20px)",
+    backgroundColor: "#fff",
     padding: 20,
     marginBottom: 12,
     borderRadius: 20,
-    shadowColor: "#1e293b",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 16,
-    elevation: 4,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.3)",
+    borderStyle: "dashed",
+    borderWidth: 2,
+    borderColor: "rgba(6, 182, 212, 0.1)",
   },
   expenseInfo: {
     flex: 1,
@@ -1110,39 +1075,30 @@ const styles = StyleSheet.create({
   },
   actionButtons: {
     flexDirection: "row",
-    gap: 8,
+    marginTop: 4,
   },
   actionButton: {
     padding: 10,
     borderRadius: 12,
-    backgroundColor: "rgba(248, 250, 252, 0.8)",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
+    backgroundColor: "#f8fafc",
     elevation: 2,
+    marginRight: 8,
   },
   editButton: {
     backgroundColor: "rgba(34, 197, 94, 0.1)",
   },
   deleteButton: {
     backgroundColor: "rgba(239, 68, 68, 0.1)",
+    marginRight: 0,
   },
   actionButtonText: {
     fontSize: 16,
   },
-
-  // === EMPTY STATE STYLES ===
   emptyState: {
-    backgroundColor: "rgba(255, 255, 255, 0.9)",
-    backdropFilter: "blur(20px)",
+    backgroundColor: "#fff",
     padding: 48,
     borderRadius: 24,
     alignItems: "center",
-    shadowColor: "#1e293b",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.08,
-    shadowRadius: 24,
     elevation: 6,
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.3)",
@@ -1160,26 +1116,18 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 20,
   },
-
-  // === MODAL STYLES ===
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(15, 23, 42, 0.7)",
-    backdropFilter: "blur(8px)",
     justifyContent: "center",
     alignItems: "center",
   },
   modalContent: {
-    backgroundColor: "rgba(255, 255, 255, 0.98)",
-    backdropFilter: "blur(20px)",
+    backgroundColor: "#fff",
     borderRadius: 28,
     padding: 28,
     width: "92%",
     maxHeight: "85%",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 20 },
-    shadowOpacity: 0.25,
-    shadowRadius: 40,
     elevation: 20,
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.3)",
@@ -1196,28 +1144,23 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     marginTop: 24,
-    gap: 12,
   },
   modalButton: {
     flex: 1,
     padding: 18,
     borderRadius: 16,
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
     elevation: 4,
+    marginRight: 12,
   },
   cancelButton: {
-    backgroundColor: "rgba(248, 250, 252, 0.9)",
+    backgroundColor: "#f8fafc",
     borderWidth: 1.5,
     borderColor: "rgba(148, 163, 184, 0.3)",
+    marginRight: 12,
   },
   saveButton: {
     backgroundColor: "#06b6d4",
-    shadowColor: "#06b6d4",
-    shadowOpacity: 0.3,
   },
   cancelButtonText: {
     color: "#64748b",
@@ -1231,8 +1174,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     letterSpacing: -0.1,
   },
-
-  // === FORM INPUT STYLES ===
   inputLabel: {
     fontSize: 16,
     fontWeight: "600",
@@ -1242,7 +1183,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.1,
   },
   input: {
-    backgroundColor: "rgba(248, 250, 252, 0.8)",
+    backgroundColor: "#f8fafc",
     borderRadius: 16,
     padding: 18,
     marginBottom: 16,
@@ -1250,19 +1191,13 @@ const styles = StyleSheet.create({
     borderColor: "rgba(148, 163, 184, 0.2)",
     fontSize: 16,
     color: "#1e293b",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
     elevation: 2,
   },
-
-  // === CATEGORY PICKER STYLES ===
   categoryPickerContainer: {
     marginBottom: 20,
   },
   categoryPicker: {
-    backgroundColor: "rgba(248, 250, 252, 0.8)",
+    backgroundColor: "#f8fafc",
     borderRadius: 16,
     padding: 16,
     marginRight: 12,
@@ -1270,17 +1205,11 @@ const styles = StyleSheet.create({
     minWidth: 90,
     borderWidth: 1.5,
     borderColor: "rgba(148, 163, 184, 0.2)",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
     elevation: 2,
   },
   selectedCategoryPicker: {
     backgroundColor: "#06b6d4",
     borderColor: "#06b6d4",
-    shadowColor: "#06b6d4",
-    shadowOpacity: 0.3,
   },
   categoryPickerIcon: {
     fontSize: 24,
@@ -1293,32 +1222,24 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     letterSpacing: -0.1,
   },
-
-  // === PERIOD SELECTOR STYLES ===
   periodContainer: {
     flexDirection: "row",
     marginBottom: 24,
-    gap: 8,
   },
   periodButton: {
     flex: 1,
-    backgroundColor: "rgba(248, 250, 252, 0.8)",
+    backgroundColor: "#f8fafc",
     borderRadius: 16,
     padding: 16,
     alignItems: "center",
     borderWidth: 1.5,
     borderColor: "rgba(148, 163, 184, 0.2)",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
     elevation: 2,
+    marginRight: 8,
   },
   selectedPeriodButton: {
     backgroundColor: "#06b6d4",
     borderColor: "#06b6d4",
-    shadowColor: "#06b6d4",
-    shadowOpacity: 0.3,
   },
   periodButtonText: {
     fontSize: 15,
@@ -1329,40 +1250,28 @@ const styles = StyleSheet.create({
   selectedPeriodButtonText: {
     color: "white",
   },
-
   taskbarContainer: {
     position: "absolute",
     left: 0,
     right: 0,
     bottom: 0,
     paddingHorizontal: 20,
-    paddingBottom: 34, // Safe area padding
+    paddingBottom: 34,
     paddingTop: 10,
   },
-
-  // === MAIN TASKBAR ===
   taskbar: {
     height: 60,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    
     backgroundColor: "white",
-    backdropFilter: "blur(25px)",
     paddingHorizontal: 32,
     borderRadius: 40,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 24,
     elevation: 20,
     borderWidth: 5,
     borderColor: "#06b6d4",
-    
     position: "relative",
   },
-
-  // === ACTION BUTTONS ===
   actionButton: {
     alignItems: "center",
     justifyContent: "center",
@@ -1371,23 +1280,10 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     backgroundColor: "transparent",
     minWidth: 80,
-    transition: "all 0.2s ease",
   },
-
-  actionIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(6, 182, 212, 0.1)",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 4,
-  },
-
   actionIcon: {
     fontSize: 20,
   },
-
   actionLabel: {
     fontSize: 12,
     fontWeight: "600",
@@ -1395,51 +1291,28 @@ const styles = StyleSheet.create({
     textAlign: "center",
     letterSpacing: -0.2,
     left: 2,
-    
   },
-
-  // === CENTER ADD BUTTON ===
   addButton: {
     position: "absolute",
     left: "45%",
     right: 0,
-    top: -16, // Elevated above taskbar
+    top: -16,
     width: 90,
     height: 90,
     backgroundColor: "#06b6d4",
     borderRadius: 90,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#06b6d4",
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.35,
-    shadowRadius: 20,
     elevation: 16,
     borderWidth: 5,
     borderColor: "white",
     zIndex: 10,
     alignSelf: "center",
   },
-
   addIcon: {
     fontSize: 32,
     fontWeight: "300",
     color: "white",
     lineHeight: 32,
-  },
-
-  // === ACTIVE STATES (Add these with conditional styling) ===
-  actionButtonActive: {
-    backgroundColor: "rgba(6, 182, 212, 0.08)",
-    transform: [{ scale: 0.95 }],
-  },
-
-  actionIconContainerActive: {
-    backgroundColor: "rgba(6, 182, 212, 0.2)",
-  },
-
-  addButtonPressed: {
-    transform: [{ scale: 0.92 }],
-    shadowOpacity: 0.25,
   },
 });
