@@ -17,6 +17,8 @@ import {
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
 import { PieChart } from "react-native-chart-kit";
+import Alert from "../components/Alert";
+import { LogOut, Trash2 } from "lucide-react-native";
 
 const screenWidth = Dimensions.get("window").width;
 
@@ -45,28 +47,53 @@ const CHART_COLORS = [
 // BudgetBar - horizontal bar for visualizing progress
 const BudgetBar = ({ label, spent, budget, color, icon }) => {
   const percent = budget > 0 ? Math.min((spent / budget) * 100, 100) : 0;
+  const isOverBudget = spent > budget;
+  
   return (
     <View style={{ marginBottom: 16 }}>
-      <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 2 }}>
-        {icon && <Text style={{ marginRight: 4 }}>{icon}</Text>}
-        <Text style={{ fontWeight: "600", color: "#222", flex: 1 }}>{label}</Text>
-        <Text style={{ fontWeight: "600", color: spent > budget ? "#ef4444" : "#06b6d4" }}>
+      <View
+        style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}
+      >
+        {icon && <Text style={{ marginRight: 8, fontSize: 16 }}>{icon}</Text>}
+        <Text style={{ fontWeight: "600", color: "#222", flex: 1, fontSize: 16 }}>
+          {label}
+        </Text>
+        <Text
+          style={{
+            fontWeight: "600",
+            color: isOverBudget ? "#ef4444" : "#06b6d4",
+            fontSize: 14,
+          }}
+        >
           ₹{spent.toFixed(0)} / ₹{budget.toFixed(0)}
         </Text>
       </View>
-      <View style={{
-        backgroundColor: "#e5e7eb",
-        borderRadius: 12,
-        height: 18,
-        overflow: "hidden",
-        marginBottom: 2
-      }}>
-        <View style={{
-          width: `${percent}%`,
-          backgroundColor: spent > budget ? "#ef4444" : color,
+      <View
+        style={{
+          backgroundColor: "#e5e7eb",
+          borderRadius: 12,
           height: 18,
-        }} />
+          overflow: "hidden",
+          marginBottom: 4,
+        }}
+      >
+        <View
+          style={{
+            width: `${percent}%`,
+            backgroundColor: isOverBudget ? "#ef4444" : color,
+            height: 18,
+            borderRadius: 12,
+          }}
+        />
       </View>
+      {isOverBudget && (
+        <Text style={{ fontSize: 12, color: "#ef4444", fontWeight: "500" }}>
+          Over budget by ₹{(spent - budget).toFixed(0)}
+        </Text>
+      )}
+      <Text style={{ fontSize: 12, color: "#64748b", fontWeight: "400" }}>
+        {percent.toFixed(1)}% used
+      </Text>
     </View>
   );
 };
@@ -88,6 +115,9 @@ export default function DashboardScreen({ navigation }) {
 
   const [totalExpenses, setTotalExpenses] = useState(0);
   const [monthlyExpenses, setMonthlyExpenses] = useState(0);
+  const [showLogoutAlert, setShowLogoutAlert] = useState(false);
+  const [showDeleteAlert, setShowDeleteAlert] = useState(false);
+  const [expenseToDelete, setExpenseToDelete] = useState(null);
 
   useEffect(() => {
     if (session && session.user) {
@@ -108,9 +138,11 @@ export default function DashboardScreen({ navigation }) {
         setExpenses(data);
         calculateStatistics(data);
       } else {
+        console.error("Error fetching expenses:", error);
         setExpenses([]);
       }
     } catch (err) {
+      console.error("Exception fetching expenses:", err);
       setExpenses([]);
     } finally {
       setLoading(false);
@@ -127,8 +159,14 @@ export default function DashboardScreen({ navigation }) {
 
       if (!error && data) {
         setBudgets(data);
+      } else {
+        console.error("Error fetching budgets:", error);
+        setBudgets([]);
       }
-    } catch (err) {}
+    } catch (err) {
+      console.error("Exception fetching budgets:", err);
+      setBudgets([]);
+    }
   };
 
   const calculateStatistics = (expenseData) => {
@@ -174,7 +212,8 @@ export default function DashboardScreen({ navigation }) {
         return {
           name: category,
           amount: amount,
-          color: categoryObj?.color || CHART_COLORS[index % CHART_COLORS.length],
+          color:
+            categoryObj?.color || CHART_COLORS[index % CHART_COLORS.length],
           legendFontColor: "#222",
           legendFontSize: 14,
           icon: categoryObj?.icon || "📝",
@@ -182,34 +221,31 @@ export default function DashboardScreen({ navigation }) {
       });
   };
 
-  const getCategorySpending = (category) => {
-    const currentMonth = new Date().getMonth();
-    const currentYear = new Date().getFullYear();
+  // Returns how much was spent in a category for the current month
+  const getMonthlyCategorySpending = (category) => {
+    const now = new Date();
     return expenses
       .filter((expense) => {
+        if (expense.category !== category) return false;
         const expenseDate = new Date(expense.date);
         return (
-          expense.category === category &&
-          expenseDate.getMonth() === currentMonth &&
-          expenseDate.getFullYear() === currentYear
+          expenseDate.getFullYear() === now.getFullYear() &&
+          expenseDate.getMonth() === now.getMonth()
         );
       })
       .reduce((sum, expense) => sum + parseFloat(expense.amount || 0), 0);
   };
 
+  // Creates an array of category budgets, each with current month spent
   const getBudgetProgress = () => {
     return budgets.map((budget) => {
-      const spent = getCategorySpending(budget.category);
-      const remaining = budget.amount - spent;
-      const percentage = Math.min((spent / budget.amount) * 100, 100);
+      const spent = getMonthlyCategorySpending(budget.category);
       const categoryData = EXPENSE_CATEGORIES.find(
         (cat) => cat.name === budget.category
       );
       return {
         ...budget,
         spent,
-        remaining,
-        percentage,
         icon: categoryData?.icon || "📝",
         color: categoryData?.color || "#747D8C",
         isOverBudget: spent > budget.amount,
@@ -229,18 +265,8 @@ export default function DashboardScreen({ navigation }) {
   };
 
   const handleDelete = (expense) => {
-    Alert.alert(
-      "Delete Expense",
-      `Are you sure you want to delete "${expense.title}"?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => deleteExpense(expense.id),
-        },
-      ]
-    );
+    setExpenseToDelete(expense);
+    setShowDeleteAlert(true);
   };
 
   const deleteExpense = async (expenseId) => {
@@ -252,18 +278,19 @@ export default function DashboardScreen({ navigation }) {
 
       if (!error) {
         fetchExpenses();
-        Alert.alert("Success", "Expense deleted successfully!");
+        // Using console.log instead of Alert.alert for React Native compatibility
+        console.log("Expense deleted successfully!");
       } else {
-        Alert.alert("Error", "Failed to delete expense");
+        console.error("Failed to delete expense:", error);
       }
     } catch (err) {
-      Alert.alert("Error", "Failed to delete expense");
+      console.error("Failed to delete expense:", err);
     }
   };
 
   const updateExpense = async () => {
     if (!editForm.title || !editForm.amount) {
-      Alert.alert("Error", "Please fill in all required fields");
+      console.log("Please fill in all required fields");
       return;
     }
     try {
@@ -280,17 +307,25 @@ export default function DashboardScreen({ navigation }) {
       if (!error) {
         setEditModalVisible(false);
         fetchExpenses();
-        Alert.alert("Success", "Expense updated successfully!");
+        console.log("Expense updated successfully!");
       } else {
-        Alert.alert("Error", "Failed to update expense");
+        console.error("Failed to update expense:", error);
       }
     } catch (err) {
-      Alert.alert("Error", "Failed to update expense");
+      console.error("Failed to update expense:", err);
     }
   };
 
   const recentExpenses = expenses.slice(0, 5);
   const budgetProgress = getBudgetProgress();
+  const totalBudgetAmount = budgets.reduce(
+    (sum, b) => sum + (parseFloat(b.amount) || 0),
+    0
+  );
+  const totalSpentForBudgets = budgets.reduce(
+    (sum, b) => sum + getMonthlyCategorySpending(b.category),
+    0
+  );
 
   // Today's total
   const today = new Date();
@@ -307,6 +342,7 @@ export default function DashboardScreen({ navigation }) {
       </View>
     );
   }
+
   const pieData = getPieChartData(expenses);
 
   return (
@@ -320,14 +356,10 @@ export default function DashboardScreen({ navigation }) {
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.welcomeText}>Welcome back!</Text>
-          <TouchableOpacity style={styles.logoutButton} onPress={() => {
-            Alert.alert("Logout", "Are you sure you want to logout?", [
-              { text: "Cancel", style: "cancel" },
-              { text: "Logout", style: "destructive", onPress: async () => {
-                try { await supabase.auth.signOut(); } catch (error) {}
-              }},
-            ]);
-          }}>
+          <TouchableOpacity
+            style={styles.logoutButton}
+            onPress={() => setShowLogoutAlert(true)}
+          >
             <Text style={styles.logoutButtonText}>🚪 Logout</Text>
           </TouchableOpacity>
         </View>
@@ -339,7 +371,9 @@ export default function DashboardScreen({ navigation }) {
               <Text style={styles.statLabel}>Total Expenses</Text>
             </View>
             <View style={[styles.statCard, { marginRight: 12 }]}>
-              <Text style={styles.statValue}>₹{monthlyExpenses.toFixed(2)}</Text>
+              <Text style={styles.statValue}>
+                ₹{monthlyExpenses.toFixed(2)}
+              </Text>
               <Text style={styles.statLabel}>This Month</Text>
             </View>
             <View style={styles.statCard}>
@@ -384,7 +418,7 @@ export default function DashboardScreen({ navigation }) {
                             ]}
                           />
                           <Text style={styles.legendText}>
-                            {item.icon} {item.name}: ₹{item.amount}
+                            {item.icon} {item.name}: ₹{item.amount.toFixed(0)}
                           </Text>
                         </View>
                       ))}
@@ -397,36 +431,65 @@ export default function DashboardScreen({ navigation }) {
         </View>
 
         {/* Budget Progress Section */}
-        <View style={{ paddingHorizontal: 20, marginTop: 24 }}>
-        <View style={styles.sectionHeader}>
-          <Text style={{ fontWeight: "700", fontSize: 20, marginBottom: 10 }}>
-            Budget Progress
-          </Text>
-          <TouchableOpacity onPress={() => navigation.navigate("BudgetScreen")}>
-            <Text style={styles.seeAllText}>Manage</Text>
-          </TouchableOpacity>
-          </View>
-          
+        {budgets.length > 0 && (
+          <View style={{ paddingHorizontal: 20, marginTop: 24 }}>
+            <View style={styles.sectionHeader}>
+              <Text style={{ fontWeight: "700", fontSize: 20, marginBottom: 10 }}>
+                Budget Progress
+              </Text>
+              <TouchableOpacity
+                onPress={() => navigation.navigate("BudgetScreen")}
+              >
+                <Text style={styles.seeAllText}>Manage</Text>
+              </TouchableOpacity>
+            </View>
 
-          {/* Total Budget Bar */}
-          <BudgetBar
-            label="Total"
-            spent={budgetProgress.reduce((s, b) => s + b.spent, 0)}
-            budget={budgetProgress.reduce((s, b) => s + b.amount, 0)}
-            color="#06b6d4"
-            icon="💰"
-          />
-          {/* Category Bars */}
-          {budgetProgress.map((item) => (
-            <BudgetBar
-              key={item.id}
-              label={item.icon + " " + item.category}
-              spent={item.spent}
-              budget={item.amount}
-              color={item.color}
-            />
-          ))}
-        </View>
+            {/* Total Budget Bar (this month, only for budgeted categories) */}
+            {totalBudgetAmount > 0 && (
+              <BudgetBar
+                label="Total Budget"
+                spent={totalSpentForBudgets}
+                budget={totalBudgetAmount}
+                color="#06b6d4"
+                icon="💰"
+              />
+            )}
+            
+            {/* Per-category Budget Bars */}
+            {budgetProgress.map((item) => (
+              <BudgetBar
+                key={item.id}
+                label={item.category}
+                spent={item.spent}
+                budget={parseFloat(item.amount) || 0}
+                color={item.color}
+                icon={item.icon}
+              />
+            ))}
+          </View>
+        )}
+
+        {/* Show message when no budgets exist */}
+        {budgets.length === 0 && (
+          <View style={{ paddingHorizontal: 20, marginTop: 24 }}>
+            <View style={styles.sectionHeader}>
+              <Text style={{ fontWeight: "700", fontSize: 20, marginBottom: 10 }}>
+                Budget Progress
+              </Text>
+              <TouchableOpacity
+                onPress={() => navigation.navigate("BudgetScreen")}
+              >
+                <Text style={styles.seeAllText}>Create Budget</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.emptyBudgetState}>
+              <Text style={styles.emptyStateText}>No budgets set</Text>
+              <Text style={styles.emptyStateSubtext}>
+                Create your first budget to track spending!
+              </Text>
+            </View>
+          </View>
+        )}
 
         {/* Recent Expenses */}
         <View style={styles.recentSection}>
@@ -441,37 +504,19 @@ export default function DashboardScreen({ navigation }) {
           {recentExpenses.length > 0 ? (
             <FlatList
               data={recentExpenses}
-              renderItem={({ item, index }) => (
-                <View
-                  style={[
-                    styles.expenseItem,
-                    { marginRight: index < 4 ? 8 : 0 },
-                  ]}
-                >
+              renderItem={({ item }) => (
+                <View style={styles.expenseItem}>
                   <View style={styles.expenseInfo}>
-                    <Text style={styles.expenseTitle}>{item.title || "Untitled"}</Text>
-                    <Text style={styles.expenseCategory}>
-                      {item.category || "Uncategorized"}
+                    <Text style={styles.expenseTitle}>
+                      {item.title || "Untitled"}
                     </Text>
-                    <Text style={styles.expenseDate}>{item.date || "No date"}</Text>
+                    <Text style={styles.expenseDate}>
+                      {item.date || "No date"}
+                    </Text>
                   </View>
-                  <View style={styles.expenseActions}>
-                    <Text style={styles.expenseAmount}>₹{item.amount || "0"}</Text>
-                    <View style={styles.actionButtons}>
-                      <TouchableOpacity
-                        style={[styles.actionButton, styles.editButton]}
-                        onPress={() => handleEdit(item)}
-                      >
-                        <Text style={styles.actionButtonText}>✏️</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.actionButton, styles.deleteButton]}
-                        onPress={() => handleDelete(item)}
-                      >
-                        <Text style={styles.actionButtonText}>🗑️</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
+                  <Text style={styles.expenseAmount}>
+                    ₹{item.amount || "0"}
+                  </Text>
                 </View>
               )}
               keyExtractor={(item) =>
@@ -553,6 +598,7 @@ export default function DashboardScreen({ navigation }) {
           </KeyboardAvoidingView>
         </Modal>
       </ScrollView>
+      
       {/* Taskbar */}
       <View style={styles.taskbarContainer}>
         <View style={styles.taskbar}>
@@ -585,9 +631,59 @@ export default function DashboardScreen({ navigation }) {
           </TouchableOpacity>
         </View>
       </View>
+      
+      {/* Alerts  */}
+      <Alert
+        open={showDeleteAlert}
+        onConfirm={async () => {
+          setShowDeleteAlert(false);
+          if (expenseToDelete) {
+            await deleteExpense(expenseToDelete.id);
+            setExpenseToDelete(null);
+          }
+        }}
+        onCancel={() => {
+          setShowDeleteAlert(false);
+          setExpenseToDelete(null);
+        }}
+        title="Delete Expense"
+        message={`Are you sure you want to delete ${expenseToDelete?.title}?`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        icon={<Trash2 color="#fff" size={40} />}
+        iconBg="#ef4444"
+        confirmColor="#ef4444"
+        confirmTextColor="#fff"
+        cancelColor="#f1f5f9"
+        cancelTextColor="#334155"
+      />
+
+      <Alert
+        open={showLogoutAlert}
+        onConfirm={async () => {
+          setShowLogoutAlert(false);
+          try {
+            await supabase.auth.signOut();
+          } catch (error) {
+            console.error("Logout error:", error);
+          }
+        }}
+        onCancel={() => setShowLogoutAlert(false)}
+        title="Logout"
+        message="Are you sure you want to logout?"
+        confirmText="Logout"
+        cancelText="Cancel"
+        icon={<LogOut color="#fff" size={40} />}
+        iconBg="#ef4444"
+        confirmColor="#ef4444"
+        confirmTextColor="#fff"
+        cancelColor="#f1f5f9"
+        cancelTextColor="#334155"
+      />
     </>
   );
 }
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -747,6 +843,8 @@ const styles = StyleSheet.create({
   },
   expenseItem: {
     flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     backgroundColor: "#fff",
     padding: 20,
     marginBottom: 12,
@@ -801,7 +899,7 @@ const styles = StyleSheet.create({
   editButton: {
     marginRight: 0,
     marginTop: 0,
-    },
+  },
   deleteButton: {
     marginRight: 0,
     marginTop: 0,
@@ -845,7 +943,6 @@ const styles = StyleSheet.create({
     maxHeight: "85%",
     elevation: 20,
     borderWidth: 1,
-    
   },
   modalTitle: {
     fontSize: 24,
@@ -955,15 +1052,14 @@ const styles = StyleSheet.create({
   },
   actionIcon: {
     fontSize: 20,
-    margin:10
+    margin: 10,
   },
   actionButton2: {
     padding: 10,
-    
+
     // borderRadius: 12,
     // backgroundColor: "#f8fafc",
     // elevation: 2,
     // marginRight: 8,
   },
 });
-
