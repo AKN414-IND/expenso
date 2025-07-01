@@ -398,12 +398,15 @@ export default function DashboardScreen({ navigation }) {
 
         {/* Budget Progress Section */}
         <View style={{ paddingHorizontal: 20, marginTop: 24 }}>
+        <View style={styles.sectionHeader}>
           <Text style={{ fontWeight: "700", fontSize: 20, marginBottom: 10 }}>
             Budget Progress
           </Text>
           <TouchableOpacity onPress={() => navigation.navigate("BudgetScreen")}>
             <Text style={styles.seeAllText}>Manage</Text>
           </TouchableOpacity>
+          </View>
+          
 
           {/* Total Budget Bar */}
           <BudgetBar

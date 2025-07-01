@@ -391,12 +391,16 @@ export default function AllExpensesScreen({ navigation }) {
       </View>
 
       {/* Quick Sort Buttons */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sortContainer}>
-        {renderSortButton("Date", "date")}
+
+      <View style={styles.sortContainer}>
+      {renderSortButton("Date", "date")}
         {renderSortButton("Amount", "amount")}
         {renderSortButton("Title", "title")}
         {renderSortButton("Category", "category")}
-      </ScrollView>
+      </View>
+      
+        
+      
 
       {/* Expenses List */}
       <FlatList
@@ -674,6 +678,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   sortContainer: {
+    flexDirection:'row',
     paddingHorizontal: 20,
     marginBottom: 10,
   },
@@ -682,9 +687,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     paddingVertical: 8,
     borderRadius: 20,
-    marginRight: 10,
+    marginRight: 5,
     borderWidth: 1,
     borderColor: "#e0e0e0",
+    height:40,
+    width:'25%',
+    justifyContent:'center',
+    alignContent:'center',
   },
   activeSortButton: {
     backgroundColor: "#4ECDC4",
