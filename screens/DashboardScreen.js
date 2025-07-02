@@ -565,7 +565,7 @@ export default function DashboardScreen({ navigation }) {
             <View style={styles.sectionHeader2}>
               <Text style={styles.sectionTitle}>Payment Reminders</Text>
               <TouchableOpacity
-                onPress={() => navigation.navigate("PaymentReminder")}
+                onPress={() => navigation.navigate("PaymentReminders")}
               >
                 <Text style={styles.seeAllText}>View All</Text>
               </TouchableOpacity>
@@ -580,7 +580,7 @@ export default function DashboardScreen({ navigation }) {
               renderItem={({ item }) => (
                 <ReminderCard
                   item={item}
-                  onPress={() => navigation.navigate("PaymentReminder")}
+                  onPress={() => navigation.navigate("PaymentReminders")}
                 />
               )}
             />
@@ -736,7 +736,7 @@ export default function DashboardScreen({ navigation }) {
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.actionButton}
-            onPress={() => navigation.navigate("PaymentReminder")}
+            onPress={() => navigation.navigate("PaymentReminders")}
             activeOpacity={0.7}
           >
             <Text style={styles.actionIcon}>🔔</Text>

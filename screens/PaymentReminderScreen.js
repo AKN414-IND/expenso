@@ -18,6 +18,7 @@ import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
 import Alert from "../components/Alert";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import * as Notifications from "expo-notifications";
 import { notificationService, NOTIFICATION_CATEGORIES } from "../lib/notificationService";
 import { registerBackgroundTask } from "../lib/backgroundTasks";
 import {
@@ -111,8 +112,7 @@ export default function PaymentReminderScreen({ navigation }) {
               { text: "Cancel", style: "cancel" },
               {
                 text: "Settings",
-                onPress: () => notificationService.openSettingsAsync?.() || 
-                         console.log("Settings not available"),
+                onPress: () => Notifications.openSettingsAsync(),
               },
             ]
           );

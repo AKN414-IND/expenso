@@ -5,6 +5,7 @@ import { ActivityIndicator, View } from "react-native";
 import * as SecureStore from "expo-secure-store";
 
 import { useAuth } from "./context/AuthContext";
+import { navigationRef } from "./lib/navigationService";
 import OnboardingScreen from "./screens/OnboardingScreen";
 import AuthScreen from "./screens/AuthScreen";
 import DashboardScreen from "./screens/DashboardScreen";
@@ -59,7 +60,7 @@ export default function AppNavigator() {
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef}>
       <>
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           {!onboardingComplete ? (
@@ -80,7 +81,7 @@ export default function AppNavigator() {
               <Stack.Screen name="Profile" component={ProfileScreen} />
               <Stack.Screen name="AppSettings" component={AppSettingsScreen} />
               <Stack.Screen
-                name="PaymentReminder"
+                name="PaymentReminders"
                 component={PaymentReminderScreen}
                 options={{ headerShown: false }}
               />
