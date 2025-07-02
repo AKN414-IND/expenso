@@ -19,6 +19,8 @@ import { useAuth } from "../context/AuthContext";
 import { PieChart } from "react-native-chart-kit";
 import Alert from "../components/Alert";
 import { LogOut, Trash2, User } from "lucide-react-native";
+import { useNavigation } from "@react-navigation/native";
+import { Bell } from "lucide-react-native";
 
 const screenWidth = Dimensions.get("window").width;
 
@@ -73,10 +75,9 @@ const Avatar = ({ name, email, size = 50, style, onPress }) => {
           alignItems: "center",
           justifyContent: "center",
           elevation: 4,
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.1,
-          shadowRadius: 4,
+          borderStyle: "dashed",
+          borderWidth: 2,
+          borderColor: "rgba(6, 182, 212, 0.1)",
           borderWidth: 2,
           borderColor: "white",
         },
@@ -177,6 +178,8 @@ const BudgetBar = ({ label, spent, budget, color, icon }) => {
 
 export default function DashboardScreen({ navigation }) {
   const { session } = useAuth();
+  
+
   const [expenses, setExpenses] = useState([]);
   const [budgets, setBudgets] = useState([]);
   const [profile, setProfile] = useState(null);
@@ -184,6 +187,8 @@ export default function DashboardScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState(null);
+  const [reminders, setReminders] = useState([]);
+
   const [editForm, setEditForm] = useState({
     title: "",
     amount: "",
@@ -204,6 +209,24 @@ export default function DashboardScreen({ navigation }) {
       fetchProfile();
     }
   }, [session]);
+  useEffect(() => {
+    const fetchReminders = async () => {
+      const { data, error } = await supabase
+        .from("payment_reminders")
+        .select("*")
+        .eq("user_id", session.user.id)
+        .eq("is_active", true)
+        .order("next_due_date", { ascending: true });
+
+      if (!error) {
+        setReminders(data);
+      } else {
+        console.error("Error fetching reminders:", error);
+      }
+    };
+
+    fetchReminders();
+  }, []);
 
   const fetchProfile = async () => {
     try {
@@ -461,6 +484,14 @@ export default function DashboardScreen({ navigation }) {
 
   const pieData = getPieChartData(expenses);
 
+  const upcomingReminder = reminders?.length
+    ? reminders.reduce((next, curr) => {
+        return new Date(curr.next_due_date) < new Date(next.next_due_date)
+          ? curr
+          : next;
+      }, reminders[0])
+    : null;
+
   return (
     <>
       <ScrollView
@@ -625,6 +656,34 @@ export default function DashboardScreen({ navigation }) {
         {/* Recent Expenses */}
         <View style={styles.recentSection}>
           <View style={styles.sectionHeader}>
+            {upcomingReminder && (
+              <TouchableOpacity
+                style={{
+                  backgroundColor: "#fef9c3",
+                  padding: 15,
+                  borderRadius: 12,
+                  marginBottom: 20,
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+                onPress={() => navigation.navigate("PaymentReminder")}
+              >
+                <View>
+                  <Text style={{ fontWeight: "700", fontSize: 16 }}>
+                    💡 Upcoming Payment: {upcomingReminder.title}
+                  </Text>
+                  <Text style={{ color: "#555", fontSize: 14 }}>
+                    Due on{" "}
+                    {new Date(
+                      upcomingReminder.next_due_date
+                    ).toLocaleDateString()}
+                  </Text>
+                </View>
+                <Bell size={24} color="#facc15" />
+              </TouchableOpacity>
+            )}
+
             <Text style={styles.sectionTitle}>Recent Expenses</Text>
             <TouchableOpacity
               onPress={() => navigation.navigate("AllExpenses")}
@@ -1187,6 +1246,5 @@ const styles = StyleSheet.create({
   },
   actionButton2: {
     padding: 10,
-
   },
 });

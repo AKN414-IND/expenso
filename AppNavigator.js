@@ -15,6 +15,7 @@ import BudgetScreen from "./screens/BudgetScreen";
 import ProfileScreen from "./screens/ProfileScreen";
 import AppSettingsScreen from "./screens/AppSettingsScreen";
 import PrivacySecurityScreen from "./screens/PrivacySecurityScreen";
+import PaymentReminderScreen from "./screens/PaymentReminderScreen";
 
 import Toast from "react-native-toast-message";
 
@@ -81,8 +82,16 @@ export default function AppNavigator() {
               <Stack.Screen name="Profile" component={ProfileScreen} />
 
               <Stack.Screen name="AppSettings" component={AppSettingsScreen} />
-              <Stack.Screen name="PrivacySecurity" component={PrivacySecurityScreen} />
+              <Stack.Screen
+                name="PrivacySecurity"
+                component={PrivacySecurityScreen}
+              />
 
+              <Stack.Screen
+                name="PaymentReminder"
+                component={PaymentReminderScreen}
+                options={{ headerShown: false }}
+              />
             </>
           ) : (
             <>

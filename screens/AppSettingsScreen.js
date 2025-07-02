@@ -1,13 +1,40 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
-  StyleSheet,
   TouchableOpacity,
+  StyleSheet,
+  Alert,
+  Switch,  
 } from "react-native";
+
 import { ArrowLeft, Settings } from "lucide-react-native";
+import * as Notifications from "expo-notifications";
+
 
 export default function AppSettingsScreen({ navigation }) {
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  useEffect(() => {
+    const checkPermissions = async () => {
+      const { status } = await Notifications.getPermissionsAsync();
+      setNotificationsEnabled(status === "granted");
+    };
+  
+    checkPermissions();
+  }, []);
+  const handleToggleNotifications = async () => {
+    const { status } = await Notifications.requestPermissionsAsync();
+    const granted = status === "granted";
+    setNotificationsEnabled(granted);
+  
+    if (!granted) {
+      Alert.alert(
+        "Permission Denied",
+        "You have disabled notifications. You won’t get payment reminders unless you enable them from system settings."
+      );
+    }
+  };
+    
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -24,10 +51,25 @@ export default function AppSettingsScreen({ navigation }) {
 
       <View style={styles.centerContent}>
         <Settings color="#06b6d4" size={48} style={{ marginBottom: 20 }} />
-        <Text style={styles.comingSoonText}>Coming Soon!</Text>
-        <Text style={styles.desc}>
-          We’re working on new app settings and features for you.
-        </Text>
+        <View
+  style={{
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 15,
+    borderBottomColor: "#e2e8f0",
+    borderBottomWidth: 1,
+  }}
+>
+  <Text style={{ fontSize: 16, fontWeight: "500" }}>Payment Reminders</Text>
+  <Switch
+    value={notificationsEnabled}
+    onValueChange={handleToggleNotifications}
+    trackColor={{ false: "#ccc", true: "#06b6d4" }}
+    thumbColor={notificationsEnabled ? "#fff" : "#f4f4f4"}
+  />
+</View>
+
       </View>
     </View>
   );
