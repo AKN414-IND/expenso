@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo, useCallback } from "react";
 import {
   View,
   Text,
@@ -13,90 +13,16 @@ import {
   Dimensions,
   KeyboardAvoidingView,
   Platform,
+  Alert as RNAlert,
 } from "react-native";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
 import { PieChart } from "react-native-chart-kit";
 import Alert from "../components/Alert";
-import { LogOut, Trash2, User } from "lucide-react-native";
-import { useNavigation } from "@react-navigation/native";
-import { Bell } from "lucide-react-native";
+import { LogOut, Trash2, Bell } from "lucide-react-native";
+import Carousel from "react-native-reanimated-carousel";
 
 const screenWidth = Dimensions.get("window").width;
-
-// Avatar component with initials fallback
-const Avatar = ({ name, email, size = 50, style, onPress }) => {
-  const getInitials = (name, email) => {
-    if (name && name.trim()) {
-      return name
-        .trim()
-        .split(" ")
-        .map((n) => n[0])
-        .join("")
-        .toUpperCase()
-        .slice(0, 2);
-    }
-    if (email) {
-      return email.charAt(0).toUpperCase();
-    }
-    return "U";
-  };
-
-  const getAvatarColor = (text) => {
-    const colors = [
-      "#FF6B6B",
-      "#4ECDC4",
-      "#45B7D1",
-      "#96CEB4",
-      "#FECA57",
-      "#FF9FF3",
-      "#54A0FF",
-      "#5F27CD",
-    ];
-    let hash = 0;
-    for (let i = 0; i < text.length; i++) {
-      hash = text.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    return colors[Math.abs(hash) % colors.length];
-  };
-
-  const initials = getInitials(name, email);
-  const backgroundColor = getAvatarColor(name || email || "User");
-
-  return (
-    <TouchableOpacity
-      onPress={onPress}
-      style={[
-        {
-          width: size,
-          height: size,
-          borderRadius: size / 2,
-          backgroundColor,
-          alignItems: "center",
-          justifyContent: "center",
-          elevation: 4,
-          borderStyle: "dashed",
-          borderWidth: 2,
-          borderColor: "rgba(6, 182, 212, 0.1)",
-          borderWidth: 2,
-          borderColor: "white",
-        },
-        style,
-      ]}
-    >
-      <Text
-        style={{
-          color: "white",
-          fontSize: size * 0.4,
-          fontWeight: "bold",
-          letterSpacing: 1,
-        }}
-      >
-        {initials}
-      </Text>
-    </TouchableOpacity>
-  );
-};
 
 const EXPENSE_CATEGORIES = [
   { name: "Food & Dining", icon: "🍽️", color: "#FF6B6B" },
@@ -120,65 +46,117 @@ const CHART_COLORS = [
   "#DDA0DD",
 ];
 
-// BudgetBar - horizontal bar for visualizing progress
-const BudgetBar = ({ label, spent, budget, color, icon }) => {
-  const percent = budget > 0 ? Math.min((spent / budget) * 100, 100) : 0;
-  const isOverBudget = spent > budget;
+const Avatar = ({ name, email, size = 50, style, onPress }) => {
+  const getInitials = useCallback((name, email) => {
+    if (name && name.trim()) {
+      return name
+        .trim()
+        .split(" ")
+        .map((n) => n[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2);
+    }
+    if (email) {
+      return email.charAt(0).toUpperCase();
+    }
+    return "U";
+  }, []);
+
+  const getAvatarColor = useCallback((text) => {
+    const colors = [
+      "#FF6B6B",
+      "#4ECDC4",
+      "#45B7D1",
+      "#96CEB4",
+      "#FECA57",
+      "#FF9FF3",
+      "#54A0FF",
+      "#5F27CD",
+    ];
+    let hash = 0;
+    for (let i = 0; i < text.length; i++) {
+      hash = text.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return colors[Math.abs(hash) % colors.length];
+  }, []);
+
+  const initials = useMemo(() => getInitials(name, email), [name, email, getInitials]);
+  const backgroundColor = useMemo(() => getAvatarColor(name || email || "User"), [name, email, getAvatarColor]);
 
   return (
-    <View style={{ marginBottom: 16 }}>
-      <View
-        style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}
+    <TouchableOpacity
+      onPress={onPress}
+      style={[
+        {
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          backgroundColor,
+          alignItems: "center",
+          justifyContent: "center",
+          borderWidth: 2,
+          borderColor: "white",
+          elevation: 4,
+        },
+        style,
+      ]}
+    >
+      <Text
+        style={{
+          color: "white",
+          fontSize: size * 0.4,
+          fontWeight: "bold",
+          letterSpacing: 1,
+        }}
       >
-        {icon && <Text style={{ marginRight: 8, fontSize: 16 }}>{icon}</Text>}
+        {initials}
+      </Text>
+    </TouchableOpacity>
+  );
+};
+
+const BudgetBar = ({ label, spent, budget, color, icon }) => {
+  const percent = budget > 0 ? Math.min((spent / budget) * 100, 100) : 0;
+  const isOverBudget = spent > budget && budget > 0;
+
+  return (
+    <View style={styles.budgetBarContainer}>
+      <View style={styles.budgetBarHeader}>
+        {icon && <Text style={styles.budgetBarIcon}>{icon}</Text>}
+        <Text style={styles.budgetBarLabel}>{label}</Text>
         <Text
-          style={{ fontWeight: "600", color: "#222", flex: 1, fontSize: 16 }}
-        >
-          {label}
-        </Text>
-        <Text
-          style={{
-            fontWeight: "600",
-            color: isOverBudget ? "#ef4444" : "#06b6d4",
-            fontSize: 14,
-          }}
+          style={[
+            styles.budgetBarAmount,
+            { color: isOverBudget ? "#ef4444" : "#06b6d4" },
+          ]}
         >
           ₹{spent.toFixed(0)} / ₹{budget.toFixed(0)}
         </Text>
       </View>
-      <View
-        style={{
-          backgroundColor: "#e5e7eb",
-          borderRadius: 12,
-          height: 18,
-          overflow: "hidden",
-          marginBottom: 4,
-        }}
-      >
+      <View style={styles.budgetBarTrack}>
         <View
-          style={{
-            width: `${percent}%`,
-            backgroundColor: isOverBudget ? "#ef4444" : color,
-            height: 18,
-            borderRadius: 12,
-          }}
+          style={[
+            styles.budgetBarFill,
+            {
+              width: `${percent}%`,
+              backgroundColor: isOverBudget ? "#ef4444" : color,
+            },
+          ]}
         />
       </View>
       {isOverBudget && (
-        <Text style={{ fontSize: 12, color: "#ef4444", fontWeight: "500" }}>
+        <Text style={styles.budgetBarOverage}>
           Over budget by ₹{(spent - budget).toFixed(0)}
         </Text>
       )}
-      <Text style={{ fontSize: 12, color: "#64748b", fontWeight: "400" }}>
-        {percent.toFixed(1)}% used
-      </Text>
+      <Text style={styles.budgetBarPercent}>{percent.toFixed(1)}% used</Text>
     </View>
   );
 };
 
 export default function DashboardScreen({ navigation }) {
   const { session } = useAuth();
-  
 
   const [expenses, setExpenses] = useState([]);
   const [budgets, setBudgets] = useState([]);
@@ -188,14 +166,12 @@ export default function DashboardScreen({ navigation }) {
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState(null);
   const [reminders, setReminders] = useState([]);
-
   const [editForm, setEditForm] = useState({
     title: "",
     amount: "",
     category: "",
     date: "",
   });
-
   const [totalExpenses, setTotalExpenses] = useState(0);
   const [monthlyExpenses, setMonthlyExpenses] = useState(0);
   const [showLogoutAlert, setShowLogoutAlert] = useState(false);
@@ -203,30 +179,27 @@ export default function DashboardScreen({ navigation }) {
   const [expenseToDelete, setExpenseToDelete] = useState(null);
 
   useEffect(() => {
-    if (session && session.user) {
-      fetchExpenses();
-      fetchBudgets();
-      fetchProfile();
+    if (session?.user) {
+      initializeData();
     }
   }, [session]);
-  useEffect(() => {
-    const fetchReminders = async () => {
-      const { data, error } = await supabase
-        .from("payment_reminders")
-        .select("*")
-        .eq("user_id", session.user.id)
-        .eq("is_active", true)
-        .order("next_due_date", { ascending: true });
 
-      if (!error) {
-        setReminders(data);
-      } else {
-        console.error("Error fetching reminders:", error);
-      }
-    };
-
-    fetchReminders();
-  }, []);
+  const initializeData = async () => {
+    setLoading(true);
+    try {
+      await Promise.all([
+        fetchExpenses(),
+        fetchBudgets(),
+        fetchProfile(),
+        fetchReminders(),
+      ]);
+    } catch (error) {
+      console.error("Error initializing data:", error);
+      RNAlert.alert("Error", "Failed to load dashboard data. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const fetchProfile = async () => {
     try {
@@ -238,10 +211,13 @@ export default function DashboardScreen({ navigation }) {
 
       if (error && error.code !== "PGRST116") {
         console.error("Error fetching profile:", error);
-      } else if (data) {
+        return;
+      }
+
+      if (data) {
         setProfile(data);
       } else {
-        // Create initial profile if it doesn't exist
+        // Create profile if it doesn't exist
         const { data: newProfile, error: createError } = await supabase
           .from("profiles")
           .insert([
@@ -273,19 +249,18 @@ export default function DashboardScreen({ navigation }) {
         .eq("user_id", session.user.id)
         .order("date", { ascending: false });
 
-      if (!error && data) {
-        setExpenses(data);
-        calculateStatistics(data);
-      } else {
+      if (error) {
         console.error("Error fetching expenses:", error);
         setExpenses([]);
+        return;
       }
+
+      const validExpenses = data || [];
+      setExpenses(validExpenses);
+      calculateStatistics(validExpenses);
     } catch (err) {
       console.error("Exception fetching expenses:", err);
       setExpenses([]);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
     }
   };
 
@@ -296,21 +271,44 @@ export default function DashboardScreen({ navigation }) {
         .select("*")
         .eq("user_id", session.user.id);
 
-      if (!error && data) {
-        setBudgets(data);
-      } else {
+      if (error) {
         console.error("Error fetching budgets:", error);
         setBudgets([]);
+        return;
       }
+
+      setBudgets(data || []);
     } catch (err) {
       console.error("Exception fetching budgets:", err);
       setBudgets([]);
     }
   };
 
-  const calculateStatistics = (expenseData) => {
+  const fetchReminders = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("payment_reminders")
+        .select("*")
+        .eq("user_id", session.user.id)
+        .eq("is_active", true)
+        .order("next_due_date", { ascending: true });
+
+      if (error) {
+        console.error("Error fetching reminders:", error);
+        setReminders([]);
+        return;
+      }
+
+      setReminders(data || []);
+    } catch (err) {
+      console.error("Exception fetching reminders:", err);
+      setReminders([]);
+    }
+  };
+
+  const calculateStatistics = useCallback((expenseData) => {
     const total = expenseData.reduce(
-      (sum, expense) => sum + parseFloat(expense.amount || 0),
+      (sum, expense) => sum + (parseFloat(expense.amount) || 0),
       0
     );
     setTotalExpenses(total);
@@ -319,29 +317,31 @@ export default function DashboardScreen({ navigation }) {
     const currentYear = new Date().getFullYear();
     const monthlyTotal = expenseData
       .filter((expense) => {
+        if (!expense.date) return false;
         const expenseDate = new Date(expense.date);
         return (
           expenseDate.getMonth() === currentMonth &&
           expenseDate.getFullYear() === currentYear
         );
       })
-      .reduce((sum, expense) => sum + parseFloat(expense.amount || 0), 0);
+      .reduce((sum, expense) => sum + (parseFloat(expense.amount) || 0), 0);
     setMonthlyExpenses(monthlyTotal);
-  };
+  }, []);
 
-  const onRefresh = () => {
+  const onRefresh = useCallback(() => {
     setRefreshing(true);
-    fetchExpenses();
-    fetchBudgets();
-  };
+    Promise.all([fetchExpenses(), fetchBudgets(), fetchReminders()])
+      .finally(() => setRefreshing(false));
+  }, []);
 
-  const getPieChartData = (items) => {
+  const getPieChartData = useMemo(() => {
     const categoryMap = {};
-    items.forEach((item) => {
+    expenses.forEach((item) => {
       const amount = parseFloat(item.amount);
-      if (!item.category || isNaN(amount)) return;
+      if (!item.category || isNaN(amount) || amount <= 0) return;
       categoryMap[item.category] = (categoryMap[item.category] || 0) + amount;
     });
+
     return Object.entries(categoryMap)
       .filter(([cat, amt]) => cat && amt > 0)
       .sort((a, b) => b[1] - a[1])
@@ -351,32 +351,29 @@ export default function DashboardScreen({ navigation }) {
         return {
           name: category,
           amount: amount,
-          color:
-            categoryObj?.color || CHART_COLORS[index % CHART_COLORS.length],
+          color: categoryObj?.color || CHART_COLORS[index % CHART_COLORS.length],
           legendFontColor: "#222",
           legendFontSize: 14,
           icon: categoryObj?.icon || "📝",
         };
       });
-  };
+  }, [expenses]);
 
-  // Returns how much was spent in a category for the current month
-  const getMonthlyCategorySpending = (category) => {
+  const getMonthlyCategorySpending = useCallback((category) => {
     const now = new Date();
     return expenses
       .filter((expense) => {
-        if (expense.category !== category) return false;
+        if (expense.category !== category || !expense.date) return false;
         const expenseDate = new Date(expense.date);
         return (
           expenseDate.getFullYear() === now.getFullYear() &&
           expenseDate.getMonth() === now.getMonth()
         );
       })
-      .reduce((sum, expense) => sum + parseFloat(expense.amount || 0), 0);
-  };
+      .reduce((sum, expense) => sum + (parseFloat(expense.amount) || 0), 0);
+  }, [expenses]);
 
-  // Creates an array of category budgets, each with current month spent
-  const getBudgetProgress = () => {
+  const budgetProgress = useMemo(() => {
     return budgets.map((budget) => {
       const spent = getMonthlyCategorySpending(budget.category);
       const categoryData = EXPENSE_CATEGORIES.find(
@@ -387,12 +384,12 @@ export default function DashboardScreen({ navigation }) {
         spent,
         icon: categoryData?.icon || "📝",
         color: categoryData?.color || "#747D8C",
-        isOverBudget: spent > budget.amount,
+        isOverBudget: spent > parseFloat(budget.amount || 0),
       };
     });
-  };
+  }, [budgets, getMonthlyCategorySpending]);
 
-  const handleEdit = (expense) => {
+  const handleEdit = useCallback((expense) => {
     setSelectedExpense(expense);
     setEditForm({
       title: expense.title || "",
@@ -401,12 +398,12 @@ export default function DashboardScreen({ navigation }) {
       date: expense.date || "",
     });
     setEditModalVisible(true);
-  };
+  }, []);
 
-  const handleDelete = (expense) => {
+  const handleDelete = useCallback((expense) => {
     setExpenseToDelete(expense);
     setShowDeleteAlert(true);
-  };
+  }, []);
 
   const deleteExpense = async (expenseId) => {
     try {
@@ -415,65 +412,116 @@ export default function DashboardScreen({ navigation }) {
         .delete()
         .eq("id", expenseId);
 
-      if (!error) {
-        fetchExpenses();
-        // Using console.log instead of Alert.alert for React Native compatibility
-        console.log("Expense deleted successfully!");
-      } else {
+      if (error) {
         console.error("Failed to delete expense:", error);
+        RNAlert.alert("Error", "Failed to delete expense. Please try again.");
+        return;
       }
+
+      await fetchExpenses();
+      RNAlert.alert("Success", "Expense deleted successfully!");
     } catch (err) {
       console.error("Failed to delete expense:", err);
+      RNAlert.alert("Error", "Failed to delete expense. Please try again.");
     }
   };
 
+  const uniqueReminders = useMemo(() => {
+    return reminders
+      .sort((a, b) => {
+        const dateA = new Date(`${a.next_due_date}T${a.reminder_time || '00:00'}`);
+        const dateB = new Date(`${b.next_due_date}T${b.reminder_time || '00:00'}`);
+        return dateA - dateB;
+      })
+      .filter((rem, idx, arr) =>
+        arr.findIndex(
+          r =>
+            r.title === rem.title &&
+            r.next_due_date === rem.next_due_date &&
+            r.reminder_time === rem.reminder_time
+        ) === idx
+      );
+  }, [reminders]);
+
   const updateExpense = async () => {
-    if (!editForm.title || !editForm.amount) {
-      console.log("Please fill in all required fields");
+    if (!editForm.title.trim() || !editForm.amount.trim()) {
+      RNAlert.alert("Error", "Please fill in all required fields");
       return;
     }
+
+    const amount = parseFloat(editForm.amount);
+    if (isNaN(amount) || amount <= 0) {
+      RNAlert.alert("Error", "Please enter a valid amount");
+      return;
+    }
+
     try {
       const { error } = await supabase
         .from("expenses")
         .update({
-          title: editForm.title,
-          amount: parseFloat(editForm.amount),
-          category: editForm.category,
-          date: editForm.date,
+          title: editForm.title.trim(),
+          amount: amount,
+          category: editForm.category.trim(),
+          date: editForm.date || new Date().toISOString().split('T')[0],
         })
         .eq("id", selectedExpense.id);
 
-      if (!error) {
-        setEditModalVisible(false);
-        fetchExpenses();
-        console.log("Expense updated successfully!");
-      } else {
+      if (error) {
         console.error("Failed to update expense:", error);
+        RNAlert.alert("Error", "Failed to update expense. Please try again.");
+        return;
       }
+
+      setEditModalVisible(false);
+      await fetchExpenses();
+      RNAlert.alert("Success", "Expense updated successfully!");
     } catch (err) {
       console.error("Failed to update expense:", err);
+      RNAlert.alert("Error", "Failed to update expense. Please try again.");
     }
   };
 
-  const recentExpenses = expenses.slice(0, 5);
-  const budgetProgress = getBudgetProgress();
-  const totalBudgetAmount = budgets.reduce(
-    (sum, b) => sum + (parseFloat(b.amount) || 0),
-    0
-  );
-  const totalSpentForBudgets = budgets.reduce(
-    (sum, b) => sum + getMonthlyCategorySpending(b.category),
-    0
-  );
+  const handleLogout = async () => {
+    try {
+      setShowLogoutAlert(false);
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error("Logout error:", error);
+        RNAlert.alert("Error", "Failed to logout. Please try again.");
+      }
+    } catch (error) {
+      console.error("Logout error:", error);
+      RNAlert.alert("Error", "Failed to logout. Please try again.");
+    }
+  };
 
-  // Today's total
-  const today = new Date();
-  const todayString = today.toISOString().split("T")[0];
-  const todaysTotal = expenses
-    .filter((exp) => exp.date === todayString)
-    .reduce((sum, exp) => sum + Number(exp.amount), 0);
+  const renderExpenseItem = useCallback(({ item }) => (
+    <TouchableOpacity
+      style={styles.expenseItem}
+      onPress={() => handleEdit(item)}
+      onLongPress={() => handleDelete(item)}
+      activeOpacity={0.7}
+    >
+      <View style={styles.expenseInfo}>
+        <Text style={styles.expenseTitle}>
+          {item.title || "Untitled"}
+        </Text>
+        <Text style={styles.expenseDate}>
+          {item.date ? new Date(item.date).toLocaleDateString() : "No date"}
+        </Text>
+        {item.category && (
+          <Text style={styles.expenseCategory}>
+            {EXPENSE_CATEGORIES.find(cat => cat.name === item.category)?.icon || "📝"} {item.category}
+          </Text>
+        )}
+      </View>
+      <Text style={styles.expenseAmount}>
+        ₹{(parseFloat(item.amount) || 0).toFixed(2)}
+      </Text>
+    </TouchableOpacity>
+  ), [handleEdit, handleDelete]);
 
-  if (loading || !session || !session.user) {
+  if (loading || !session?.user) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#4ECDC4" />
@@ -482,15 +530,21 @@ export default function DashboardScreen({ navigation }) {
     );
   }
 
-  const pieData = getPieChartData(expenses);
-
-  const upcomingReminder = reminders?.length
-    ? reminders.reduce((next, curr) => {
-        return new Date(curr.next_due_date) < new Date(next.next_due_date)
-          ? curr
-          : next;
-      }, reminders[0])
-    : null;
+  const recentExpenses = expenses.slice(0, 5);
+  const totalBudgetAmount = budgets.reduce(
+    (sum, b) => sum + (parseFloat(b.amount) || 0),
+    0
+  );
+  const totalSpentForBudgets = budgets.reduce(
+    (sum, b) => sum + getMonthlyCategorySpending(b.category),
+    0
+  );
+  
+  const today = new Date();
+  const todayString = today.toISOString().split("T")[0];
+  const todaysTotal = expenses
+    .filter((exp) => exp.date === todayString)
+    .reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0);
 
   return (
     <>
@@ -499,20 +553,17 @@ export default function DashboardScreen({ navigation }) {
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
+        showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
         <View style={styles.header}>
           <Text style={styles.welcomeText}>Welcome back!</Text>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
-            {/* Profile Avatar */}
+          <View style={styles.headerActions}>
             <Avatar
               name={profile?.full_name}
               email={profile?.email || session?.user?.email}
               size={44}
               onPress={() => navigation.navigate("Profile", { profile })}
-              style={{ marginRight: 8 }}
             />
-            {/* Logout Button */}
             <TouchableOpacity
               style={styles.logoutButton}
               onPress={() => setShowLogoutAlert(true)}
@@ -522,13 +573,42 @@ export default function DashboardScreen({ navigation }) {
           </View>
         </View>
 
-        <View style={styles.StatisticsContainer}>
+        {uniqueReminders.length > 0 && (
+          <View style={{ marginTop: 10, marginBottom: 10 }}>
+            <Carousel
+              width={screenWidth - 40}
+              height={90}
+              data={uniqueReminders}
+              mode="parallax"
+              autoPlay={false}
+              scrollAnimationDuration={600}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.reminderCard}
+                  onPress={() => navigation.navigate("PaymentReminder")}
+                  activeOpacity={0.8}
+                >
+                  <View>
+                    <Text style={styles.reminderTitle}>🔔 {item.title}</Text>
+                    <Text style={styles.reminderDate}>
+                      Due on {new Date(item.next_due_date).toLocaleDateString()}{" "}
+                      at {item.reminder_time || "09:00"}
+                    </Text>
+                  </View>
+                  <Bell size={24} color="#facc15" />
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        )}
+
+        <View style={styles.statisticsContainer}>
           <View style={styles.statsContainer}>
-            <View style={[styles.statCard, { marginRight: 12 }]}>
+            <View style={[styles.statCard, styles.statCardMargin]}>
               <Text style={styles.statValue}>₹{totalExpenses.toFixed(2)}</Text>
               <Text style={styles.statLabel}>Total Expenses</Text>
             </View>
-            <View style={[styles.statCard, { marginRight: 12 }]}>
+            <View style={[styles.statCard, styles.statCardMargin]}>
               <Text style={styles.statValue}>
                 ₹{monthlyExpenses.toFixed(2)}
               </Text>
@@ -539,14 +619,14 @@ export default function DashboardScreen({ navigation }) {
               <Text style={styles.statLabel}>Today's Total</Text>
             </View>
           </View>
-          {expenses.length > 0 && pieData.length > 0 && (
+
+          {expenses.length > 0 && getPieChartData.length > 0 && (
             <View style={styles.chartsContainer}>
               <View style={styles.chartCard}>
                 <View style={styles.chartRow}>
-                  {/* Pie Chart Side */}
                   <View style={styles.chartSide}>
                     <PieChart
-                      data={pieData}
+                      data={getPieChartData}
                       width={screenWidth}
                       height={200}
                       chartConfig={{
@@ -563,11 +643,9 @@ export default function DashboardScreen({ navigation }) {
                       hasLegend={false}
                     />
                   </View>
-
-                  {/* Legend Side */}
                   <View style={styles.legendSide}>
                     <View style={styles.chartLegendGrid}>
-                      {pieData.map((item, idx) => (
+                      {getPieChartData.map((item) => (
                         <View key={item.name} style={styles.legendGridItem}>
                           <View
                             style={[
@@ -588,102 +666,54 @@ export default function DashboardScreen({ navigation }) {
           )}
         </View>
 
-        {/* Budget Progress Section */}
-        {budgets.length > 0 && (
-          <View style={{ paddingHorizontal: 20, marginTop: 24 }}>
-            <View style={styles.sectionHeader}>
-              <Text
-                style={{ fontWeight: "700", fontSize: 20, marginBottom: 10 }}
-              >
-                Budget Progress
+        
+
+        <View style={styles.budgetSection}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Budget Progress</Text>
+            <TouchableOpacity
+              onPress={() => navigation.navigate("BudgetScreen")}
+            >
+              <Text style={styles.seeAllText}>
+                {budgets.length > 0 ? "Manage" : "Create Budget"}
               </Text>
-              <TouchableOpacity
-                onPress={() => navigation.navigate("BudgetScreen")}
-              >
-                <Text style={styles.seeAllText}>Manage</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Total Budget Bar (this month, only for budgeted categories) */}
-            {totalBudgetAmount > 0 && (
-              <BudgetBar
-                label="Total Budget"
-                spent={totalSpentForBudgets}
-                budget={totalBudgetAmount}
-                color="#06b6d4"
-                icon="💰"
-              />
-            )}
-
-            {/* Per-category Budget Bars */}
-            {budgetProgress.map((item) => (
-              <BudgetBar
-                key={item.id}
-                label={item.category}
-                spent={item.spent}
-                budget={parseFloat(item.amount) || 0}
-                color={item.color}
-                icon={item.icon}
-              />
-            ))}
+            </TouchableOpacity>
           </View>
-        )}
 
-        {/* Show message when no budgets exist */}
-        {budgets.length === 0 && (
-          <View style={{ paddingHorizontal: 20, marginTop: 24 }}>
-            <View style={styles.sectionHeader}>
-              <Text
-                style={{ fontWeight: "700", fontSize: 20, marginBottom: 10 }}
-              >
-                Budget Progress
-              </Text>
-              <TouchableOpacity
-                onPress={() => navigation.navigate("BudgetScreen")}
-              >
-                <Text style={styles.seeAllText}>Create Budget</Text>
-              </TouchableOpacity>
-            </View>
+          {budgets.length > 0 ? (
+            <>
+              {totalBudgetAmount > 0 && (
+                <BudgetBar
+                  label="Total Budget"
+                  spent={totalSpentForBudgets}
+                  budget={totalBudgetAmount}
+                  color="#06b6d4"
+                  icon="💰"
+                />
+              )}
+              {budgetProgress.map((item) => (
+                <BudgetBar
+                  key={item.id}
+                  label={item.category}
+                  spent={item.spent}
+                  budget={parseFloat(item.amount) || 0}
+                  color={item.color}
+                  icon={item.icon}
+                />
+              ))}
+            </>
+          ) : (
             <View style={styles.emptyBudgetState}>
               <Text style={styles.emptyStateText}>No budgets set</Text>
               <Text style={styles.emptyStateSubtext}>
                 Create your first budget to track spending!
               </Text>
             </View>
-          </View>
-        )}
+          )}
+        </View>
 
-        {/* Recent Expenses */}
         <View style={styles.recentSection}>
           <View style={styles.sectionHeader}>
-            {upcomingReminder && (
-              <TouchableOpacity
-                style={{
-                  backgroundColor: "#fef9c3",
-                  padding: 15,
-                  borderRadius: 12,
-                  marginBottom: 20,
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-                onPress={() => navigation.navigate("PaymentReminder")}
-              >
-                <View>
-                  <Text style={{ fontWeight: "700", fontSize: 16 }}>
-                    💡 Upcoming Payment: {upcomingReminder.title}
-                  </Text>
-                  <Text style={{ color: "#555", fontSize: 14 }}>
-                    Due on{" "}
-                    {new Date(
-                      upcomingReminder.next_due_date
-                    ).toLocaleDateString()}
-                  </Text>
-                </View>
-                <Bell size={24} color="#facc15" />
-              </TouchableOpacity>
-            )}
-
             <Text style={styles.sectionTitle}>Recent Expenses</Text>
             <TouchableOpacity
               onPress={() => navigation.navigate("AllExpenses")}
@@ -691,28 +721,14 @@ export default function DashboardScreen({ navigation }) {
               <Text style={styles.seeAllText}>See All</Text>
             </TouchableOpacity>
           </View>
+
           {recentExpenses.length > 0 ? (
             <FlatList
               data={recentExpenses}
-              renderItem={({ item }) => (
-                <View style={styles.expenseItem}>
-                  <View style={styles.expenseInfo}>
-                    <Text style={styles.expenseTitle}>
-                      {item.title || "Untitled"}
-                    </Text>
-                    <Text style={styles.expenseDate}>
-                      {item.date || "No date"}
-                    </Text>
-                  </View>
-                  <Text style={styles.expenseAmount}>
-                    ₹{item.amount || "0"}
-                  </Text>
-                </View>
-              )}
-              keyExtractor={(item) =>
-                item.id?.toString() || Math.random().toString()
-              }
+              renderItem={renderExpenseItem}
+              keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
               scrollEnabled={false}
+              showsVerticalScrollIndicator={false}
             />
           ) : (
             <View style={styles.emptyState}>
@@ -724,7 +740,6 @@ export default function DashboardScreen({ navigation }) {
           )}
         </View>
 
-        {/* Edit Expense Modal */}
         <Modal
           animationType="slide"
           transparent={true}
@@ -789,19 +804,24 @@ export default function DashboardScreen({ navigation }) {
         </Modal>
       </ScrollView>
 
-      {/* Taskbar */}
       <View style={styles.taskbarContainer}>
         <View style={styles.taskbar}>
           <TouchableOpacity
-            style={styles.actionButton2}
+            style={styles.actionButton}
             onPress={() => navigation.navigate("BudgetScreen")}
             activeOpacity={0.7}
           >
-            <Text style={styles.actionLabel}>
-              <Text style={styles.actionIcon}>💰</Text>
-              Budget
-            </Text>
+            <Text style={styles.actionIcon}>💰</Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => navigation.navigate("PaymentReminder")}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.actionIcon}>🔔</Text>
+          </TouchableOpacity>
+
           <TouchableOpacity
             style={styles.addButton}
             onPress={() => navigation.navigate("AddExpense")}
@@ -809,20 +829,17 @@ export default function DashboardScreen({ navigation }) {
           >
             <Text style={styles.addIcon}>+</Text>
           </TouchableOpacity>
+
           <TouchableOpacity
-            style={styles.actionButton2}
+            style={styles.actionButton}
             onPress={() => navigation.navigate("AllExpenses")}
             activeOpacity={0.7}
           >
-            <Text style={styles.actionLabel}>
-              <Text style={styles.actionIcon}>📊</Text>
-              Expenses
-            </Text>
+            <Text style={styles.actionIcon}>📊</Text>
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* Alerts  */}
       <Alert
         open={showDeleteAlert}
         onConfirm={async () => {
@@ -837,7 +854,7 @@ export default function DashboardScreen({ navigation }) {
           setExpenseToDelete(null);
         }}
         title="Delete Expense"
-        message={`Are you sure you want to delete ${expenseToDelete?.title}?`}
+        message={`Are you sure you want to delete "${expenseToDelete?.title}"?`}
         confirmText="Delete"
         cancelText="Cancel"
         icon={<Trash2 color="#fff" size={40} />}
@@ -850,14 +867,7 @@ export default function DashboardScreen({ navigation }) {
 
       <Alert
         open={showLogoutAlert}
-        onConfirm={async () => {
-          setShowLogoutAlert(false);
-          try {
-            await supabase.auth.signOut();
-          } catch (error) {
-            console.error("Logout error:", error);
-          }
-        }}
+        onConfirm={handleLogout}
         onCancel={() => setShowLogoutAlert(false)}
         title="Logout"
         message="Are you sure you want to logout?"
@@ -908,6 +918,11 @@ const styles = StyleSheet.create({
     color: "#1e293b",
     letterSpacing: -0.5,
   },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+  },
   logoutButton: {
     backgroundColor: "#ef4444",
     paddingHorizontal: 20,
@@ -921,7 +936,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     letterSpacing: 0.2,
   },
-  StatisticsContainer: {
+  statisticsContainer: {
     flexDirection: "column",
     gap: 1,
   },
@@ -937,10 +952,12 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: "center",
     minHeight: 100,
-    borderStyle: "dashed",
     borderWidth: 2,
     borderColor: "rgba(6, 182, 212, 0.1)",
     justifyContent: "center",
+  },
+  statCardMargin: {
+    marginRight: 12,
   },
   statValue: {
     fontSize: 16,
@@ -964,7 +981,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     borderRadius: 25,
     padding: 15,
-    borderStyle: "dashed",
     borderWidth: 2,
     borderColor: "rgba(6, 182, 212, 0.1)",
   },
@@ -1003,248 +1019,290 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     flex: 1,
   },
-  seeAllText: {
-    fontSize: 15,
-    color: "#06b6d4",
-    fontWeight: "600",
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    backgroundColor: "rgba(6, 182, 212, 0.1)",
-    alignSelf: "flex-start",
+  budgetSection: {
+    paddingHorizontal: 20,
+    marginTop: 24,
+  },
+  budgetBarContainer: {
+    marginBottom: 16,
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "rgba(148, 163, 184, 0.1)",
+    elevation: 2,
+  },
+  budgetBarHeader: {
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 12,
+  },
+  budgetBarIcon: {
+    fontSize: 20,
+    marginRight: 10,
+  },
+  budgetBarLabel: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1e293b",
+  },
+  budgetBarAmount: {
+    fontSize: 14,
+    fontWeight: "700",
+    letterSpacing: -0.2,
+  },
+  budgetBarTrack: {
+    height: 8,
+    backgroundColor: "#f1f5f9",
+    borderRadius: 4,
+    overflow: "hidden",
+    marginBottom: 8,
+  },
+  budgetBarFill: {
+    height: "100%",
+    borderRadius: 4,
+  },
+  budgetBarOverage: {
+    fontSize: 12,
+    color: "#ef4444",
+    fontWeight: "600",
+    marginTop: 4,
+  },
+  budgetBarPercent: {
+    fontSize: 12,
+    color: "#64748b",
+    fontWeight: "500",
   },
   sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 10,
-    paddingHorizontal: 4,
+    marginBottom: 16,
   },
   sectionTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: "700",
     color: "#1e293b",
     letterSpacing: -0.3,
   },
-  recentSection: {
-    paddingHorizontal: 20,
-    marginBottom: 100,
-  },
-  expenseItem: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    backgroundColor: "#fff",
-    padding: 20,
-    marginBottom: 12,
-    borderRadius: 20,
-    borderStyle: "dashed",
-    borderWidth: 2,
-    borderColor: "rgba(6, 182, 212, 0.1)",
-  },
-  expenseInfo: {
-    flex: 1,
-  },
-  expenseTitle: {
-    fontSize: 17,
-    fontWeight: "600",
-    color: "#1e293b",
-    marginBottom: 6,
-    letterSpacing: -0.1,
-  },
-  expenseCategory: {
-    fontSize: 13,
-    color: "#64748b",
-    marginBottom: 4,
-    fontWeight: "500",
-  },
-  expenseDate: {
-    fontSize: 12,
-    color: "#94a3b8",
-    fontWeight: "400",
-  },
-  expenseActions: {
-    alignItems: "flex-end",
-    justifyContent: "space-between",
-  },
-  expenseAmount: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#06b6d4",
-    marginBottom: 12,
-    letterSpacing: -0.2,
-  },
-  actionButtons: {
-    flexDirection: "row",
-    marginTop: 4,
-  },
-  actionButton: {
-    padding: 10,
-    borderRadius: 12,
-    backgroundColor: "#f8fafc",
-    elevation: 2,
-    marginRight: 8,
-  },
-  editButton: {
-    marginRight: 0,
-    marginTop: 0,
-  },
-  deleteButton: {
-    marginRight: 0,
-    marginTop: 0,
-  },
-  actionButtonText: {
+  seeAllText: {
     fontSize: 16,
+    color: "#06b6d4",
+    fontWeight: "600",
   },
-  emptyState: {
+  emptyBudgetState: {
     backgroundColor: "#fff",
-    padding: 48,
-    borderRadius: 24,
+    borderRadius: 16,
+    padding: 24,
     alignItems: "center",
-    elevation: 6,
     borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.3)",
+    borderColor: "rgba(148, 163, 184, 0.1)",
   },
   emptyStateText: {
     fontSize: 18,
     fontWeight: "600",
     color: "#64748b",
     marginBottom: 8,
-    letterSpacing: -0.1,
   },
   emptyStateSubtext: {
-    fontSize: 15,
+    fontSize: 14,
     color: "#94a3b8",
     textAlign: "center",
-    lineHeight: 20,
+  },
+  recentSection: {
+    paddingHorizontal: 20,
+    marginTop: 24,
+    marginBottom: 120,
+  },
+  reminderCard: {
+    backgroundColor: "#fef3c7",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderLeftWidth: 4,
+    borderLeftColor: "#facc15",
+  },
+  reminderTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#92400e",
+    marginBottom: 4,
+  },
+  reminderDate: {
+    fontSize: 12,
+    color: "#a16207",
+    fontWeight: "500",
+  },
+  expenseItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: "rgba(148, 163, 184, 0.1)",
+    elevation: 1,
+  },
+  expenseInfo: {
+    flex: 1,
+  },
+  expenseTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1e293b",
+    marginBottom: 4,
+  },
+  expenseDate: {
+    fontSize: 12,
+    color: "#64748b",
+    fontWeight: "500",
+    marginBottom: 2,
+  },
+  expenseCategory: {
+    fontSize: 12,
+    color: "#94a3b8",
+    fontWeight: "500",
+  },
+  expenseAmount: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#06b6d4",
+    letterSpacing: -0.2,
+  },
+  emptyState: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 24,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(148, 163, 184, 0.1)",
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(15, 23, 42, 0.7)",
     justifyContent: "center",
     alignItems: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
   },
   modalContent: {
     backgroundColor: "#fff",
-    borderRadius: 28,
-    padding: 28,
-    width: "92%",
-    maxHeight: "85%",
-    elevation: 20,
-    borderWidth: 1,
+    borderRadius: 20,
+    padding: 24,
+    width: "90%",
+    maxWidth: 400,
+    elevation: 10,
   },
   modalTitle: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: "700",
     color: "#1e293b",
+    marginBottom: 20,
     textAlign: "center",
-    marginBottom: 28,
-    letterSpacing: -0.3,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 16,
+    marginBottom: 16,
+    backgroundColor: "#f8fafc",
+    color: "#1e293b",
   },
   modalButtons: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginTop: 24,
+    gap: 12,
+    marginTop: 8,
   },
   modalButton: {
     flex: 1,
-    padding: 18,
-    borderRadius: 16,
+    paddingVertical: 16,
+    borderRadius: 12,
     alignItems: "center",
-    elevation: 4,
-    marginRight: 12,
   },
   cancelButton: {
-    backgroundColor: "#f8fafc",
-    borderWidth: 1.5,
-    borderColor: "rgba(148, 163, 184, 0.3)",
-    marginRight: 12,
+    backgroundColor: "#f1f5f9",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
   },
   saveButton: {
     backgroundColor: "#06b6d4",
   },
   cancelButtonText: {
-    color: "#64748b",
-    fontWeight: "600",
+    color: "#334155",
     fontSize: 16,
-    letterSpacing: -0.1,
+    fontWeight: "600",
   },
   saveButtonText: {
-    color: "white",
+    color: "#fff",
+    fontSize: 16,
     fontWeight: "600",
-    fontSize: 16,
-    letterSpacing: -0.1,
-  },
-  input: {
-    backgroundColor: "#f8fafc",
-    borderRadius: 16,
-    padding: 18,
-    marginBottom: 16,
-    borderWidth: 1.5,
-    borderColor: "rgba(148, 163, 184, 0.2)",
-    fontSize: 16,
-    color: "#1e293b",
-    elevation: 2,
   },
   taskbarContainer: {
     position: "absolute",
+    bottom: 0,
     left: 0,
     right: 0,
-    bottom: 0,
+    backgroundColor: "transparent",
     paddingHorizontal: 20,
-    paddingBottom: 34,
-    paddingTop: 10,
+    paddingBottom: 30,
   },
   taskbar: {
-    height: 60,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: "white",
-    paddingHorizontal: 32,
-    borderRadius: 40,
-    elevation: 20,
-    borderWidth: 5,
-    borderColor: "#06b6d4",
-    position: "relative",
+    backgroundColor: "#fff",
+    borderRadius: 30,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    elevation: 10,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(148, 163, 184, 0.1)",
   },
-  addButton: {
-    position: "absolute",
-    left: "45%",
-    right: 0,
-    top: -16,
-    width: 90,
-    height: 90,
-    backgroundColor: "#06b6d4",
-    borderRadius: 90,
+  actionButton: {
     alignItems: "center",
-    justifyContent: "center",
-    elevation: 16,
-    borderWidth: 5,
-    borderColor: "white",
-    zIndex: 10,
-    alignSelf: "center",
-  },
-  addIcon: {
-    fontSize: 32,
-    fontWeight: "300",
-    color: "white",
-    lineHeight: 32,
-  },
-  actionLabel: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#475569",
-    textAlign: "center",
-    letterSpacing: -0.2,
-    left: 2,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    backgroundColor: "transparent",
   },
   actionIcon: {
-    fontSize: 20,
-    margin: 10,
+    fontSize: 18,
+    marginBottom: 4,
   },
-  actionButton2: {
-    padding: 10,
+  addButton: {
+    backgroundColor: "#06b6d4",
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: "center",
+    alignItems: "center",
+    elevation: 8,
+    shadowColor: "#06b6d4",
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  addIcon: {
+    fontSize: 28,
+    color: "#fff",
+    fontWeight: "300",
+    lineHeight: 32,
   },
 });

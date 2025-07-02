@@ -1,35 +1,38 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
   TouchableOpacity,
   FlatList,
   StyleSheet,
+  ActivityIndicator,
   Modal,
   TextInput,
   ScrollView,
-  Alert,
-  Switch,
-  Platform,
-  Dimensions,
+  RefreshControl,
   KeyboardAvoidingView,
+  Platform,
+  Alert as RNAlert,
 } from "react-native";
-import DateTimePicker from "@react-native-community/datetimepicker";
-import { Picker } from "@react-native-picker/picker";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
+import Alert from "../components/Alert";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import * as Notifications from "expo-notifications";
+import * as BackgroundFetch from "expo-background-fetch";
+import * as TaskManager from "expo-task-manager";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   Bell,
   Plus,
+  Edit3,
+  Trash2,
   Calendar,
   Clock,
-  Trash2,
-  Edit3,
+  ArrowLeft,
+  CheckCircle2,
   AlertCircle,
 } from "lucide-react-native";
-
-const screenWidth = Dimensions.get("window").width;
 
 // Configure notifications
 Notifications.setNotificationHandler({
@@ -40,91 +43,113 @@ Notifications.setNotificationHandler({
   }),
 });
 
-const REMINDER_FREQUENCIES = [
-  { label: "Daily", value: "daily" },
-  { label: "Weekly", value: "weekly" },
-  { label: "Monthly", value: "monthly" },
-  { label: "Quarterly (3 months)", value: "quarterly" },
-  { label: "Half-yearly (6 months)", value: "half_yearly" },
-  { label: "Yearly", value: "yearly" },
-  { label: "Custom", value: "custom" },
-];
+// Background task for checking overdue reminders
+const BACKGROUND_FETCH_TASK = "background-fetch-reminders";
 
-const REMINDER_CATEGORIES = [
-  { name: "Rent", icon: "🏠", color: "#FF6B6B" },
-  { name: "Utilities", icon: "⚡", color: "#4ECDC4" },
-  { name: "Insurance", icon: "🛡️", color: "#45B7D1" },
-  { name: "Subscription", icon: "📱", color: "#96CEB4" },
-  { name: "Loan Payment", icon: "🏦", color: "#FECA57" },
-  { name: "Credit Card", icon: "💳", color: "#FF9FF3" },
-  { name: "Tax Payment", icon: "📊", color: "#54A0FF" },
-  { name: "Medical", icon: "🏥", color: "#5F27CD" },
-  { name: "Education", icon: "📚", color: "#00D2D3" },
-  { name: "Other", icon: "📝", color: "#747D8C" },
-];
+TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
+  try {
+    console.log("Background task: Checking for overdue reminders");
+    // This would typically check for overdue reminders and send notifications
+    return BackgroundFetch.BackgroundFetchResult.NewData;
+  } catch (error) {
+    console.error("Background task error:", error);
+    return BackgroundFetch.BackgroundFetchResult.Failed;
+  }
+});
 
-const DAYS_OF_WEEK = [
-  "Sunday",
-  "Monday",
-  "Tuesday",
-  "Wednesday",
-  "Thursday",
-  "Friday",
-  "Saturday",
+const FREQUENCY_OPTIONS = [
+  { value: "monthly", label: "Monthly", icon: "📅" },
+  { value: "weekly", label: "Weekly", icon: "📋" },
+  { value: "yearly", label: "Yearly", icon: "🗓️" },
+  { value: "one-time", label: "One Time", icon: "⏰" },
 ];
 
 export default function PaymentReminderScreen({ navigation }) {
   const { session } = useAuth();
+
   const [reminders, setReminders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingReminder, setEditingReminder] = useState(null);
+  const [showDeleteAlert, setShowDeleteAlert] = useState(false);
+  const [reminderToDelete, setReminderToDelete] = useState(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [notificationPermission, setNotificationPermission] = useState(null);
+  const [saving, setSaving] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
 
-  // Form state
-  const [form, setForm] = useState({
-    title: "",
-    description: "",
-    amount: "",
-    category: "Other",
-    frequency: "monthly",
-    nextDueDate: new Date(),
-    reminderTime: new Date(),
-    isActive: true,
-    dayOfMonth: 1,
-    dayOfWeek: 1,
-    customInterval: 30,
-    advanceNotice: 1, // days before due date
-  });
-
-  useEffect(() => {
-    if (session?.user) {
-      requestNotificationPermissions();
-      fetchReminders();
-      setupNotificationListener();
-    }
-  }, [session]);
-
-  const requestNotificationPermissions = async () => {
-    const { status } = await Notifications.requestPermissionsAsync();
-    if (status !== "granted") {
-      Alert.alert(
-        "Notification Permission",
-        "Please enable notifications to receive payment reminders."
-      );
+  const onTimeChange = (event, selectedTime) => {
+    setShowTimePicker(false);
+    if (selectedTime) {
+      // Format as "HH:mm"
+      const hours = selectedTime.getHours().toString().padStart(2, "0");
+      const minutes = selectedTime.getMinutes().toString().padStart(2, "0");
+      setForm({ ...form, reminder_time: `${hours}:${minutes}` });
     }
   };
 
-  const setupNotificationListener = () => {
-    const subscription = Notifications.addNotificationReceivedListener(
-      (notification) => {
-        // Handle received notification while app is running
-        console.log("Notification received:", notification);
-      }
-    );
+  const [form, setForm] = useState({
+    title: "",
+    amount: "",
+    frequency: "monthly",
+    next_due_date: "",
+    reminder_time: "09:00", // Default value
+    description: "",
+    notification_enabled: true,
+    category: "",
+  });
 
-    return () => subscription.remove();
+  useEffect(() => {
+    if (session && session.user) {
+      initializeNotifications();
+      fetchReminders();
+      registerBackgroundTask();
+    }
+  }, [session]);
+
+  const initializeNotifications = async () => {
+    try {
+      const { status: existingStatus } =
+        await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+
+      if (existingStatus !== "granted") {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+
+      setNotificationPermission(finalStatus);
+
+      if (finalStatus !== "granted") {
+        RNAlert.alert(
+          "Notification Permission Required",
+          "Please enable notifications to receive payment reminders.",
+          [
+            { text: "Cancel", style: "cancel" },
+            {
+              text: "Settings",
+              onPress: () => Notifications.openSettingsAsync(),
+            },
+          ]
+        );
+      }
+    } catch (error) {
+      console.error("Error initializing notifications:", error);
+    }
+  };
+
+  const registerBackgroundTask = async () => {
+    try {
+      await BackgroundFetch.registerTaskAsync(BACKGROUND_FETCH_TASK, {
+        minimumInterval: 60 * 60 * 24, // 24 hours
+        stopOnTerminate: false,
+        startOnBoot: true,
+      });
+    } catch (error) {
+      console.error("Error registering background task:", error);
+    }
   };
 
   const fetchReminders = async () => {
@@ -137,182 +162,327 @@ export default function PaymentReminderScreen({ navigation }) {
 
       if (!error && data) {
         setReminders(data);
-        // Schedule notifications for active reminders
-        data.filter((r) => r.is_active).forEach(scheduleNotification);
+        // Check for overdue reminders
+        checkOverdueReminders(data);
       } else {
         console.error("Error fetching reminders:", error);
+        setReminders([]);
+        if (error.code !== "PGRST116") {
+          RNAlert.alert("Error", "Failed to load reminders. Please try again.");
+        }
       }
     } catch (err) {
       console.error("Exception fetching reminders:", err);
+      setReminders([]);
+      RNAlert.alert("Error", "Network error. Please check your connection.");
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
-  const calculateNextDueDate = (
-    frequency,
-    baseDate,
-    dayOfMonth,
-    dayOfWeek,
-    customInterval
-  ) => {
-    const date = new Date(baseDate);
+  const checkOverdueReminders = (reminderList) => {
+    const today = new Date().toISOString().split("T")[0];
+    const overdueReminders = reminderList.filter(
+      (reminder) =>
+        reminder.is_active &&
+        reminder.next_due_date < today &&
+        reminder.notification_enabled !== false
+    );
 
+    if (overdueReminders.length > 0) {
+      sendOverdueNotifications(overdueReminders);
+    }
+  };
+
+  const sendOverdueNotifications = async (overdueReminders) => {
+    try {
+      for (const reminder of overdueReminders) {
+        const daysPast = Math.floor(
+          (new Date() - new Date(reminder.next_due_date)) /
+            (1000 * 60 * 60 * 24)
+        );
+
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: "⚠️ Overdue Payment Reminder",
+            body: `${reminder.title} was due ${daysPast} day(s) ago. Amount: ₹${
+              reminder.amount || "Not specified"
+            }`,
+            data: {
+              reminderId: reminder.id,
+              type: "overdue",
+            },
+          },
+          trigger: null, // Send immediately
+        });
+      }
+    } catch (error) {
+      console.error("Error sending overdue notifications:", error);
+    }
+  };
+
+  const calculateNextDueDate = (currentDate, frequency) => {
+    const date = new Date(currentDate);
     switch (frequency) {
-      case "daily":
-        date.setDate(date.getDate() + 1);
-        break;
       case "weekly":
         date.setDate(date.getDate() + 7);
         break;
       case "monthly":
         date.setMonth(date.getMonth() + 1);
-        date.setDate(dayOfMonth);
-        break;
-      case "quarterly":
-        date.setMonth(date.getMonth() + 3);
-        break;
-      case "half_yearly":
-        date.setMonth(date.getMonth() + 6);
         break;
       case "yearly":
         date.setFullYear(date.getFullYear() + 1);
         break;
-      case "custom":
-        date.setDate(date.getDate() + customInterval);
-        break;
       default:
-        date.setMonth(date.getMonth() + 1);
+        return null; // one-time
     }
-
-    return date;
+    return date.toISOString().split("T")[0];
   };
 
   const scheduleNotification = async (reminder) => {
     try {
-      // Cancel existing notification
+      if (
+        notificationPermission !== "granted" ||
+        !reminder.notification_enabled
+      ) {
+        return null;
+      }
+
+      // Cancel existing notification if updating
       if (reminder.notification_id) {
         await Notifications.cancelScheduledNotificationAsync(
           reminder.notification_id
         );
       }
 
-      if (!reminder.is_active) return;
+      const triggerDate = new Date(reminder.next_due_date);
+      triggerDate.setHours(9, 0, 0, 0); // 9 AM notification
 
-      const dueDate = new Date(reminder.next_due_date);
-      const notificationDate = new Date(dueDate);
-      notificationDate.setDate(dueDate.getDate() - reminder.advance_notice);
-
-      // Set the time from reminder_time
-      const reminderTime = new Date(reminder.reminder_time);
-      notificationDate.setHours(reminderTime.getHours());
-      notificationDate.setMinutes(reminderTime.getMinutes());
-
-      // Only schedule if the notification date is in the future
-      if (notificationDate > new Date()) {
-        const notificationId = await Notifications.scheduleNotificationAsync({
-          content: {
-            title: `💰 Payment Reminder: ${reminder.title}`,
-            body:
-              reminder.description ||
-              `${
-                reminder.title
-              } is due on ${dueDate.toLocaleDateString()}. Amount: ₹${
-                reminder.amount
-              }`,
-            data: {
-              reminderId: reminder.id,
-              type: "payment_reminder",
-              amount: reminder.amount,
-              category: reminder.category,
-            },
-            sound: true,
-            priority: Notifications.AndroidImportance.HIGH,
-          },
-          trigger: notificationDate,
-        });
-
-        // Update the notification ID in the database
-        await supabase
-          .from("payment_reminders")
-          .update({ notification_id: notificationId })
-          .eq("id", reminder.id);
+      // Don't schedule if date is in the past
+      if (triggerDate <= new Date()) {
+        return null;
       }
+
+      const notificationId = await Notifications.scheduleNotificationAsync({
+        content: {
+          title: "💰 Payment Reminder",
+          body: `${reminder.title} is due today!${
+            reminder.amount ? ` Amount: ₹${reminder.amount}` : ""
+          }`,
+          data: {
+            reminderId: reminder.id,
+            type: "due_today",
+          },
+        },
+        trigger: triggerDate,
+      });
+
+      return notificationId;
     } catch (error) {
       console.error("Error scheduling notification:", error);
+      return null;
     }
   };
 
-  const saveReminder = async () => {
+  const validateForm = () => {
+    const errors = [];
+
     if (!form.title.trim()) {
-      Alert.alert("Error", "Please enter a reminder title");
+      errors.push("Title is required");
+    }
+
+    if (form.title.trim().length > 100) {
+      errors.push("Title must be less than 100 characters");
+    }
+
+    if (!form.next_due_date.trim()) {
+      errors.push("Due date is required");
+    }
+
+    if (
+      form.amount &&
+      (isNaN(parseFloat(form.amount)) || parseFloat(form.amount) < 0)
+    ) {
+      errors.push("Amount must be a valid positive number");
+    }
+
+    if (form.amount && parseFloat(form.amount) > 10000000) {
+      errors.push("Amount cannot exceed ₹1,00,00,000");
+    }
+    if (!form.category || !form.category.trim()) {
+      errors.push("Category is required");
+    }
+
+    const selectedDateObj = new Date(form.next_due_date);
+    if (isNaN(selectedDateObj.getTime())) {
+      errors.push("Please select a valid due date");
+    }
+
+    if (errors.length > 0) {
+      RNAlert.alert("Validation Error", errors.join("\\n"));
+      return false;
+    }
+
+    return true;
+  };
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchReminders();
+  };
+
+  const resetForm = () => {
+    setForm({
+      title: "",
+      amount: "",
+      frequency: "monthly",
+      next_due_date: "",
+      description: "",
+      notification_enabled: true,
+    });
+    setEditingReminder(null);
+    setSelectedDate(new Date());
+  };
+
+  const openAddModal = () => {
+    resetForm();
+    setModalVisible(true);
+  };
+
+  const openEditModal = (reminder) => {
+    setEditingReminder(reminder);
+    const reminderDate = new Date(reminder.next_due_date);
+    setSelectedDate(reminderDate);
+    setForm({
+      title: reminder.title || "",
+      amount: reminder.amount?.toString() || "",
+      frequency: reminder.frequency || "monthly",
+      next_due_date: reminder.next_due_date || "",
+      description: reminder.description || "",
+      notification_enabled: reminder.notification_enabled !== false,
+    });
+    setModalVisible(true);
+  };
+  const CATEGORY_OPTIONS = [
+    { value: "Bills", label: "Bills" },
+    { value: "Subscription", label: "Subscription" },
+    { value: "Loan", label: "Loan" },
+    { value: "Rent", label: "Rent" },
+    { value: "Other", label: "Other" },
+  ];
+
+  const saveReminder = async () => {
+    if (!validateForm()) {
       return;
     }
 
+    setSaving(true);
     try {
       const reminderData = {
         title: form.title.trim(),
-        description: form.description.trim(),
-        amount: parseFloat(form.amount) || 0,
-        category: form.category,
+        amount: form.amount ? parseFloat(form.amount) : null,
         frequency: form.frequency,
-        next_due_date: form.nextDueDate.toISOString(),
-        reminder_time: form.reminderTime.toISOString(),
-        is_active: form.isActive,
-        day_of_month: form.dayOfMonth,
-        day_of_week: form.dayOfWeek,
-        custom_interval: form.customInterval,
-        advance_notice: form.advanceNotice,
+        next_due_date: form.next_due_date,
+        description: form.description.trim(),
+        is_active: true,
         user_id: session.user.id,
+        notification_enabled: form.notification_enabled,
+        updated_at: new Date().toISOString(),
+        category: form.category,
+        reminder_time: "09:00",
       };
+      
+      let savedReminder;
+      let error;
 
-      let result;
       if (editingReminder) {
-        result = await supabase
+        const { data, error: updateError } = await supabase
           .from("payment_reminders")
           .update(reminderData)
           .eq("id", editingReminder.id)
           .select()
           .single();
+        error = updateError;
+        savedReminder = data;
       } else {
-        result = await supabase
+        reminderData.created_at = new Date().toISOString();
+        const { data, error: insertError } = await supabase
           .from("payment_reminders")
           .insert([reminderData])
           .select()
           .single();
+        error = insertError;
+        savedReminder = data;
       }
 
-      if (!result.error && result.data) {
-        // Schedule notification for the new/updated reminder
-        await scheduleNotification(result.data);
+      if (!error && savedReminder) {
+        // Schedule notification
+        const notificationId = await scheduleNotification({
+          ...savedReminder,
+          notification_enabled: form.notification_enabled,
+        });
 
+        // Update with notification ID if scheduled
+        if (notificationId) {
+          await supabase
+            .from("payment_reminders")
+            .update({ notification_id: notificationId })
+            .eq("id", savedReminder.id);
+        }
+
+        // Update next due date for recurring reminders
+        if (form.frequency !== "one-time") {
+          const nextDueDate = calculateNextDueDate(
+            form.next_due_date,
+            form.frequency
+          );
+          if (nextDueDate) {
+            await supabase
+              .from("payment_reminders")
+              .update({ next_due_date: nextDueDate })
+              .eq("id", savedReminder.id);
+          }
+        }
+
+        setModalVisible(false);
+        resetForm();
         fetchReminders();
-        closeModal();
-        Alert.alert(
+        RNAlert.alert(
           "Success",
-          editingReminder
-            ? "Reminder updated successfully!"
-            : "Reminder created successfully!"
+          `Reminder ${editingReminder ? "updated" : "created"} successfully!${
+            form.notification_enabled && notificationPermission === "granted"
+              ? " You will receive notifications."
+              : ""
+          }`
         );
       } else {
-        console.error("Error saving reminder:", result.error);
-        Alert.alert("Error", "Failed to save reminder");
+        console.error("Error saving reminder:", error);
+        RNAlert.alert(
+          "Error",
+          error?.message || "Failed to save reminder. Please try again."
+        );
       }
-    } catch (error) {
-      console.error("Exception saving reminder:", error);
-      Alert.alert("Error", "Failed to save reminder");
+    } catch (err) {
+      console.error("Exception saving reminder:", err);
+      RNAlert.alert(
+        "Error",
+        "Network error. Please check your connection and try again."
+      );
+    } finally {
+      setSaving(false);
     }
   };
 
   const deleteReminder = async (reminderId) => {
     try {
       // Find the reminder to get notification ID
-      const reminder = reminders.find((r) => r.id === reminderId);
+      const reminderToDelete = reminders.find((r) => r.id === reminderId);
 
       // Cancel scheduled notification
-      if (reminder?.notification_id) {
+      if (reminderToDelete?.notification_id) {
         await Notifications.cancelScheduledNotificationAsync(
-          reminder.notification_id
+          reminderToDelete.notification_id
         );
       }
 
@@ -323,14 +493,14 @@ export default function PaymentReminderScreen({ navigation }) {
 
       if (!error) {
         fetchReminders();
-        Alert.alert("Success", "Reminder deleted successfully!");
+        RNAlert.alert("Success", "Reminder deleted successfully!");
       } else {
-        console.error("Error deleting reminder:", error);
-        Alert.alert("Error", "Failed to delete reminder");
+        console.error("Failed to delete reminder:", error);
+        RNAlert.alert("Error", "Failed to delete reminder. Please try again.");
       }
-    } catch (error) {
-      console.error("Exception deleting reminder:", error);
-      Alert.alert("Error", "Failed to delete reminder");
+    } catch (err) {
+      console.error("Failed to delete reminder:", err);
+      RNAlert.alert("Error", "Network error. Please try again.");
     }
   };
 
@@ -338,545 +508,551 @@ export default function PaymentReminderScreen({ navigation }) {
     try {
       const newStatus = !reminder.is_active;
 
-      const { error } = await supabase
-        .from("payment_reminders")
-        .update({ is_active: newStatus })
-        .eq("id", reminder.id);
-
-      if (!error) {
+      // Cancel or reschedule notification based on new status
+      if (reminder.notification_id) {
         if (newStatus) {
-          // Schedule notification when activating
-          await scheduleNotification({ ...reminder, is_active: true });
+          // Reschedule notification
+          const notificationId = await scheduleNotification(reminder);
+          await supabase
+            .from("payment_reminders")
+            .update({
+              is_active: newStatus,
+              notification_id: notificationId,
+            })
+            .eq("id", reminder.id);
         } else {
-          // Cancel notification when deactivating
-          if (reminder.notification_id) {
-            await Notifications.cancelScheduledNotificationAsync(
-              reminder.notification_id
-            );
-          }
+          // Cancel notification
+          await Notifications.cancelScheduledNotificationAsync(
+            reminder.notification_id
+          );
+          await supabase
+            .from("payment_reminders")
+            .update({
+              is_active: newStatus,
+              notification_id: null,
+            })
+            .eq("id", reminder.id);
         }
-
-        fetchReminders();
       } else {
-        console.error("Error toggling reminder status:", error);
-        Alert.alert("Error", "Failed to update reminder status");
+        await supabase
+          .from("payment_reminders")
+          .update({ is_active: newStatus })
+          .eq("id", reminder.id);
       }
-    } catch (error) {
-      console.error("Exception toggling reminder status:", error);
+
+      fetchReminders();
+    } catch (err) {
+      console.error("Failed to toggle reminder:", err);
+      RNAlert.alert("Error", "Failed to update reminder status.");
     }
   };
 
-  const markAsPaid = async (reminder) => {
+  const onDateChange = (event, selectedDate) => {
+    setShowDatePicker(Platform.OS === "ios");
+    if (selectedDate) {
+      setSelectedDate(selectedDate);
+      const dateString = selectedDate.toISOString().split("T")[0];
+      setForm({ ...form, next_due_date: dateString });
+    }
+  };
+
+  const formatDate = (dateString) => {
     try {
-      // Calculate next due date based on frequency
-      const nextDueDate = calculateNextDueDate(
-        reminder.frequency,
-        new Date(reminder.next_due_date),
-        reminder.day_of_month,
-        reminder.day_of_week,
-        reminder.custom_interval
-      );
-
-      const { error } = await supabase
-        .from("payment_reminders")
-        .update({
-          next_due_date: nextDueDate.toISOString(),
-          last_paid_date: new Date().toISOString(),
-        })
-        .eq("id", reminder.id);
-
-      if (!error) {
-        // Reschedule notification for the new due date
-        await scheduleNotification({
-          ...reminder,
-          next_due_date: nextDueDate.toISOString(),
-        });
-
-        fetchReminders();
-        Alert.alert(
-          "Success",
-          "Payment marked as completed! Next reminder scheduled."
-        );
-      } else {
-        console.error("Error marking as paid:", error);
-        Alert.alert("Error", "Failed to mark as paid");
-      }
+      const date = new Date(dateString);
+      return date.toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      });
     } catch (error) {
-      console.error("Exception marking as paid:", error);
+      return dateString;
     }
   };
 
-  const openEditModal = (reminder = null) => {
-    if (reminder) {
-      setEditingReminder(reminder);
-      setForm({
-        title: reminder.title,
-        description: reminder.description || "",
-        amount: reminder.amount?.toString() || "",
-        category: reminder.category,
-        frequency: reminder.frequency,
-        nextDueDate: new Date(reminder.next_due_date),
-        reminderTime: new Date(reminder.reminder_time),
-        isActive: reminder.is_active,
-        dayOfMonth: reminder.day_of_month || 1,
-        dayOfWeek: reminder.day_of_week || 1,
-        customInterval: reminder.custom_interval || 30,
-        advanceNotice: reminder.advance_notice || 1,
-      });
-    } else {
-      setEditingReminder(null);
-      const now = new Date();
-      const tomorrow = new Date();
-      tomorrow.setDate(now.getDate() + 1);
-
-      setForm({
-        title: "",
-        description: "",
-        amount: "",
-        category: "Other",
-        frequency: "monthly",
-        nextDueDate: tomorrow,
-        reminderTime: new Date(
-          now.getFullYear(),
-          now.getMonth(),
-          now.getDate(),
-          9,
-          0
-        ), // 9 AM
-        isActive: true,
-        dayOfMonth: tomorrow.getDate(),
-        dayOfWeek: 1,
-        customInterval: 30,
-        advanceNotice: 1,
-      });
+  const getDaysUntilDue = (dateString) => {
+    try {
+      const today = new Date();
+      const dueDate = new Date(dateString);
+      const diffTime = dueDate - today;
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      return diffDays;
+    } catch (error) {
+      return 0;
     }
-    setModalVisible(true);
   };
 
-  const closeModal = () => {
-    setModalVisible(false);
-    setEditingReminder(null);
-    setShowDatePicker(false);
-    setShowTimePicker(false);
-  };
+  const getStatusColor = (reminder) => {
+    if (!reminder.is_active) return "#94a3b8";
 
-  const formatDate = (date) => {
-    return new Date(date).toLocaleDateString("en-IN", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    });
-  };
-
-  const formatTime = (date) => {
-    return new Date(date).toLocaleTimeString("en-IN", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
-  const getDaysUntilDue = (dueDate) => {
-    const today = new Date();
-    const due = new Date(dueDate);
-    const diffTime = due - today;
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays;
-  };
-
-  const getReminderStatusColor = (reminder) => {
     const daysUntil = getDaysUntilDue(reminder.next_due_date);
-    if (daysUntil < 0) return "#ef4444"; // Overdue - red
-    if (daysUntil <= reminder.advance_notice) return "#f59e0b"; // Due soon - orange
-    return "#10b981"; // Good - green
+    if (daysUntil < 0) return "#ef4444"; // Overdue
+    if (daysUntil <= 3) return "#f59e0b"; // Due soon
+    return "#10b981"; // On time
   };
 
-  const getReminderStatusText = (reminder) => {
+  const getStatusText = (reminder) => {
+    if (!reminder.is_active) return "Inactive";
+
     const daysUntil = getDaysUntilDue(reminder.next_due_date);
-    if (daysUntil < 0) return `Overdue by ${Math.abs(daysUntil)} days`;
+    if (daysUntil < 0) return `${Math.abs(daysUntil)} days overdue`;
     if (daysUntil === 0) return "Due today";
     if (daysUntil === 1) return "Due tomorrow";
-    return `Due in ${daysUntil} days`;
+    return `${daysUntil} days left`;
   };
 
-  const getCategoryIcon = (category) => {
-    const cat = REMINDER_CATEGORIES.find((c) => c.name === category);
-    return cat ? cat.icon : "📝";
+  const getFrequencyIcon = (frequency) => {
+    const option = FREQUENCY_OPTIONS.find((opt) => opt.value === frequency);
+    return option ? option.icon : "📅";
   };
 
-  const getCategoryColor = (category) => {
-    const cat = REMINDER_CATEGORIES.find((c) => c.name === category);
-    return cat ? cat.color : "#747D8C";
-  };
-
-  const renderReminderItem = ({ item }) => (
+  const renderReminder = ({ item }) => (
     <View
-      style={[
-        styles.reminderCard,
-        { borderLeftColor: getCategoryColor(item.category) },
-      ]}
+      style={[styles.reminderCard, { borderLeftColor: getStatusColor(item) }]}
     >
       <View style={styles.reminderHeader}>
-        <View style={styles.reminderInfo}>
-          <View style={styles.reminderTitleRow}>
-            <Text style={styles.categoryIcon}>
-              {getCategoryIcon(item.category)}
+        <View style={styles.reminderTitleRow}>
+          <Text style={styles.reminderIcon}>
+            {getFrequencyIcon(item.frequency)}
+          </Text>
+          <View style={styles.reminderTitleContainer}>
+            <Text
+              style={[
+                styles.reminderTitle,
+                !item.is_active && styles.inactiveText,
+              ]}
+            >
+              {item.title}
             </Text>
-            <Text style={styles.reminderTitle}>{item.title}</Text>
-            <Switch
-              value={item.is_active}
-              onValueChange={() => toggleReminderStatus(item)}
-              trackColor={{ false: "#d1d5db", true: "#06b6d4" }}
-              thumbColor={item.is_active ? "#ffffff" : "#f3f4f6"}
-            />
+            {item.description && (
+              <Text style={styles.reminderDescription}>{item.description}</Text>
+            )}
           </View>
-          {item.description && (
-            <Text style={styles.reminderDescription}>{item.description}</Text>
-          )}
-          <View style={styles.reminderDetails}>
-            <Text style={styles.reminderAmount}>₹{item.amount || 0}</Text>
-            <Text style={styles.reminderFrequency}>
-              {
-                REMINDER_FREQUENCIES.find((f) => f.value === item.frequency)
-                  ?.label
-              }
-            </Text>
+          <View style={styles.reminderStatusContainer}>
+            <TouchableOpacity
+              style={[
+                styles.statusToggle,
+                { backgroundColor: getStatusColor(item) },
+              ]}
+              onPress={() => toggleReminderStatus(item)}
+            >
+              <CheckCircle2
+                size={16}
+                color="white"
+                style={{ opacity: item.is_active ? 1 : 0.6 }}
+              />
+            </TouchableOpacity>
+            {item.notification_enabled === false && (
+              <AlertCircle
+                size={16}
+                color="#f59e0b"
+                style={{ marginLeft: 4 }}
+              />
+            )}
           </View>
         </View>
+
+        <View style={styles.reminderDetails}>
+          <View style={styles.reminderInfo}>
+            <Calendar size={14} color="#64748b" />
+            <Text style={styles.reminderDate}>
+              {formatDate(item.next_due_date)}
+            </Text>
+          </View>
+
+          {item.amount && (
+            <View style={styles.reminderInfo}>
+              <Text style={styles.reminderAmount}>₹{item.amount}</Text>
+            </View>
+          )}
+        </View>
+
+        <Text style={[styles.statusText, { color: getStatusColor(item) }]}>
+          {getStatusText(item)}
+        </Text>
       </View>
 
-      <View style={styles.reminderFooter}>
-        <View style={styles.dueDateInfo}>
-          <Text style={styles.dueDateLabel}>Next Due:</Text>
-          <Text style={styles.dueDate}>{formatDate(item.next_due_date)}</Text>
-          <Text
-            style={[styles.statusText, { color: getReminderStatusColor(item) }]}
-          >
-            {getReminderStatusText(item)}
+      <View style={styles.reminderActions}>
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => openEditModal(item)}
+        >
+          <Edit3 size={16} color="#06b6d4" />
+          <Text style={styles.actionButtonText}>Edit</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.actionButton, styles.deleteButton]}
+          onPress={() => {
+            setReminderToDelete(item);
+            setShowDeleteAlert(true);
+          }}
+        >
+          <Trash2 size={16} color="#ef4444" />
+          <Text style={[styles.actionButtonText, styles.deleteButtonText]}>
+            Delete
           </Text>
-        </View>
-
-        <View style={styles.reminderActions}>
-          <TouchableOpacity
-            style={[styles.actionButton, styles.paidButton]}
-            onPress={() => markAsPaid(item)}
-          >
-            <Text style={styles.paidButtonText}>✓ Paid</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.actionButton, styles.editButton]}
-            onPress={() => openEditModal(item)}
-          >
-            <Edit3 size={16} color="#06b6d4" />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.actionButton, styles.deleteButton]}
-            onPress={() => {
-              Alert.alert(
-                "Delete Reminder",
-                `Are you sure you want to delete "${item.title}"?`,
-                [
-                  { text: "Cancel", style: "cancel" },
-                  {
-                    text: "Delete",
-                    style: "destructive",
-                    onPress: () => deleteReminder(item.id),
-                  },
-                ]
-              );
-            }}
-          >
-            <Trash2 size={16} color="#ef4444" />
-          </TouchableOpacity>
-        </View>
+        </TouchableOpacity>
       </View>
     </View>
   );
 
-  return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backButton}>← Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Payment Reminders</Text>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => openEditModal()}
-        >
-          <Plus size={24} color="#ffffff" />
-        </TouchableOpacity>
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#4ECDC4" />
+        <Text style={styles.loadingText}>Loading reminders...</Text>
       </View>
+    );
+  }
 
-      {/* Reminders List */}
-      <FlatList
-        data={reminders}
-        renderItem={renderReminderItem}
-        keyExtractor={(item) => item.id.toString()}
-        contentContainerStyle={styles.listContainer}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Bell size={64} color="#94a3b8" />
-            <Text style={styles.emptyStateTitle}>No Payment Reminders</Text>
-            <Text style={styles.emptyStateText}>
-              Create your first reminder to never miss a payment!
+  return (
+    <>
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+          >
+            <ArrowLeft size={24} color="#1e293b" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Payment Reminders</Text>
+          <TouchableOpacity
+            style={styles.addHeaderButton}
+            onPress={openAddModal}
+          >
+            <Plus size={24} color="#06b6d4" />
+          </TouchableOpacity>
+        </View>
+
+        {notificationPermission !== "granted" && (
+          <View style={styles.permissionBanner}>
+            <AlertCircle size={20} color="#f59e0b" />
+            <Text style={styles.permissionText}>
+              Enable notifications to receive payment reminders
             </Text>
             <TouchableOpacity
-              style={styles.emptyStateButton}
-              onPress={() => openEditModal()}
+              style={styles.enableButton}
+              onPress={initializeNotifications}
             >
-              <Text style={styles.emptyStateButtonText}>Create Reminder</Text>
+              <Text style={styles.enableButtonText}>Enable</Text>
             </TouchableOpacity>
           </View>
-        }
-      />
+        )}
+
+        <ScrollView
+          style={styles.content}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+        >
+          {reminders.length > 0 ? (
+            <FlatList
+              data={reminders}
+              renderItem={renderReminder}
+              keyExtractor={(item) => item.id.toString()}
+              scrollEnabled={false}
+              showsVerticalScrollIndicator={false}
+            />
+          ) : (
+            <View style={styles.emptyState}>
+              <Bell size={64} color="#cbd5e1" />
+              <Text style={styles.emptyStateTitle}>No Payment Reminders</Text>
+              <Text style={styles.emptyStateText}>
+                Create your first payment reminder to stay on top of your bills
+                and subscriptions.
+              </Text>
+              <TouchableOpacity
+                style={styles.emptyStateButton}
+                onPress={openAddModal}
+              >
+                <Plus size={20} color="white" />
+                <Text style={styles.emptyStateButtonText}>Add Reminder</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </ScrollView>
+
+        <TouchableOpacity style={styles.fab} onPress={openAddModal}>
+          <Plus size={24} color="white" />
+        </TouchableOpacity>
+      </View>
 
       {/* Add/Edit Modal */}
       <Modal
         animationType="slide"
         transparent={true}
         visible={modalVisible}
-        onRequestClose={closeModal}
+        onRequestClose={() => setModalVisible(false)}
       >
         <KeyboardAvoidingView
           style={styles.modalOverlay}
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
           <View style={styles.modalContent}>
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
-                {editingReminder ? "Edit Reminder" : "Create New Reminder"}
+                {editingReminder ? "Edit Reminder" : "Add Reminder"}
               </Text>
-
-              {/* Title */}
-              <Text style={styles.inputLabel}>Title *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g., Rent Payment, Electricity Bill"
-                value={form.title}
-                onChangeText={(text) => setForm({ ...form, title: text })}
-              />
-
-              {/* Description */}
-              <Text style={styles.inputLabel}>Description</Text>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                placeholder="Optional description or notes"
-                value={form.description}
-                onChangeText={(text) => setForm({ ...form, description: text })}
-                multiline
-                numberOfLines={3}
-              />
-
-              {/* Amount */}
-              <Text style={styles.inputLabel}>Amount (₹)</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="0"
-                value={form.amount}
-                onChangeText={(text) => setForm({ ...form, amount: text })}
-                keyboardType="numeric"
-              />
-
-              {/* Category */}
-              <Text style={styles.inputLabel}>Category</Text>
-              <View style={styles.pickerContainer}>
-                <Picker
-                  selectedValue={form.category}
-                  onValueChange={(value) =>
-                    setForm({ ...form, category: value })
-                  }
-                  style={styles.picker}
-                >
-                  {REMINDER_CATEGORIES.map((cat) => (
-                    <Picker.Item
-                      key={cat.name}
-                      label={`${cat.icon} ${cat.name}`}
-                      value={cat.name}
-                    />
-                  ))}
-                </Picker>
-              </View>
-
-              {/* Frequency */}
-              <Text style={styles.inputLabel}>Frequency</Text>
-              <View style={styles.pickerContainer}>
-                <Picker
-                  selectedValue={form.frequency}
-                  onValueChange={(value) =>
-                    setForm({ ...form, frequency: value })
-                  }
-                  style={styles.picker}
-                >
-                  {REMINDER_FREQUENCIES.map((freq) => (
-                    <Picker.Item
-                      key={freq.value}
-                      label={freq.label}
-                      value={freq.value}
-                    />
-                  ))}
-                </Picker>
-              </View>
-
-              {/* Custom Interval (only for custom frequency) */}
-              {form.frequency === "custom" && (
-                <>
-                  <Text style={styles.inputLabel}>Custom Interval (days)</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="30"
-                    value={form.customInterval.toString()}
-                    onChangeText={(text) =>
-                      setForm({ ...form, customInterval: parseInt(text) || 30 })
-                    }
-                    keyboardType="numeric"
-                  />
-                </>
-              )}
-
-              {/* Day of Month (for monthly/quarterly/etc.) */}
-              {["monthly", "quarterly", "half_yearly", "yearly"].includes(
-                form.frequency
-              ) && (
-                <>
-                  <Text style={styles.inputLabel}>Day of Month (1-31)</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="1"
-                    value={form.dayOfMonth.toString()}
-                    onChangeText={(text) =>
-                      setForm({
-                        ...form,
-                        dayOfMonth: Math.min(
-                          31,
-                          Math.max(1, parseInt(text) || 1)
-                        ),
-                      })
-                    }
-                    keyboardType="numeric"
-                  />
-                </>
-              )}
-
-              {/* Next Due Date */}
-              <Text style={styles.inputLabel}>Next Due Date</Text>
               <TouchableOpacity
-                style={styles.dateTimeButton}
-                onPress={() => setShowDatePicker(true)}
+                style={styles.modalCloseButton}
+                onPress={() => setModalVisible(false)}
               >
-                <Calendar size={20} color="#06b6d4" />
-                <Text style={styles.dateTimeText}>
-                  {formatDate(form.nextDueDate)}
-                </Text>
+                <Text style={styles.modalCloseText}>✕</Text>
               </TouchableOpacity>
+            </View>
 
-              {/* Reminder Time */}
-              <Text style={styles.inputLabel}>Reminder Time</Text>
-              <TouchableOpacity
-                style={styles.dateTimeButton}
-                onPress={() => setShowTimePicker(true)}
-              >
-                <Clock size={20} color="#06b6d4" />
-                <Text style={styles.dateTimeText}>
-                  {formatTime(form.reminderTime)}
-                </Text>
-              </TouchableOpacity>
-
-              {/* Advance Notice */}
-              <Text style={styles.inputLabel}>
-                Notify me (days before due date)
-              </Text>
-              <View style={styles.pickerContainer}>
-                <Picker
-                  selectedValue={form.advanceNotice}
-                  onValueChange={(value) =>
-                    setForm({ ...form, advanceNotice: value })
-                  }
-                  style={styles.picker}
-                >
-                  <Picker.Item label="Same day" value={0} />
-                  <Picker.Item label="1 day before" value={1} />
-                  <Picker.Item label="2 days before" value={2} />
-                  <Picker.Item label="3 days before" value={3} />
-                  <Picker.Item label="1 week before" value={7} />
-                </Picker>
-              </View>
-
-              {/* Active Toggle */}
-              <View style={styles.switchRow}>
-                <Text style={styles.inputLabel}>Active</Text>
-                <Switch
-                  value={form.isActive}
-                  onValueChange={(value) =>
-                    setForm({ ...form, isActive: value })
-                  }
-                  trackColor={{ false: "#d1d5db", true: "#06b6d4" }}
-                  thumbColor={form.isActive ? "#ffffff" : "#f3f4f6"}
+            <ScrollView style={styles.modalForm}>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Title *</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g., Netflix Subscription"
+                  value={form.title}
+                  onChangeText={(text) => setForm({ ...form, title: text })}
+                  maxLength={100}
                 />
               </View>
 
-              {/* Modal Buttons */}
-              <View style={styles.modalButtons}>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Amount (Optional)</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="0.00"
+                  value={form.amount}
+                  onChangeText={(text) => setForm({ ...form, amount: text })}
+                  keyboardType="numeric"
+                />
+              </View>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Category *</Text>
+                <View style={[styles.frequencyOptions, { marginBottom: 8 }]}>
+                  {CATEGORY_OPTIONS.map((option) => (
+                    <TouchableOpacity
+                      key={option.value}
+                      style={[
+                        styles.frequencyOption,
+                        form.category === option.value &&
+                          styles.frequencyOptionSelected,
+                      ]}
+                      onPress={() =>
+                        setForm({ ...form, category: option.value })
+                      }
+                    >
+                      <Text
+                        style={[
+                          styles.frequencyLabel,
+                          form.category === option.value &&
+                            styles.frequencyLabelSelected,
+                        ]}
+                      >
+                        {option.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Frequency</Text>
+                <View style={styles.frequencyOptions}>
+                  {FREQUENCY_OPTIONS.map((option) => (
+                    <TouchableOpacity
+                      key={option.value}
+                      style={[
+                        styles.frequencyOption,
+                        form.frequency === option.value &&
+                          styles.frequencyOptionSelected,
+                      ]}
+                      onPress={() =>
+                        setForm({ ...form, frequency: option.value })
+                      }
+                    >
+                      <Text style={styles.frequencyIcon}>{option.icon}</Text>
+                      <Text
+                        style={[
+                          styles.frequencyLabel,
+                          form.frequency === option.value &&
+                            styles.frequencyLabelSelected,
+                        ]}
+                      >
+                        {option.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Due Date *</Text>
                 <TouchableOpacity
-                  style={[styles.modalButton, styles.cancelButton]}
-                  onPress={closeModal}
+                  style={styles.datePickerButton}
+                  onPress={() => setShowDatePicker(true)}
                 >
-                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                  <Calendar size={20} color="#64748b" />
+                  <Text style={styles.datePickerText}>
+                    {form.next_due_date
+                      ? formatDate(form.next_due_date)
+                      : "Select Date"}
+                  </Text>
                 </TouchableOpacity>
+
+                {showDatePicker && (
+                  <DateTimePicker
+                    value={selectedDate}
+                    mode="date"
+                    display="default"
+                    onChange={onDateChange}
+                    minimumDate={new Date()}
+                  />
+                )}
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Reminder Time *</Text>
                 <TouchableOpacity
-                  style={[styles.modalButton, styles.saveButton]}
-                  onPress={saveReminder}
+                  style={styles.datePickerButton}
+                  onPress={() => setShowTimePicker(true)}
                 >
+                  <Clock size={20} color="#64748b" />
+                  <Text style={styles.datePickerText}>
+                    {form.reminder_time || "Select Time"}
+                  </Text>
+                </TouchableOpacity>
+                {showTimePicker && (
+                  <DateTimePicker
+                    value={
+                      form.reminder_time
+                        ? new Date(`1970-01-01T${form.reminder_time}:00`)
+                        : new Date()
+                    }
+                    mode="time"
+                    display="default"
+                    onChange={onTimeChange}
+                  />
+                )}
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Description (Optional)</Text>
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  placeholder="Additional notes..."
+                  value={form.description}
+                  onChangeText={(text) =>
+                    setForm({ ...form, description: text })
+                  }
+                  multiline
+                  numberOfLines={3}
+                  maxLength={500}
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <View style={styles.switchContainer}>
+                  <Text style={styles.inputLabel}>Enable Notifications</Text>
+                  <TouchableOpacity
+                    style={[
+                      styles.switch,
+                      form.notification_enabled && styles.switchActive,
+                    ]}
+                    onPress={() =>
+                      setForm({
+                        ...form,
+                        notification_enabled: !form.notification_enabled,
+                      })
+                    }
+                  >
+                    <View
+                      style={[
+                        styles.switchThumb,
+                        form.notification_enabled && styles.switchThumbActive,
+                      ]}
+                    />
+                  </TouchableOpacity>
+                </View>
+                {notificationPermission !== "granted" && (
+                  <Text style={styles.permissionWarning}>
+                    ⚠️ Notification permission required
+                  </Text>
+                )}
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => setModalVisible(false)}
+                disabled={saving}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.modalButton,
+                  styles.saveButton,
+                  saving && styles.saveButtonDisabled,
+                ]}
+                onPress={saveReminder}
+                disabled={saving}
+              >
+                {saving ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
                   <Text style={styles.saveButtonText}>
                     {editingReminder ? "Update" : "Create"}
                   </Text>
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* Date Picker */}
-      {showDatePicker && (
-        <DateTimePicker
-          value={form.nextDueDate}
-          mode="date"
-          display="default"
-          onChange={(event, selectedDate) => {
-            setShowDatePicker(false);
-            if (selectedDate) {
-              setForm({ ...form, nextDueDate: selectedDate });
-            }
-          }}
-        />
-      )}
-
-      {/* Time Picker */}
-      {showTimePicker && (
-        <DateTimePicker
-          value={form.reminderTime}
-          mode="time"
-          display="default"
-          onChange={(event, selectedTime) => {
-            setShowTimePicker(false);
-            if (selectedTime) {
-              setForm({ ...form, reminderTime: selectedTime });
-            }
-          }}
-        />
-      )}
-    </View>
+      {/* Delete Confirmation Alert */}
+      <Alert
+        open={showDeleteAlert}
+        onConfirm={async () => {
+          setShowDeleteAlert(false);
+          if (reminderToDelete) {
+            await deleteReminder(reminderToDelete.id);
+            setReminderToDelete(null);
+          }
+        }}
+        onCancel={() => {
+          setShowDeleteAlert(false);
+          setReminderToDelete(null);
+        }}
+        title="Delete Reminder"
+        message={`Are you sure you want to delete "${reminderToDelete?.title}"? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        icon={<Trash2 color="#fff" size={40} />}
+        iconBg="#ef4444"
+        confirmColor="#ef4444"
+        confirmTextColor="#fff"
+        cancelColor="#f1f5f9"
+        cancelTextColor="#334155"
+      />
+    </>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f8fafc",
+    backgroundColor: "#f5f7fa",
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#f5f7fa",
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: "#64748b",
+    fontWeight: "500",
   },
   header: {
     flexDirection: "row",
@@ -884,251 +1060,393 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 20,
     paddingTop: 60,
-    paddingBottom: 20,
-    backgroundColor: "#ffffff",
+    paddingBottom: 24,
+    backgroundColor: "#fff",
     borderBottomWidth: 1,
     borderBottomColor: "rgba(148, 163, 184, 0.1)",
+    elevation: 2,
   },
   backButton: {
-    fontSize: 16,
-    color: "#06b6d4",
-    fontWeight: "600",
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#f8fafc",
+    justifyContent: "center",
+    alignItems: "center",
   },
   headerTitle: {
     fontSize: 20,
     fontWeight: "700",
     color: "#1e293b",
+    letterSpacing: -0.3,
   },
-  addButton: {
-    backgroundColor: "#06b6d4",
+  addHeaderButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    alignItems: "center",
+    backgroundColor: "#f8fafc",
     justifyContent: "center",
+    alignItems: "center",
   },
-  listContainer: {
-    padding: 20,
-    paddingBottom: 100,
+  permissionBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fef3c7",
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#fbbf24",
+  },
+  permissionText: {
+    flex: 1,
+    fontSize: 14,
+    color: "#92400e",
+    fontWeight: "500",
+    marginLeft: 8,
+  },
+  enableButton: {
+    backgroundColor: "#f59e0b",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  enableButtonText: {
+    color: "white",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  content: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 20,
   },
   reminderCard: {
-    backgroundColor: "#ffffff",
+    backgroundColor: "#fff",
     borderRadius: 16,
     padding: 20,
     marginBottom: 16,
     borderLeftWidth: 4,
+    borderWidth: 1,
+    borderColor: "rgba(148, 163, 184, 0.1)",
     elevation: 2,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
   },
   reminderHeader: {
-    marginBottom: 16,
+    marginBottom: 12,
   },
   reminderTitleRow: {
     flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 8,
+    alignItems: "flex-start",
+    marginBottom: 12,
   },
-  categoryIcon: {
+  reminderIcon: {
     fontSize: 20,
-    marginRight: 8,
+    marginRight: 12,
+    marginTop: 2,
+  },
+  reminderTitleContainer: {
+    flex: 1,
   },
   reminderTitle: {
-    flex: 1,
     fontSize: 18,
     fontWeight: "700",
     color: "#1e293b",
+    marginBottom: 4,
+    letterSpacing: -0.3,
+  },
+  inactiveText: {
+    opacity: 0.6,
+    textDecorationLine: "line-through",
   },
   reminderDescription: {
     fontSize: 14,
     color: "#64748b",
-    marginBottom: 12,
-    lineHeight: 20,
+    fontWeight: "500",
+    lineHeight: 18,
+  },
+  reminderStatusContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginLeft: 12,
+  },
+  statusToggle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: "center",
+    alignItems: "center",
   },
   reminderDetails: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    marginBottom: 8,
   },
-  reminderAmount: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#059669",
-  },
-  reminderFrequency: {
-    fontSize: 14,
-    color: "#64748b",
-    backgroundColor: "#f1f5f9",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  reminderFooter: {
-    borderTopWidth: 1,
-    borderTopColor: "rgba(148, 163, 184, 0.1)",
-    paddingTop: 16,
+  reminderInfo: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
   },
-  dueDateInfo: {
-    flex: 1,
-  },
-  dueDateLabel: {
-    fontSize: 12,
+  reminderDate: {
+    fontSize: 14,
     color: "#64748b",
-    marginBottom: 4,
-  },
-  dueDate: {
-    fontSize: 16,
     fontWeight: "600",
-    color: "#1e293b",
-    marginBottom: 4,
+    marginLeft: 6,
+  },
+  reminderAmount: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#06b6d4",
+    letterSpacing: -0.2,
   },
   statusText: {
     fontSize: 12,
     fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   reminderActions: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
+    justifyContent: "flex-end",
+    gap: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(148, 163, 184, 0.1)",
   },
   actionButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-  },
-  paidButton: {
-    backgroundColor: "#dcfce7",
-    borderWidth: 1,
-    borderColor: "#16a34a",
-  },
-  paidButtonText: {
-    color: "#16a34a",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  editButton: {
-    backgroundColor: "#e0f2fe",
-    borderWidth: 1,
-    borderColor: "#06b6d4",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: "#f8fafc",
   },
   deleteButton: {
     backgroundColor: "#fef2f2",
-    borderWidth: 1,
-    borderColor: "#ef4444",
+  },
+  actionButtonText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#06b6d4",
+    marginLeft: 4,
+  },
+  deleteButtonText: {
+    color: "#ef4444",
   },
   emptyState: {
-    alignItems: "center",
+    flex: 1,
     justifyContent: "center",
+    alignItems: "center",
     paddingVertical: 60,
+    paddingHorizontal: 40,
   },
   emptyStateTitle: {
     fontSize: 24,
     fontWeight: "700",
-    color: "#1e293b",
-    marginTop: 16,
-    marginBottom: 8,
+    color: "#64748b",
+    marginTop: 20,
+    marginBottom: 12,
+    textAlign: "center",
   },
   emptyStateText: {
     fontSize: 16,
-    color: "#64748b",
+    color: "#94a3b8",
     textAlign: "center",
-    marginBottom: 24,
     lineHeight: 24,
+    marginBottom: 32,
   },
   emptyStateButton: {
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: "#06b6d4",
     paddingHorizontal: 24,
     paddingVertical: 12,
-    borderRadius: 12,
+    borderRadius: 25,
+    elevation: 6,
   },
   emptyStateButtonText: {
-    color: "#ffffff",
+    color: "white",
     fontSize: 16,
     fontWeight: "600",
+    marginLeft: 8,
+  },
+  fab: {
+    position: "absolute",
+    bottom: 30,
+    right: 30,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "#06b6d4",
+    justifyContent: "center",
+    alignItems: "center",
+    elevation: 8,
+    shadowColor: "#06b6d4",
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
   modalOverlay: {
     flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
     backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "flex-end",
   },
   modalContent: {
-    backgroundColor: "#ffffff",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 40,
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    width: "95%",
     maxHeight: "90%",
+    elevation: 10,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(148, 163, 184, 0.1)",
   },
   modalTitle: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: "700",
     color: "#1e293b",
-    textAlign: "center",
-    marginBottom: 24,
+  },
+  modalCloseButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#f1f5f9",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalCloseText: {
+    fontSize: 16,
+    color: "#64748b",
+    fontWeight: "600",
+  },
+  modalForm: {
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+    maxHeight: 400,
+  },
+  inputGroup: {
+    marginBottom: 20,
   },
   inputLabel: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "600",
     color: "#374151",
     marginBottom: 8,
-    marginTop: 16,
   },
   input: {
     borderWidth: 1,
-    borderColor: "#d1d5db",
+    borderColor: "#e2e8f0",
     borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    padding: 16,
     fontSize: 16,
-    backgroundColor: "#ffffff",
+    backgroundColor: "#f8fafc",
+    color: "#1e293b",
   },
   textArea: {
     height: 80,
     textAlignVertical: "top",
   },
-  pickerContainer: {
-    borderWidth: 1,
-    borderColor: "#d1d5db",
+  frequencyOptions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+  },
+  frequencyOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderRadius: 12,
-    backgroundColor: "#ffffff",
+    backgroundColor: "#f8fafc",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    minWidth: 100,
   },
-  picker: {
-    height: 50,
+  frequencyOptionSelected: {
+    backgroundColor: "#06b6d4",
+    borderColor: "#06b6d4",
   },
-  dateTimeButton: {
+  frequencyIcon: {
+    fontSize: 16,
+    marginRight: 8,
+  },
+  frequencyLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#374151",
+  },
+  frequencyLabelSelected: {
+    color: "white",
+  },
+  datePickerButton: {
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#d1d5db",
+    borderColor: "#e2e8f0",
     borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: "#ffffff",
+    padding: 16,
+    backgroundColor: "#f8fafc",
   },
-  dateTimeText: {
+  datePickerText: {
     fontSize: 16,
-    color: "#374151",
-    marginLeft: 8,
+    color: "#1e293b",
+    marginLeft: 12,
   },
-  switchRow: {
+  switchContainer: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginTop: 16,
+  },
+  switch: {
+    width: 50,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: "#e2e8f0",
+    justifyContent: "center",
+    paddingHorizontal: 2,
+  },
+  switchActive: {
+    backgroundColor: "#06b6d4",
+  },
+  switchThumb: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: "white",
+    alignSelf: "flex-start",
+  },
+  switchThumbActive: {
+    alignSelf: "flex-end",
+  },
+  permissionWarning: {
+    fontSize: 12,
+    color: "#f59e0b",
+    fontWeight: "500",
+    marginTop: 4,
   },
   modalButtons: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginTop: 32,
     gap: 12,
+    paddingHorizontal: 24,
+    paddingBottom: 24,
+    paddingTop: 16,
   },
   modalButton: {
     flex: 1,
@@ -1137,20 +1455,23 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   cancelButton: {
-    backgroundColor: "#f8fafc",
+    backgroundColor: "#f1f5f9",
     borderWidth: 1,
-    borderColor: "#d1d5db",
-  },
-  cancelButtonText: {
-    color: "#64748b",
-    fontSize: 16,
-    fontWeight: "600",
+    borderColor: "#e2e8f0",
   },
   saveButton: {
     backgroundColor: "#06b6d4",
   },
+  saveButtonDisabled: {
+    backgroundColor: "#94a3b8",
+  },
+  cancelButtonText: {
+    color: "#334155",
+    fontSize: 16,
+    fontWeight: "600",
+  },
   saveButtonText: {
-    color: "#ffffff",
+    color: "#fff",
     fontSize: 16,
     fontWeight: "600",
   },

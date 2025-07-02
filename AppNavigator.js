@@ -82,10 +82,7 @@ export default function AppNavigator() {
               <Stack.Screen name="Profile" component={ProfileScreen} />
 
               <Stack.Screen name="AppSettings" component={AppSettingsScreen} />
-              <Stack.Screen
-                name="PrivacySecurity"
-                component={PrivacySecurityScreen}
-              />
+            
 
               <Stack.Screen
                 name="PaymentReminder"
