@@ -80,6 +80,7 @@ export default function PaymentReminderScreen({ navigation }) {
   const [modalVisible, setModalVisible] = useState(false);
   const [editingReminder, setEditingReminder] = useState(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
 
   // Form state
@@ -90,6 +91,7 @@ export default function PaymentReminderScreen({ navigation }) {
     category: "Other",
     frequency: "monthly",
     nextDueDate: new Date(),
+    endDate: null, // optional end date
     reminderTime: new Date(),
     isActive: true,
     dayOfMonth: 1,
@@ -257,6 +259,7 @@ export default function PaymentReminderScreen({ navigation }) {
         category: form.category,
         frequency: form.frequency,
         next_due_date: form.nextDueDate.toISOString(),
+        end_date: form.endDate ? form.endDate.toISOString() : null,
         reminder_time: form.reminderTime.toISOString(),
         is_active: form.isActive,
         day_of_month: form.dayOfMonth,
@@ -416,6 +419,7 @@ export default function PaymentReminderScreen({ navigation }) {
         category: reminder.category,
         frequency: reminder.frequency,
         nextDueDate: new Date(reminder.next_due_date),
+        endDate: reminder.end_date ? new Date(reminder.end_date) : null,
         reminderTime: new Date(reminder.reminder_time),
         isActive: reminder.is_active,
         dayOfMonth: reminder.day_of_month || 1,
@@ -436,6 +440,7 @@ export default function PaymentReminderScreen({ navigation }) {
         category: "Other",
         frequency: "monthly",
         nextDueDate: tomorrow,
+        endDate: null,
         reminderTime: new Date(
           now.getFullYear(),
           now.getMonth(),
@@ -457,6 +462,7 @@ export default function PaymentReminderScreen({ navigation }) {
     setModalVisible(false);
     setEditingReminder(null);
     setShowDatePicker(false);
+    setShowEndDatePicker(false);
     setShowTimePicker(false);
   };
 
@@ -773,6 +779,26 @@ export default function PaymentReminderScreen({ navigation }) {
                 </Text>
               </TouchableOpacity>
 
+              {/* End Date (Optional) */}
+              <Text style={styles.inputLabel}>End Date (Optional)</Text>
+              <TouchableOpacity
+                style={styles.dateTimeButton}
+                onPress={() => setShowEndDatePicker(true)}
+              >
+                <Calendar size={20} color="#06b6d4" />
+                <Text style={styles.dateTimeText}>
+                  {form.endDate ? formatDate(form.endDate) : "No end date"}
+                </Text>
+              </TouchableOpacity>
+              {form.endDate && (
+                <TouchableOpacity
+                  style={styles.clearEndDateButton}
+                  onPress={() => setForm({ ...form, endDate: null })}
+                >
+                  <Text style={styles.clearEndDateText}>Clear end date</Text>
+                </TouchableOpacity>
+              )}
+
               {/* Reminder Time */}
               <Text style={styles.inputLabel}>Reminder Time</Text>
               <TouchableOpacity
@@ -865,6 +891,21 @@ export default function PaymentReminderScreen({ navigation }) {
             setShowTimePicker(false);
             if (selectedTime) {
               setForm({ ...form, reminderTime: selectedTime });
+            }
+          }}
+        />
+      )}
+
+      {/* End Date Picker */}
+      {showEndDatePicker && (
+        <DateTimePicker
+          value={form.endDate || new Date()}
+          mode="date"
+          display="default"
+          onChange={(event, selectedDate) => {
+            setShowEndDatePicker(false);
+            if (selectedDate) {
+              setForm({ ...form, endDate: selectedDate });
             }
           }}
         />
@@ -1153,5 +1194,15 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontSize: 16,
     fontWeight: "600",
+  },
+  clearEndDateButton: {
+    marginTop: 8,
+    alignSelf: "flex-start",
+  },
+  clearEndDateText: {
+    color: "#64748b",
+    fontSize: 14,
+    fontWeight: "500",
+    textDecorationLine: "underline",
   },
 });

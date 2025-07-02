@@ -803,6 +803,19 @@ export default function DashboardScreen({ navigation }) {
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
+            style={styles.actionButton2}
+            onPress={() => navigation.navigate("PaymentReminder")}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.actionLabel}>
+              <Text style={styles.actionIcon}>🔔</Text>
+              Reminders
+              {reminders.length > 0 && (
+                <Text style={styles.reminderCount}> ({reminders.length})</Text>
+              )}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
             style={styles.addButton}
             onPress={() => navigation.navigate("AddExpense")}
             activeOpacity={0.8}
@@ -1199,10 +1212,10 @@ const styles = StyleSheet.create({
   taskbar: {
     height: 60,
     flexDirection: "row",
-    justifyContent: "space-between",
+    justifyContent: "space-around",
     alignItems: "center",
     backgroundColor: "white",
-    paddingHorizontal: 32,
+    paddingHorizontal: 20,
     borderRadius: 40,
     elevation: 20,
     borderWidth: 5,
@@ -1211,7 +1224,7 @@ const styles = StyleSheet.create({
   },
   addButton: {
     position: "absolute",
-    left: "45%",
+    left: "43%",
     right: 0,
     top: -16,
     width: 90,
@@ -1246,5 +1259,10 @@ const styles = StyleSheet.create({
   },
   actionButton2: {
     padding: 10,
+  },
+  reminderCount: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: "#06b6d4",
   },
 });
