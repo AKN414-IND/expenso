@@ -12,16 +12,19 @@ import {
   RefreshControl,
   KeyboardAvoidingView,
   Platform,
-  Alert as RNAlert,
 } from "react-native";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
 import Alert from "../components/Alert";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import * as Notifications from "expo-notifications";
-import * as BackgroundFetch from "expo-background-fetch";
-import * as TaskManager from "expo-task-manager";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  setupNotificationCategories,
+  scheduleNotification as scheduleReminderNotification,
+  cleanupNotifications,
+  requestNotificationPermissions,
+  BACKGROUND_FETCH_TASK,
+} from "../services/NotificationService";
 import {
   Bell,
   Plus,
@@ -34,34 +37,19 @@ import {
   AlertCircle,
 } from "lucide-react-native";
 
-// Configure notifications
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
-
-// Background task for checking overdue reminders
-const BACKGROUND_FETCH_TASK = "background-fetch-reminders";
-
-TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
-  try {
-    console.log("Background task: Checking for overdue reminders");
-    // This would typically check for overdue reminders and send notifications
-    return BackgroundFetch.BackgroundFetchResult.NewData;
-  } catch (error) {
-    console.error("Background task error:", error);
-    return BackgroundFetch.BackgroundFetchResult.Failed;
-  }
-});
-
 const FREQUENCY_OPTIONS = [
   { value: "monthly", label: "Monthly", icon: "📅" },
   { value: "weekly", label: "Weekly", icon: "📋" },
   { value: "yearly", label: "Yearly", icon: "🗓️" },
   { value: "one-time", label: "One Time", icon: "⏰" },
+];
+
+const CATEGORY_OPTIONS = [
+  { value: "Bills", label: "Bills" },
+  { value: "Subscription", label: "Subscription" },
+  { value: "Loan", label: "Loan" },
+  { value: "Rent", label: "Rent" },
+  { value: "Other", label: "Other" },
 ];
 
 export default function PaymentReminderScreen({ navigation }) {
@@ -80,78 +68,117 @@ export default function PaymentReminderScreen({ navigation }) {
   const [saving, setSaving] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
 
-  const onTimeChange = (event, selectedTime) => {
-    setShowTimePicker(false);
-    if (selectedTime) {
-      // Format as "HH:mm"
-      const hours = selectedTime.getHours().toString().padStart(2, "0");
-      const minutes = selectedTime.getMinutes().toString().padStart(2, "0");
-      setForm({ ...form, reminder_time: `${hours}:${minutes}` });
-    }
-  };
-
   const [form, setForm] = useState({
     title: "",
     amount: "",
     frequency: "monthly",
     next_due_date: "",
-    reminder_time: "09:00", // Default value
+    reminder_time: "09:00",
     description: "",
     notification_enabled: true,
     category: "",
   });
 
+  // ----- Notification Integration -----
+
   useEffect(() => {
-    if (session && session.user) {
+    if (session?.user) {
       initializeNotifications();
       fetchReminders();
-      registerBackgroundTask();
     }
+    // Remove notification listener on unmount
+    return () => {
+      Notifications.removeAllNotificationListeners && Notifications.removeAllNotificationListeners();
+    };
+    // eslint-disable-next-line
   }, [session]);
 
+  // 1. Notification Setup & Permission
   const initializeNotifications = async () => {
     try {
-      const { status: existingStatus } =
-        await Notifications.getPermissionsAsync();
-      let finalStatus = existingStatus;
+      await setupNotificationCategories();
+      const status = await requestNotificationPermissions();
+      setNotificationPermission(status);
 
-      if (existingStatus !== "granted") {
-        const { status } = await Notifications.requestPermissionsAsync();
-        finalStatus = status;
+      if (status !== "granted") {
+        Alert({
+          title: "Notification Permission Required",
+          message: "Please enable notifications to receive payment reminders.",
+          onConfirm: () => Notifications.openSettingsAsync(),
+          confirmText: "Settings",
+          cancelText: "Cancel",
+          open: true,
+        });
       }
-
-      setNotificationPermission(finalStatus);
-
-      if (finalStatus !== "granted") {
-        RNAlert.alert(
-          "Notification Permission Required",
-          "Please enable notifications to receive payment reminders.",
-          [
-            { text: "Cancel", style: "cancel" },
-            {
-              text: "Settings",
-              onPress: () => Notifications.openSettingsAsync(),
-            },
-          ]
-        );
-      }
+      // Add notification response handler
+      const subscription = Notifications.addNotificationResponseReceivedListener(
+        handleNotificationResponse
+      );
+      return () => subscription.remove();
     } catch (error) {
       console.error("Error initializing notifications:", error);
     }
   };
 
-  const registerBackgroundTask = async () => {
-    try {
-      await BackgroundFetch.registerTaskAsync(BACKGROUND_FETCH_TASK, {
-        minimumInterval: 60 * 60 * 24, // 24 hours
-        stopOnTerminate: false,
-        startOnBoot: true,
-      });
-    } catch (error) {
-      console.error("Error registering background task:", error);
+  // 2. Notification Response Handler
+  const handleNotificationResponse = (response) => {
+    const { screen, params, reminderId } = response.notification.request.content.data || {};
+    const actionIdentifier = response.actionIdentifier;
+    if (actionIdentifier === "mark_paid") {
+      markReminderAsPaid(reminderId);
+    } else if (actionIdentifier === "urgent_pay" || actionIdentifier === "view_details") {
+      navigation.navigate("PaymentReminder", params);
+    } else if (actionIdentifier === "snooze") {
+      snoozeReminder(reminderId);
+    } else if (screen) {
+      navigation.navigate(screen, params);
     }
   };
 
+  // 3. Notification Scheduling
+  const scheduleNotification = async (reminder) => {
+    return await scheduleReminderNotification(reminder, form.reminder_time);
+  };
+
+  // 4. Helper: Mark as Paid
+  const markReminderAsPaid = async (reminderId) => {
+    try {
+      await supabase.from("payment_reminders").update({ is_active: false }).eq("id", reminderId);
+      fetchReminders();
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: "✅ Payment Marked as Paid",
+          body: "Reminder has been marked as completed.",
+        },
+        trigger: null,
+      });
+    } catch (error) {
+      console.error("Error marking reminder as paid:", error);
+    }
+  };
+
+  // 5. Helper: Snooze
+  const snoozeReminder = async (reminderId) => {
+    try {
+      const reminder = reminders.find((r) => r.id === reminderId);
+      if (reminder) {
+        const snoozeTime = new Date();
+        snoozeTime.setHours(snoozeTime.getHours() + 1);
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: "💰 Payment Reminder (Snoozed)",
+            body: `${reminder.title} - Don't forget to pay!`,
+            data: { reminderId: reminder.id, type: "snoozed" },
+          },
+          trigger: snoozeTime,
+        });
+      }
+    } catch (error) {
+      console.error("Error snoozing reminder:", error);
+    }
+  };
+
+  // 6. Reminder CRUD
   const fetchReminders = async () => {
     try {
       const { data, error } = await supabase
@@ -159,26 +186,34 @@ export default function PaymentReminderScreen({ navigation }) {
         .select("*")
         .eq("user_id", session.user.id)
         .order("next_due_date", { ascending: true });
-
       if (!error && data) {
         setReminders(data);
-        // Check for overdue reminders
+        await cleanupNotifications(data);
         checkOverdueReminders(data);
       } else {
-        console.error("Error fetching reminders:", error);
         setReminders([]);
-        if (error.code !== "PGRST116") {
-          RNAlert.alert("Error", "Failed to load reminders. Please try again.");
+        if (error?.code !== "PGRST116") {
+          Alert({
+            title: "Error",
+            message: "Failed to load reminders. Please try again.",
+            open: true,
+          });
         }
       }
     } catch (err) {
-      console.error("Exception fetching reminders:", err);
       setReminders([]);
-      RNAlert.alert("Error", "Network error. Please check your connection.");
+      Alert({ title: "Error", message: "Network error. Please check your connection.", open: true });
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
+  };
+
+  // ----- UI & Other Logic -----
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchReminders();
   };
 
   const checkOverdueReminders = (reminderList) => {
@@ -189,32 +224,22 @@ export default function PaymentReminderScreen({ navigation }) {
         reminder.next_due_date < today &&
         reminder.notification_enabled !== false
     );
-
-    if (overdueReminders.length > 0) {
-      sendOverdueNotifications(overdueReminders);
-    }
+    if (overdueReminders.length > 0) sendOverdueNotifications(overdueReminders);
   };
 
   const sendOverdueNotifications = async (overdueReminders) => {
     try {
       for (const reminder of overdueReminders) {
         const daysPast = Math.floor(
-          (new Date() - new Date(reminder.next_due_date)) /
-            (1000 * 60 * 60 * 24)
+          (new Date() - new Date(reminder.next_due_date)) / (1000 * 60 * 60 * 24)
         );
-
         await Notifications.scheduleNotificationAsync({
           content: {
             title: "⚠️ Overdue Payment Reminder",
-            body: `${reminder.title} was due ${daysPast} day(s) ago. Amount: ₹${
-              reminder.amount || "Not specified"
-            }`,
-            data: {
-              reminderId: reminder.id,
-              type: "overdue",
-            },
+            body: `${reminder.title} was due ${daysPast} day(s) ago. Amount: ₹${reminder.amount || "Not specified"}`,
+            data: { reminderId: reminder.id, type: "overdue" },
           },
-          trigger: null, // Send immediately
+          trigger: null,
         });
       }
     } catch (error) {
@@ -235,101 +260,22 @@ export default function PaymentReminderScreen({ navigation }) {
         date.setFullYear(date.getFullYear() + 1);
         break;
       default:
-        return null; // one-time
+        return null;
     }
     return date.toISOString().split("T")[0];
   };
 
-  const scheduleNotification = async (reminder) => {
-    try {
-      if (
-        notificationPermission !== "granted" ||
-        !reminder.notification_enabled
-      ) {
-        return null;
-      }
-
-      // Cancel existing notification if updating
-      if (reminder.notification_id) {
-        await Notifications.cancelScheduledNotificationAsync(
-          reminder.notification_id
-        );
-      }
-
-      const triggerDate = new Date(reminder.next_due_date);
-      triggerDate.setHours(9, 0, 0, 0); // 9 AM notification
-
-      // Don't schedule if date is in the past
-      if (triggerDate <= new Date()) {
-        return null;
-      }
-
-      const notificationId = await Notifications.scheduleNotificationAsync({
-        content: {
-          title: "💰 Payment Reminder",
-          body: `${reminder.title} is due today!${
-            reminder.amount ? ` Amount: ₹${reminder.amount}` : ""
-          }`,
-          data: {
-            reminderId: reminder.id,
-            type: "due_today",
-          },
-        },
-        trigger: triggerDate,
-      });
-
-      return notificationId;
-    } catch (error) {
-      console.error("Error scheduling notification:", error);
-      return null;
-    }
-  };
-
   const validateForm = () => {
     const errors = [];
-
-    if (!form.title.trim()) {
-      errors.push("Title is required");
-    }
-
-    if (form.title.trim().length > 100) {
-      errors.push("Title must be less than 100 characters");
-    }
-
-    if (!form.next_due_date.trim()) {
-      errors.push("Due date is required");
-    }
-
-    if (
-      form.amount &&
-      (isNaN(parseFloat(form.amount)) || parseFloat(form.amount) < 0)
-    ) {
-      errors.push("Amount must be a valid positive number");
-    }
-
-    if (form.amount && parseFloat(form.amount) > 10000000) {
-      errors.push("Amount cannot exceed ₹1,00,00,000");
-    }
-    if (!form.category || !form.category.trim()) {
-      errors.push("Category is required");
-    }
-
-    const selectedDateObj = new Date(form.next_due_date);
-    if (isNaN(selectedDateObj.getTime())) {
-      errors.push("Please select a valid due date");
-    }
-
+    if (!form.title.trim()) errors.push("Title is required");
+    if (!form.next_due_date.trim()) errors.push("Due date is required");
+    if (!form.category?.trim()) errors.push("Category is required");
+    if (form.amount && (isNaN(parseFloat(form.amount)) || parseFloat(form.amount) < 0)) errors.push("Amount must be a valid positive number");
     if (errors.length > 0) {
-      RNAlert.alert("Validation Error", errors.join("\\n"));
+      Alert({ title: "Validation Error", message: errors.join("\n"), open: true });
       return false;
     }
-
     return true;
-  };
-
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchReminders();
   };
 
   const resetForm = () => {
@@ -338,8 +284,10 @@ export default function PaymentReminderScreen({ navigation }) {
       amount: "",
       frequency: "monthly",
       next_due_date: "",
+      reminder_time: "09:00",
       description: "",
       notification_enabled: true,
+      category: "",
     });
     setEditingReminder(null);
     setSelectedDate(new Date());
@@ -352,31 +300,22 @@ export default function PaymentReminderScreen({ navigation }) {
 
   const openEditModal = (reminder) => {
     setEditingReminder(reminder);
-    const reminderDate = new Date(reminder.next_due_date);
-    setSelectedDate(reminderDate);
+    setSelectedDate(new Date(reminder.next_due_date));
     setForm({
       title: reminder.title || "",
       amount: reminder.amount?.toString() || "",
       frequency: reminder.frequency || "monthly",
       next_due_date: reminder.next_due_date || "",
+      reminder_time: reminder.reminder_time || "09:00",
       description: reminder.description || "",
       notification_enabled: reminder.notification_enabled !== false,
+      category: reminder.category || "",
     });
     setModalVisible(true);
   };
-  const CATEGORY_OPTIONS = [
-    { value: "Bills", label: "Bills" },
-    { value: "Subscription", label: "Subscription" },
-    { value: "Loan", label: "Loan" },
-    { value: "Rent", label: "Rent" },
-    { value: "Other", label: "Other" },
-  ];
 
   const saveReminder = async () => {
-    if (!validateForm()) {
-      return;
-    }
-
+    if (!validateForm()) return;
     setSaving(true);
     try {
       const reminderData = {
@@ -390,12 +329,9 @@ export default function PaymentReminderScreen({ navigation }) {
         notification_enabled: form.notification_enabled,
         updated_at: new Date().toISOString(),
         category: form.category,
-        reminder_time: "09:00",
+        reminder_time: form.reminder_time,
       };
-      
-      let savedReminder;
-      let error;
-
+      let savedReminder, error;
       if (editingReminder) {
         const { data, error: updateError } = await supabase
           .from("payment_reminders")
@@ -415,28 +351,21 @@ export default function PaymentReminderScreen({ navigation }) {
         error = insertError;
         savedReminder = data;
       }
-
       if (!error && savedReminder) {
         // Schedule notification
         const notificationId = await scheduleNotification({
           ...savedReminder,
           notification_enabled: form.notification_enabled,
         });
-
-        // Update with notification ID if scheduled
         if (notificationId) {
           await supabase
             .from("payment_reminders")
             .update({ notification_id: notificationId })
             .eq("id", savedReminder.id);
         }
-
-        // Update next due date for recurring reminders
+        // Next due for recurring
         if (form.frequency !== "one-time") {
-          const nextDueDate = calculateNextDueDate(
-            form.next_due_date,
-            form.frequency
-          );
+          const nextDueDate = calculateNextDueDate(form.next_due_date, form.frequency);
           if (nextDueDate) {
             await supabase
               .from("payment_reminders")
@@ -444,31 +373,23 @@ export default function PaymentReminderScreen({ navigation }) {
               .eq("id", savedReminder.id);
           }
         }
-
         setModalVisible(false);
         resetForm();
         fetchReminders();
-        RNAlert.alert(
-          "Success",
-          `Reminder ${editingReminder ? "updated" : "created"} successfully!${
-            form.notification_enabled && notificationPermission === "granted"
-              ? " You will receive notifications."
-              : ""
-          }`
-        );
+        Alert({
+          title: "Success",
+          message: `Reminder ${editingReminder ? "updated" : "created"} successfully!`,
+          open: true,
+        });
       } else {
-        console.error("Error saving reminder:", error);
-        RNAlert.alert(
-          "Error",
-          error?.message || "Failed to save reminder. Please try again."
-        );
+        Alert({
+          title: "Error",
+          message: error?.message || "Failed to save reminder. Please try again.",
+          open: true,
+        });
       }
     } catch (err) {
-      console.error("Exception saving reminder:", err);
-      RNAlert.alert(
-        "Error",
-        "Network error. Please check your connection and try again."
-      );
+      Alert({ title: "Error", message: "Network error. Please try again.", open: true });
     } finally {
       setSaving(false);
     }
@@ -476,100 +397,113 @@ export default function PaymentReminderScreen({ navigation }) {
 
   const deleteReminder = async (reminderId) => {
     try {
-      // Find the reminder to get notification ID
       const reminderToDelete = reminders.find((r) => r.id === reminderId);
-
-      // Cancel scheduled notification
       if (reminderToDelete?.notification_id) {
-        await Notifications.cancelScheduledNotificationAsync(
-          reminderToDelete.notification_id
-        );
+        await Notifications.cancelScheduledNotificationAsync(reminderToDelete.notification_id);
       }
-
       const { error } = await supabase
         .from("payment_reminders")
         .delete()
         .eq("id", reminderId);
-
       if (!error) {
         fetchReminders();
-        RNAlert.alert("Success", "Reminder deleted successfully!");
+        Alert({ title: "Success", message: "Reminder deleted successfully!", open: true });
       } else {
-        console.error("Failed to delete reminder:", error);
-        RNAlert.alert("Error", "Failed to delete reminder. Please try again.");
+        Alert({ title: "Error", message: "Failed to delete reminder. Please try again.", open: true });
       }
     } catch (err) {
-      console.error("Failed to delete reminder:", err);
-      RNAlert.alert("Error", "Network error. Please try again.");
+      Alert({ title: "Error", message: "Network error. Please try again.", open: true });
     }
   };
 
-  const toggleReminderStatus = async (reminder) => {
-    try {
-      const newStatus = !reminder.is_active;
-
-      // Cancel or reschedule notification based on new status
-      if (reminder.notification_id) {
-        if (newStatus) {
-          // Reschedule notification
-          const notificationId = await scheduleNotification(reminder);
-          await supabase
-            .from("payment_reminders")
-            .update({
-              is_active: newStatus,
-              notification_id: notificationId,
-            })
-            .eq("id", reminder.id);
-        } else {
-          // Cancel notification
-          await Notifications.cancelScheduledNotificationAsync(
-            reminder.notification_id
-          );
-          await supabase
-            .from("payment_reminders")
-            .update({
-              is_active: newStatus,
-              notification_id: null,
-            })
-            .eq("id", reminder.id);
-        }
-      } else {
-        await supabase
-          .from("payment_reminders")
-          .update({ is_active: newStatus })
-          .eq("id", reminder.id);
-      }
-
-      fetchReminders();
-    } catch (err) {
-      console.error("Failed to toggle reminder:", err);
-      RNAlert.alert("Error", "Failed to update reminder status.");
-    }
-  };
-
+  // Date/time input handlers
   const onDateChange = (event, selectedDate) => {
     setShowDatePicker(Platform.OS === "ios");
     if (selectedDate) {
       setSelectedDate(selectedDate);
-      const dateString = selectedDate.toISOString().split("T")[0];
-      setForm({ ...form, next_due_date: dateString });
+      setForm({ ...form, next_due_date: selectedDate.toISOString().split("T")[0] });
+    }
+  };
+  const onTimeChange = (event, selectedTime) => {
+    setShowTimePicker(false);
+    if (selectedTime) {
+      const hours = selectedTime.getHours().toString().padStart(2, "0");
+      const minutes = selectedTime.getMinutes().toString().padStart(2, "0");
+      setForm({ ...form, reminder_time: `${hours}:${minutes}` });
     }
   };
 
-  const formatDate = (dateString) => {
+  // --- Render ---
+
+  const renderReminder = ({ item }) => (
+    <View style={[styles.reminderCard, { borderLeftColor: getStatusColor(item) }]}>
+      <View style={styles.reminderHeader}>
+        <View style={styles.reminderTitleRow}>
+          <Text style={styles.reminderIcon}>{getFrequencyIcon(item.frequency)}</Text>
+          <View style={styles.reminderTitleContainer}>
+            <Text style={[styles.reminderTitle, !item.is_active && styles.inactiveText]}>
+              {item.title}
+            </Text>
+            {item.description && (
+              <Text style={styles.reminderDescription}>{item.description}</Text>
+            )}
+          </View>
+          <View style={styles.reminderStatusContainer}>
+            <TouchableOpacity
+              style={[styles.statusToggle, { backgroundColor: getStatusColor(item) }]}
+              onPress={() => toggleReminderStatus(item)}
+            >
+              <CheckCircle2 size={16} color="white" style={{ opacity: item.is_active ? 1 : 0.6 }} />
+            </TouchableOpacity>
+            {item.notification_enabled === false && (
+              <AlertCircle size={16} color="#f59e0b" style={{ marginLeft: 4 }} />
+            )}
+          </View>
+        </View>
+        <View style={styles.reminderDetails}>
+          <View style={styles.reminderInfo}>
+            <Calendar size={14} color="#64748b" />
+            <Text style={styles.reminderDate}>{formatDate(item.next_due_date)}</Text>
+          </View>
+          {item.amount && (
+            <View style={styles.reminderInfo}>
+              <Text style={styles.reminderAmount}>₹{item.amount}</Text>
+            </View>
+          )}
+        </View>
+        <Text style={[styles.statusText, { color: getStatusColor(item) }]}>
+          {getStatusText(item)}
+        </Text>
+      </View>
+      <View style={styles.reminderActions}>
+        <TouchableOpacity style={styles.actionButton} onPress={() => openEditModal(item)}>
+          <Edit3 size={16} color="#06b6d4" />
+          <Text style={styles.actionButtonText}>Edit</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.actionButton, styles.deleteButton]}
+          onPress={() => {
+            setReminderToDelete(item);
+            setShowDeleteAlert(true);
+          }}
+        >
+          <Trash2 size={16} color="#ef4444" />
+          <Text style={[styles.actionButtonText, styles.deleteButtonText]}>Delete</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
+  // --- Util UI ---
+  function formatDate(dateString) {
     try {
       const date = new Date(dateString);
-      return date.toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-      });
+      return date.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
     } catch (error) {
       return dateString;
     }
-  };
-
-  const getDaysUntilDue = (dateString) => {
+  }
+  function getDaysUntilDue(dateString) {
     try {
       const today = new Date();
       const dueDate = new Date(dateString);
@@ -579,122 +513,57 @@ export default function PaymentReminderScreen({ navigation }) {
     } catch (error) {
       return 0;
     }
-  };
-
-  const getStatusColor = (reminder) => {
+  }
+  function getStatusColor(reminder) {
     if (!reminder.is_active) return "#94a3b8";
-
     const daysUntil = getDaysUntilDue(reminder.next_due_date);
-    if (daysUntil < 0) return "#ef4444"; // Overdue
-    if (daysUntil <= 3) return "#f59e0b"; // Due soon
-    return "#10b981"; // On time
-  };
-
-  const getStatusText = (reminder) => {
+    if (daysUntil < 0) return "#ef4444";
+    if (daysUntil <= 3) return "#f59e0b";
+    return "#10b981";
+  }
+  function getStatusText(reminder) {
     if (!reminder.is_active) return "Inactive";
-
     const daysUntil = getDaysUntilDue(reminder.next_due_date);
     if (daysUntil < 0) return `${Math.abs(daysUntil)} days overdue`;
     if (daysUntil === 0) return "Due today";
     if (daysUntil === 1) return "Due tomorrow";
     return `${daysUntil} days left`;
-  };
-
-  const getFrequencyIcon = (frequency) => {
+  }
+  function getFrequencyIcon(frequency) {
     const option = FREQUENCY_OPTIONS.find((opt) => opt.value === frequency);
     return option ? option.icon : "📅";
+  }
+  const toggleReminderStatus = async (reminder) => {
+    try {
+      const newStatus = !reminder.is_active;
+      if (reminder.notification_id) {
+        if (newStatus) {
+          const notificationId = await scheduleNotification(reminder);
+          await supabase
+            .from("payment_reminders")
+            .update({
+              is_active: newStatus,
+              notification_id: notificationId,
+            })
+            .eq("id", reminder.id);
+        } else {
+          await Notifications.cancelScheduledNotificationAsync(reminder.notification_id);
+          await supabase
+            .from("payment_reminders")
+            .update({
+              is_active: newStatus,
+              notification_id: null,
+            })
+            .eq("id", reminder.id);
+        }
+      } else {
+        await supabase.from("payment_reminders").update({ is_active: newStatus }).eq("id", reminder.id);
+      }
+      fetchReminders();
+    } catch (err) {
+      Alert({ title: "Error", message: "Failed to update reminder status.", open: true });
+    }
   };
-
-  const renderReminder = ({ item }) => (
-    <View
-      style={[styles.reminderCard, { borderLeftColor: getStatusColor(item) }]}
-    >
-      <View style={styles.reminderHeader}>
-        <View style={styles.reminderTitleRow}>
-          <Text style={styles.reminderIcon}>
-            {getFrequencyIcon(item.frequency)}
-          </Text>
-          <View style={styles.reminderTitleContainer}>
-            <Text
-              style={[
-                styles.reminderTitle,
-                !item.is_active && styles.inactiveText,
-              ]}
-            >
-              {item.title}
-            </Text>
-            {item.description && (
-              <Text style={styles.reminderDescription}>{item.description}</Text>
-            )}
-          </View>
-          <View style={styles.reminderStatusContainer}>
-            <TouchableOpacity
-              style={[
-                styles.statusToggle,
-                { backgroundColor: getStatusColor(item) },
-              ]}
-              onPress={() => toggleReminderStatus(item)}
-            >
-              <CheckCircle2
-                size={16}
-                color="white"
-                style={{ opacity: item.is_active ? 1 : 0.6 }}
-              />
-            </TouchableOpacity>
-            {item.notification_enabled === false && (
-              <AlertCircle
-                size={16}
-                color="#f59e0b"
-                style={{ marginLeft: 4 }}
-              />
-            )}
-          </View>
-        </View>
-
-        <View style={styles.reminderDetails}>
-          <View style={styles.reminderInfo}>
-            <Calendar size={14} color="#64748b" />
-            <Text style={styles.reminderDate}>
-              {formatDate(item.next_due_date)}
-            </Text>
-          </View>
-
-          {item.amount && (
-            <View style={styles.reminderInfo}>
-              <Text style={styles.reminderAmount}>₹{item.amount}</Text>
-            </View>
-          )}
-        </View>
-
-        <Text style={[styles.statusText, { color: getStatusColor(item) }]}>
-          {getStatusText(item)}
-        </Text>
-      </View>
-
-      <View style={styles.reminderActions}>
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={() => openEditModal(item)}
-        >
-          <Edit3 size={16} color="#06b6d4" />
-          <Text style={styles.actionButtonText}>Edit</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.actionButton, styles.deleteButton]}
-          onPress={() => {
-            setReminderToDelete(item);
-            setShowDeleteAlert(true);
-          }}
-        >
-          <Trash2 size={16} color="#ef4444" />
-          <Text style={[styles.actionButtonText, styles.deleteButtonText]}>
-            Delete
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
 
   if (loading) {
     return (
@@ -708,42 +577,32 @@ export default function PaymentReminderScreen({ navigation }) {
   return (
     <>
       <View style={styles.container}>
+        {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
+          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
             <ArrowLeft size={24} color="#1e293b" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Payment Reminders</Text>
-          <TouchableOpacity
-            style={styles.addHeaderButton}
-            onPress={openAddModal}
-          >
+          <TouchableOpacity style={styles.addHeaderButton} onPress={openAddModal}>
             <Plus size={24} color="#06b6d4" />
           </TouchableOpacity>
         </View>
-
+        {/* Notification Banner */}
         {notificationPermission !== "granted" && (
           <View style={styles.permissionBanner}>
             <AlertCircle size={20} color="#f59e0b" />
             <Text style={styles.permissionText}>
               Enable notifications to receive payment reminders
             </Text>
-            <TouchableOpacity
-              style={styles.enableButton}
-              onPress={initializeNotifications}
-            >
+            <TouchableOpacity style={styles.enableButton} onPress={initializeNotifications}>
               <Text style={styles.enableButtonText}>Enable</Text>
             </TouchableOpacity>
           </View>
         )}
-
+        {/* List */}
         <ScrollView
           style={styles.content}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         >
           {reminders.length > 0 ? (
             <FlatList
@@ -758,49 +617,32 @@ export default function PaymentReminderScreen({ navigation }) {
               <Bell size={64} color="#cbd5e1" />
               <Text style={styles.emptyStateTitle}>No Payment Reminders</Text>
               <Text style={styles.emptyStateText}>
-                Create your first payment reminder to stay on top of your bills
-                and subscriptions.
+                Create your first payment reminder to stay on top of your bills and subscriptions.
               </Text>
-              <TouchableOpacity
-                style={styles.emptyStateButton}
-                onPress={openAddModal}
-              >
+              <TouchableOpacity style={styles.emptyStateButton} onPress={openAddModal}>
                 <Plus size={20} color="white" />
                 <Text style={styles.emptyStateButtonText}>Add Reminder</Text>
               </TouchableOpacity>
             </View>
           )}
         </ScrollView>
-
         <TouchableOpacity style={styles.fab} onPress={openAddModal}>
           <Plus size={24} color="white" />
         </TouchableOpacity>
       </View>
 
       {/* Add/Edit Modal */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={modalVisible}
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <KeyboardAvoidingView
-          style={styles.modalOverlay}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-        >
+      <Modal animationType="slide" transparent={true} visible={modalVisible} onRequestClose={() => setModalVisible(false)}>
+        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === "ios" ? "padding" : undefined}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
                 {editingReminder ? "Edit Reminder" : "Add Reminder"}
               </Text>
-              <TouchableOpacity
-                style={styles.modalCloseButton}
-                onPress={() => setModalVisible(false)}
-              >
+              <TouchableOpacity style={styles.modalCloseButton} onPress={() => setModalVisible(false)}>
                 <Text style={styles.modalCloseText}>✕</Text>
               </TouchableOpacity>
             </View>
-
             <ScrollView style={styles.modalForm}>
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Title *</Text>
@@ -812,7 +654,6 @@ export default function PaymentReminderScreen({ navigation }) {
                   maxLength={100}
                 />
               </View>
-
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Amount (Optional)</Text>
                 <TextInput
@@ -831,18 +672,14 @@ export default function PaymentReminderScreen({ navigation }) {
                       key={option.value}
                       style={[
                         styles.frequencyOption,
-                        form.category === option.value &&
-                          styles.frequencyOptionSelected,
+                        form.category === option.value && styles.frequencyOptionSelected,
                       ]}
-                      onPress={() =>
-                        setForm({ ...form, category: option.value })
-                      }
+                      onPress={() => setForm({ ...form, category: option.value })}
                     >
                       <Text
                         style={[
                           styles.frequencyLabel,
-                          form.category === option.value &&
-                            styles.frequencyLabelSelected,
+                          form.category === option.value && styles.frequencyLabelSelected,
                         ]}
                       >
                         {option.label}
@@ -851,7 +688,6 @@ export default function PaymentReminderScreen({ navigation }) {
                   ))}
                 </View>
               </View>
-
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Frequency</Text>
                 <View style={styles.frequencyOptions}>
@@ -860,19 +696,15 @@ export default function PaymentReminderScreen({ navigation }) {
                       key={option.value}
                       style={[
                         styles.frequencyOption,
-                        form.frequency === option.value &&
-                          styles.frequencyOptionSelected,
+                        form.frequency === option.value && styles.frequencyOptionSelected,
                       ]}
-                      onPress={() =>
-                        setForm({ ...form, frequency: option.value })
-                      }
+                      onPress={() => setForm({ ...form, frequency: option.value })}
                     >
                       <Text style={styles.frequencyIcon}>{option.icon}</Text>
                       <Text
                         style={[
                           styles.frequencyLabel,
-                          form.frequency === option.value &&
-                            styles.frequencyLabelSelected,
+                          form.frequency === option.value && styles.frequencyLabelSelected,
                         ]}
                       >
                         {option.label}
@@ -881,21 +713,14 @@ export default function PaymentReminderScreen({ navigation }) {
                   ))}
                 </View>
               </View>
-
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Due Date *</Text>
-                <TouchableOpacity
-                  style={styles.datePickerButton}
-                  onPress={() => setShowDatePicker(true)}
-                >
+                <TouchableOpacity style={styles.datePickerButton} onPress={() => setShowDatePicker(true)}>
                   <Calendar size={20} color="#64748b" />
                   <Text style={styles.datePickerText}>
-                    {form.next_due_date
-                      ? formatDate(form.next_due_date)
-                      : "Select Date"}
+                    {form.next_due_date ? formatDate(form.next_due_date) : "Select Date"}
                   </Text>
                 </TouchableOpacity>
-
                 {showDatePicker && (
                   <DateTimePicker
                     value={selectedDate}
@@ -906,17 +731,11 @@ export default function PaymentReminderScreen({ navigation }) {
                   />
                 )}
               </View>
-
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Reminder Time *</Text>
-                <TouchableOpacity
-                  style={styles.datePickerButton}
-                  onPress={() => setShowTimePicker(true)}
-                >
+                <TouchableOpacity style={styles.datePickerButton} onPress={() => setShowTimePicker(true)}>
                   <Clock size={20} color="#64748b" />
-                  <Text style={styles.datePickerText}>
-                    {form.reminder_time || "Select Time"}
-                  </Text>
+                  <Text style={styles.datePickerText}>{form.reminder_time || "Select Time"}</Text>
                 </TouchableOpacity>
                 {showTimePicker && (
                   <DateTimePicker
@@ -931,30 +750,23 @@ export default function PaymentReminderScreen({ navigation }) {
                   />
                 )}
               </View>
-
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Description (Optional)</Text>
                 <TextInput
                   style={[styles.input, styles.textArea]}
                   placeholder="Additional notes..."
                   value={form.description}
-                  onChangeText={(text) =>
-                    setForm({ ...form, description: text })
-                  }
+                  onChangeText={(text) => setForm({ ...form, description: text })}
                   multiline
                   numberOfLines={3}
                   maxLength={500}
                 />
               </View>
-
               <View style={styles.inputGroup}>
                 <View style={styles.switchContainer}>
                   <Text style={styles.inputLabel}>Enable Notifications</Text>
                   <TouchableOpacity
-                    style={[
-                      styles.switch,
-                      form.notification_enabled && styles.switchActive,
-                    ]}
+                    style={[styles.switch, form.notification_enabled && styles.switchActive]}
                     onPress={() =>
                       setForm({
                         ...form,
@@ -963,10 +775,7 @@ export default function PaymentReminderScreen({ navigation }) {
                     }
                   >
                     <View
-                      style={[
-                        styles.switchThumb,
-                        form.notification_enabled && styles.switchThumbActive,
-                      ]}
+                      style={[styles.switchThumb, form.notification_enabled && styles.switchThumbActive]}
                     />
                   </TouchableOpacity>
                 </View>
@@ -977,7 +786,6 @@ export default function PaymentReminderScreen({ navigation }) {
                 )}
               </View>
             </ScrollView>
-
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.cancelButton]}
@@ -987,11 +795,7 @@ export default function PaymentReminderScreen({ navigation }) {
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[
-                  styles.modalButton,
-                  styles.saveButton,
-                  saving && styles.saveButtonDisabled,
-                ]}
+                style={[styles.modalButton, styles.saveButton, saving && styles.saveButtonDisabled]}
                 onPress={saveReminder}
                 disabled={saving}
               >
@@ -1008,7 +812,7 @@ export default function PaymentReminderScreen({ navigation }) {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* Delete Confirmation Alert */}
+      {/* Custom Alert for Delete */}
       <Alert
         open={showDeleteAlert}
         onConfirm={async () => {

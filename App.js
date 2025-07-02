@@ -4,8 +4,21 @@ import * as SecureStore from "expo-secure-store";
 import AppNavigator from "./AppNavigator";
 import { AuthProvider } from "./context/AuthContext";
 import Toast, { BaseToast, ErrorToast } from "react-native-toast-message";
+import * as Notifications from 'expo-notifications';
+
 
 export default function App() {
+  useEffect(() => {
+    const subscription = Notifications.addNotificationResponseReceivedListener(response => {
+      const { screen, params } = response.notification.request.content.data || {};
+      
+      if (screen && navigationRef.current) {
+        navigationRef.current.navigate(screen, params);
+      }
+    });
+  
+    return () => subscription.remove();
+  }, []);
   useEffect(() => {
     // Optional: reset onboarding for testing (DEV ONLY)
     if (__DEV__) {
