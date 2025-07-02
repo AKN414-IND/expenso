@@ -18,10 +18,8 @@ import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
 import Alert from "../components/Alert";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import * as Notifications from "expo-notifications";
-import * as BackgroundFetch from "expo-background-fetch";
-import * as TaskManager from "expo-task-manager";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { notificationService, NOTIFICATION_CATEGORIES } from "../lib/notificationService";
+import { registerBackgroundTask } from "../lib/backgroundTasks";
 import {
   Bell,
   Plus,
@@ -33,29 +31,6 @@ import {
   CheckCircle2,
   AlertCircle,
 } from "lucide-react-native";
-
-// Configure notifications
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
-
-// Background task for checking overdue reminders
-const BACKGROUND_FETCH_TASK = "background-fetch-reminders";
-
-TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
-  try {
-    console.log("Background task: Checking for overdue reminders");
-    // This would typically check for overdue reminders and send notifications
-    return BackgroundFetch.BackgroundFetchResult.NewData;
-  } catch (error) {
-    console.error("Background task error:", error);
-    return BackgroundFetch.BackgroundFetchResult.Failed;
-  }
-});
 
 const FREQUENCY_OPTIONS = [
   { value: "monthly", label: "Monthly", icon: "📅" },
@@ -105,50 +80,55 @@ export default function PaymentReminderScreen({ navigation }) {
     if (session && session.user) {
       initializeNotifications();
       fetchReminders();
-      registerBackgroundTask();
     }
+
+    // Cleanup function
+    return () => {
+      // The notification service will handle cleanup automatically
+      // when the app is closed, but we can clean up listeners here if needed
+    };
   }, [session]);
 
   const initializeNotifications = async () => {
     try {
-      const { status: existingStatus } =
-        await Notifications.getPermissionsAsync();
-      let finalStatus = existingStatus;
-
-      if (existingStatus !== "granted") {
-        const { status } = await Notifications.requestPermissionsAsync();
-        finalStatus = status;
-      }
-
+      // Initialize the notification service
+      await notificationService.initialize();
+      
+      // Get permission status
+      const finalStatus = notificationService.getPermissionStatus();
       setNotificationPermission(finalStatus);
 
       if (finalStatus !== "granted") {
-        RNAlert.alert(
-          "Notification Permission Required",
-          "Please enable notifications to receive payment reminders.",
-          [
-            { text: "Cancel", style: "cancel" },
-            {
-              text: "Settings",
-              onPress: () => Notifications.openSettingsAsync(),
-            },
-          ]
-        );
+        // Request permissions with user-friendly handling
+        const permissionResult = await notificationService.requestPermissions();
+        setNotificationPermission(permissionResult.status);
+        
+        if (!permissionResult.granted) {
+          RNAlert.alert(
+            "Notification Permission Required",
+            "Please enable notifications to receive payment reminders.",
+            [
+              { text: "Cancel", style: "cancel" },
+              {
+                text: "Settings",
+                onPress: () => notificationService.openSettingsAsync?.() || 
+                         console.log("Settings not available"),
+              },
+            ]
+          );
+        }
+      }
+
+      // Register background task
+      await registerBackgroundTask();
+
+      // Handle any pending navigation from notification tap
+      const pendingNav = await notificationService.getPendingNavigation();
+      if (pendingNav && navigation) {
+        navigation.navigate(pendingNav.screen, pendingNav.params);
       }
     } catch (error) {
       console.error("Error initializing notifications:", error);
-    }
-  };
-
-  const registerBackgroundTask = async () => {
-    try {
-      await BackgroundFetch.registerTaskAsync(BACKGROUND_FETCH_TASK, {
-        minimumInterval: 60 * 60 * 24, // 24 hours
-        stopOnTerminate: false,
-        startOnBoot: true,
-      });
-    } catch (error) {
-      console.error("Error registering background task:", error);
     }
   };
 
@@ -198,24 +178,7 @@ export default function PaymentReminderScreen({ navigation }) {
   const sendOverdueNotifications = async (overdueReminders) => {
     try {
       for (const reminder of overdueReminders) {
-        const daysPast = Math.floor(
-          (new Date() - new Date(reminder.next_due_date)) /
-            (1000 * 60 * 60 * 24)
-        );
-
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: "⚠️ Overdue Payment Reminder",
-            body: `${reminder.title} was due ${daysPast} day(s) ago. Amount: ₹${
-              reminder.amount || "Not specified"
-            }`,
-            data: {
-              reminderId: reminder.id,
-              type: "overdue",
-            },
-          },
-          trigger: null, // Send immediately
-        });
+        await notificationService.sendOverdueNotification(reminder);
       }
     } catch (error) {
       console.error("Error sending overdue notifications:", error);
@@ -242,43 +205,7 @@ export default function PaymentReminderScreen({ navigation }) {
 
   const scheduleNotification = async (reminder) => {
     try {
-      if (
-        notificationPermission !== "granted" ||
-        !reminder.notification_enabled
-      ) {
-        return null;
-      }
-
-      // Cancel existing notification if updating
-      if (reminder.notification_id) {
-        await Notifications.cancelScheduledNotificationAsync(
-          reminder.notification_id
-        );
-      }
-
-      const triggerDate = new Date(reminder.next_due_date);
-      triggerDate.setHours(9, 0, 0, 0); // 9 AM notification
-
-      // Don't schedule if date is in the past
-      if (triggerDate <= new Date()) {
-        return null;
-      }
-
-      const notificationId = await Notifications.scheduleNotificationAsync({
-        content: {
-          title: "💰 Payment Reminder",
-          body: `${reminder.title} is due today!${
-            reminder.amount ? ` Amount: ₹${reminder.amount}` : ""
-          }`,
-          data: {
-            reminderId: reminder.id,
-            type: "due_today",
-          },
-        },
-        trigger: triggerDate,
-      });
-
-      return notificationId;
+      return await notificationService.scheduleNotification(reminder, NOTIFICATION_CATEGORIES.PAYMENT_DUE);
     } catch (error) {
       console.error("Error scheduling notification:", error);
       return null;
@@ -481,9 +408,7 @@ export default function PaymentReminderScreen({ navigation }) {
 
       // Cancel scheduled notification
       if (reminderToDelete?.notification_id) {
-        await Notifications.cancelScheduledNotificationAsync(
-          reminderToDelete.notification_id
-        );
+        await notificationService.cancelNotification(reminderToDelete.notification_id);
       }
 
       const { error } = await supabase
@@ -522,9 +447,7 @@ export default function PaymentReminderScreen({ navigation }) {
             .eq("id", reminder.id);
         } else {
           // Cancel notification
-          await Notifications.cancelScheduledNotificationAsync(
-            reminder.notification_id
-          );
+          await notificationService.cancelNotification(reminder.notification_id);
           await supabase
             .from("payment_reminders")
             .update({
