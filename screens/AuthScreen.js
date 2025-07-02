@@ -224,18 +224,12 @@ export default function AuthScreen({ navigation }) {
         showsVerticalScrollIndicator={false}
       >
         <Animated.View
-          style={[
-            styles.content,
-            {
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }],
-            },
-          ]}
+          
         >
           <View style={styles.header}>
-            <Text style={styles.appName}>ExpenseTracker</Text>
+          <Text style={styles.appName}>EXPENSO</Text>
             <Text style={styles.tagline}>
-              Smart expense management made simple
+              Expense Management Made Simply Smart
             </Text>
           </View>
 
@@ -397,6 +391,7 @@ export default function AuthScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    paddingHorizontal:20,
   },
   gradient: {
     flex: 1,
@@ -439,11 +434,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFF",
     borderRadius: 24,
     padding: 24,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 10,
+    borderStyle: "dashed",
+    borderWidth: 2,
+    borderColor: "rgba(6, 182, 212, 0.1)",
+    
   },
   formTitle: {
     fontSize: 24,
