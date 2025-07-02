@@ -19,8 +19,9 @@ import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
 import { PieChart } from "react-native-chart-kit";
 import Alert from "../components/Alert";
-import { LogOut, Trash2, Bell } from "lucide-react-native";
+import { LogOut, Trash2 } from "lucide-react-native";
 import Carousel from "react-native-reanimated-carousel";
+import ReminderCard from "../components/ReminderCard";
 
 const screenWidth = Dimensions.get("window").width;
 
@@ -46,6 +47,7 @@ const CHART_COLORS = [
   "#DDA0DD",
 ];
 
+// --- Avatar Component ---
 const Avatar = ({ name, email, size = 50, style, onPress }) => {
   const getInitials = useCallback((name, email) => {
     if (name && name.trim()) {
@@ -62,7 +64,6 @@ const Avatar = ({ name, email, size = 50, style, onPress }) => {
     }
     return "U";
   }, []);
-
   const getAvatarColor = useCallback((text) => {
     const colors = [
       "#FF6B6B",
@@ -80,10 +81,8 @@ const Avatar = ({ name, email, size = 50, style, onPress }) => {
     }
     return colors[Math.abs(hash) % colors.length];
   }, []);
-
   const initials = useMemo(() => getInitials(name, email), [name, email, getInitials]);
   const backgroundColor = useMemo(() => getAvatarColor(name || email || "User"), [name, email, getAvatarColor]);
-
   return (
     <TouchableOpacity
       onPress={onPress}
@@ -116,10 +115,10 @@ const Avatar = ({ name, email, size = 50, style, onPress }) => {
   );
 };
 
+// --- BudgetBar Component ---
 const BudgetBar = ({ label, spent, budget, color, icon }) => {
   const percent = budget > 0 ? Math.min((spent / budget) * 100, 100) : 0;
   const isOverBudget = spent > budget && budget > 0;
-
   return (
     <View style={styles.budgetBarContainer}>
       <View style={styles.budgetBarHeader}>
@@ -194,7 +193,6 @@ export default function DashboardScreen({ navigation }) {
         fetchReminders(),
       ]);
     } catch (error) {
-      console.error("Error initializing data:", error);
       RNAlert.alert("Error", "Failed to load dashboard data. Please try again.");
     } finally {
       setLoading(false);
@@ -208,17 +206,12 @@ export default function DashboardScreen({ navigation }) {
         .select("*")
         .eq("id", session.user.id)
         .single();
-
-      if (error && error.code !== "PGRST116") {
-        console.error("Error fetching profile:", error);
-        return;
-      }
-
+      if (error && error.code !== "PGRST116") return;
       if (data) {
         setProfile(data);
       } else {
         // Create profile if it doesn't exist
-        const { data: newProfile, error: createError } = await supabase
+        const { data: newProfile } = await supabase
           .from("profiles")
           .insert([
             {
@@ -231,14 +224,9 @@ export default function DashboardScreen({ navigation }) {
           ])
           .select()
           .single();
-
-        if (!createError && newProfile) {
-          setProfile(newProfile);
-        }
+        if (newProfile) setProfile(newProfile);
       }
-    } catch (err) {
-      console.error("Exception fetching profile:", err);
-    }
+    } catch {}
   };
 
   const fetchExpenses = async () => {
@@ -248,20 +236,11 @@ export default function DashboardScreen({ navigation }) {
         .select("*")
         .eq("user_id", session.user.id)
         .order("date", { ascending: false });
-
-      if (error) {
-        console.error("Error fetching expenses:", error);
-        setExpenses([]);
-        return;
+      if (!error) {
+        setExpenses(data || []);
+        calculateStatistics(data || []);
       }
-
-      const validExpenses = data || [];
-      setExpenses(validExpenses);
-      calculateStatistics(validExpenses);
-    } catch (err) {
-      console.error("Exception fetching expenses:", err);
-      setExpenses([]);
-    }
+    } catch {}
   };
 
   const fetchBudgets = async () => {
@@ -270,18 +249,8 @@ export default function DashboardScreen({ navigation }) {
         .from("budgets")
         .select("*")
         .eq("user_id", session.user.id);
-
-      if (error) {
-        console.error("Error fetching budgets:", error);
-        setBudgets([]);
-        return;
-      }
-
-      setBudgets(data || []);
-    } catch (err) {
-      console.error("Exception fetching budgets:", err);
-      setBudgets([]);
-    }
+      if (!error) setBudgets(data || []);
+    } catch {}
   };
 
   const fetchReminders = async () => {
@@ -292,40 +261,20 @@ export default function DashboardScreen({ navigation }) {
         .eq("user_id", session.user.id)
         .eq("is_active", true)
         .order("next_due_date", { ascending: true });
-
-      if (error) {
-        console.error("Error fetching reminders:", error);
-        setReminders([]);
-        return;
-      }
-
-      setReminders(data || []);
-    } catch (err) {
-      console.error("Exception fetching reminders:", err);
-      setReminders([]);
-    }
+      if (!error) setReminders(data || []);
+    } catch {}
   };
 
   const calculateStatistics = useCallback((expenseData) => {
-    const total = expenseData.reduce(
-      (sum, expense) => sum + (parseFloat(expense.amount) || 0),
-      0
+    setTotalExpenses(expenseData.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0));
+    const now = new Date();
+    setMonthlyExpenses(
+      expenseData.filter(e => {
+        if (!e.date) return false;
+        const d = new Date(e.date);
+        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+      }).reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0)
     );
-    setTotalExpenses(total);
-
-    const currentMonth = new Date().getMonth();
-    const currentYear = new Date().getFullYear();
-    const monthlyTotal = expenseData
-      .filter((expense) => {
-        if (!expense.date) return false;
-        const expenseDate = new Date(expense.date);
-        return (
-          expenseDate.getMonth() === currentMonth &&
-          expenseDate.getFullYear() === currentYear
-        );
-      })
-      .reduce((sum, expense) => sum + (parseFloat(expense.amount) || 0), 0);
-    setMonthlyExpenses(monthlyTotal);
   }, []);
 
   const onRefresh = useCallback(() => {
@@ -341,7 +290,6 @@ export default function DashboardScreen({ navigation }) {
       if (!item.category || isNaN(amount) || amount <= 0) return;
       categoryMap[item.category] = (categoryMap[item.category] || 0) + amount;
     });
-
     return Object.entries(categoryMap)
       .filter(([cat, amt]) => cat && amt > 0)
       .sort((a, b) => b[1] - a[1])
@@ -407,21 +355,10 @@ export default function DashboardScreen({ navigation }) {
 
   const deleteExpense = async (expenseId) => {
     try {
-      const { error } = await supabase
-        .from("expenses")
-        .delete()
-        .eq("id", expenseId);
-
-      if (error) {
-        console.error("Failed to delete expense:", error);
-        RNAlert.alert("Error", "Failed to delete expense. Please try again.");
-        return;
-      }
-
+      await supabase.from("expenses").delete().eq("id", expenseId);
       await fetchExpenses();
       RNAlert.alert("Success", "Expense deleted successfully!");
-    } catch (err) {
-      console.error("Failed to delete expense:", err);
+    } catch {
       RNAlert.alert("Error", "Failed to delete expense. Please try again.");
     }
   };
@@ -448,15 +385,13 @@ export default function DashboardScreen({ navigation }) {
       RNAlert.alert("Error", "Please fill in all required fields");
       return;
     }
-
     const amount = parseFloat(editForm.amount);
     if (isNaN(amount) || amount <= 0) {
       RNAlert.alert("Error", "Please enter a valid amount");
       return;
     }
-
     try {
-      const { error } = await supabase
+      await supabase
         .from("expenses")
         .update({
           title: editForm.title.trim(),
@@ -465,18 +400,10 @@ export default function DashboardScreen({ navigation }) {
           date: editForm.date || new Date().toISOString().split('T')[0],
         })
         .eq("id", selectedExpense.id);
-
-      if (error) {
-        console.error("Failed to update expense:", error);
-        RNAlert.alert("Error", "Failed to update expense. Please try again.");
-        return;
-      }
-
       setEditModalVisible(false);
       await fetchExpenses();
       RNAlert.alert("Success", "Expense updated successfully!");
-    } catch (err) {
-      console.error("Failed to update expense:", err);
+    } catch {
       RNAlert.alert("Error", "Failed to update expense. Please try again.");
     }
   };
@@ -484,13 +411,8 @@ export default function DashboardScreen({ navigation }) {
   const handleLogout = async () => {
     try {
       setShowLogoutAlert(false);
-      const { error } = await supabase.auth.signOut();
-      if (error) {
-        console.error("Logout error:", error);
-        RNAlert.alert("Error", "Failed to logout. Please try again.");
-      }
-    } catch (error) {
-      console.error("Logout error:", error);
+      await supabase.auth.signOut();
+    } catch {
       RNAlert.alert("Error", "Failed to logout. Please try again.");
     }
   };
@@ -539,7 +461,6 @@ export default function DashboardScreen({ navigation }) {
     (sum, b) => sum + getMonthlyCategorySpending(b.category),
     0
   );
-  
   const today = new Date();
   const todayString = today.toISOString().split("T")[0];
   const todaysTotal = expenses
@@ -555,6 +476,7 @@ export default function DashboardScreen({ navigation }) {
         }
         showsVerticalScrollIndicator={false}
       >
+        {/* --- Header Section --- */}
         <View style={styles.header}>
           <Text style={styles.welcomeText}>Welcome back!</Text>
           <View style={styles.headerActions}>
@@ -573,35 +495,7 @@ export default function DashboardScreen({ navigation }) {
           </View>
         </View>
 
-        {uniqueReminders.length > 0 && (
-          <View style={{ marginTop: 10, marginBottom: 10 }}>
-            <Carousel
-              width={screenWidth - 40}
-              height={90}
-              data={uniqueReminders}
-              mode="parallax"
-              autoPlay={false}
-              scrollAnimationDuration={600}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={styles.reminderCard}
-                  onPress={() => navigation.navigate("PaymentReminder")}
-                  activeOpacity={0.8}
-                >
-                  <View>
-                    <Text style={styles.reminderTitle}>🔔 {item.title}</Text>
-                    <Text style={styles.reminderDate}>
-                      Due on {new Date(item.next_due_date).toLocaleDateString()}{" "}
-                      at {item.reminder_time || "09:00"}
-                    </Text>
-                  </View>
-                  <Bell size={24} color="#facc15" />
-                </TouchableOpacity>
-              )}
-            />
-          </View>
-        )}
-
+        {/* --- Statistics Section --- */}
         <View style={styles.statisticsContainer}>
           <View style={styles.statsContainer}>
             <View style={[styles.statCard, styles.statCardMargin]}>
@@ -619,7 +513,6 @@ export default function DashboardScreen({ navigation }) {
               <Text style={styles.statLabel}>Today's Total</Text>
             </View>
           </View>
-
           {expenses.length > 0 && getPieChartData.length > 0 && (
             <View style={styles.chartsContainer}>
               <View style={styles.chartCard}>
@@ -666,8 +559,35 @@ export default function DashboardScreen({ navigation }) {
           )}
         </View>
 
-        
+        {/* --- Reminders Section --- */}
+        {uniqueReminders.length > 0 && (
+          <View style={styles.remindersSection2}>
+            <View style={styles.sectionHeader2}>
+              <Text style={styles.sectionTitle}>Payment Reminders</Text>
+              <TouchableOpacity
+                onPress={() => navigation.navigate("PaymentReminder")}
+              >
+                <Text style={styles.seeAllText}>View All</Text>
+              </TouchableOpacity>
+            </View>
+            <Carousel
+              width={screenWidth - 40}
+              height={190}
+              data={uniqueReminders}
+              mode="parallax"
+              autoPlay={true}
+              scrollAnimationDuration={800}
+              renderItem={({ item }) => (
+                <ReminderCard
+                  item={item}
+                  onPress={() => navigation.navigate("PaymentReminder")}
+                />
+              )}
+            />
+          </View>
+        )}
 
+        {/* --- Budgets Section --- */}
         <View style={styles.budgetSection}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Budget Progress</Text>
@@ -679,7 +599,6 @@ export default function DashboardScreen({ navigation }) {
               </Text>
             </TouchableOpacity>
           </View>
-
           {budgets.length > 0 ? (
             <>
               {totalBudgetAmount > 0 && (
@@ -712,6 +631,7 @@ export default function DashboardScreen({ navigation }) {
           )}
         </View>
 
+        {/* --- Recent Expenses Section --- */}
         <View style={styles.recentSection}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Recent Expenses</Text>
@@ -721,7 +641,6 @@ export default function DashboardScreen({ navigation }) {
               <Text style={styles.seeAllText}>See All</Text>
             </TouchableOpacity>
           </View>
-
           {recentExpenses.length > 0 ? (
             <FlatList
               data={recentExpenses}
@@ -740,6 +659,7 @@ export default function DashboardScreen({ navigation }) {
           )}
         </View>
 
+        {/* --- Edit Expense Modal --- */}
         <Modal
           animationType="slide"
           transparent={true}
@@ -804,6 +724,7 @@ export default function DashboardScreen({ navigation }) {
         </Modal>
       </ScrollView>
 
+      {/* --- Floating Taskbar --- */}
       <View style={styles.taskbarContainer}>
         <View style={styles.taskbar}>
           <TouchableOpacity
@@ -813,7 +734,6 @@ export default function DashboardScreen({ navigation }) {
           >
             <Text style={styles.actionIcon}>💰</Text>
           </TouchableOpacity>
-
           <TouchableOpacity
             style={styles.actionButton}
             onPress={() => navigation.navigate("PaymentReminder")}
@@ -821,7 +741,6 @@ export default function DashboardScreen({ navigation }) {
           >
             <Text style={styles.actionIcon}>🔔</Text>
           </TouchableOpacity>
-
           <TouchableOpacity
             style={styles.addButton}
             onPress={() => navigation.navigate("AddExpense")}
@@ -829,7 +748,6 @@ export default function DashboardScreen({ navigation }) {
           >
             <Text style={styles.addIcon}>+</Text>
           </TouchableOpacity>
-
           <TouchableOpacity
             style={styles.actionButton}
             onPress={() => navigation.navigate("AllExpenses")}
@@ -840,6 +758,7 @@ export default function DashboardScreen({ navigation }) {
         </View>
       </View>
 
+      {/* --- Alerts --- */}
       <Alert
         open={showDeleteAlert}
         onConfirm={async () => {
@@ -864,7 +783,6 @@ export default function DashboardScreen({ navigation }) {
         cancelColor="#f1f5f9"
         cancelTextColor="#334155"
       />
-
       <Alert
         open={showLogoutAlert}
         onConfirm={handleLogout}
@@ -883,6 +801,7 @@ export default function DashboardScreen({ navigation }) {
     </>
   );
 }
+
 
 const styles = StyleSheet.create({
   container: {
@@ -1021,7 +940,6 @@ const styles = StyleSheet.create({
   },
   budgetSection: {
     paddingHorizontal: 20,
-    marginTop: 24,
   },
   budgetBarContainer: {
     marginBottom: 16,
@@ -1074,6 +992,12 @@ const styles = StyleSheet.create({
     color: "#64748b",
     fontWeight: "500",
   },
+  sectionHeader2: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  
   sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -1114,28 +1038,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     marginTop: 24,
     marginBottom: 120,
-  },
-  reminderCard: {
-    backgroundColor: "#fef3c7",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderLeftWidth: 4,
-    borderLeftColor: "#facc15",
-  },
-  reminderTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#92400e",
-    marginBottom: 4,
-  },
-  reminderDate: {
-    fontSize: 12,
-    color: "#a16207",
-    fontWeight: "500",
   },
   expenseItem: {
     flexDirection: "row",
