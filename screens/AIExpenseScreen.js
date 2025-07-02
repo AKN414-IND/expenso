@@ -291,7 +291,7 @@ Analyze this receipt image and extract the following information. Return ONLY va
   "merchant": "Store/restaurant name",
   "amount": "Total amount as number (no currency symbols)",
   "category": "Category (Food, Shopping, Transportation, Entertainment, Healthcare, Utilities, Other)",
-  "date": "Date in YYYY-MM-DD format",
+  "date": "Date in YYYY-MM-DD format add todays date",
   "items": ["item1", "item2", "item3"],
   "confidence": "High/Medium/Low"
 }

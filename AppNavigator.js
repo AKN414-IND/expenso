@@ -74,21 +74,22 @@ export default function AppNavigator() {
           ) : session ? (
             <>
               <Stack.Screen name="Dashboard" component={DashboardScreen} />
-
               <Stack.Screen name="AddExpense" component={AIExpenseScreen} />
               <Stack.Screen name="AllExpenses" component={AllExpenses} />
-
               <Stack.Screen name="BudgetScreen" component={BudgetScreen} />
               <Stack.Screen name="Profile" component={ProfileScreen} />
-
               <Stack.Screen name="AppSettings" component={AppSettingsScreen} />
-            
-
               <Stack.Screen
                 name="PaymentReminder"
                 component={PaymentReminderScreen}
                 options={{ headerShown: false }}
               />
+              <Stack.Screen
+                name="PrivacySecurity"
+                component={PrivacySecurityScreen}
+                options={{ headerShown: false }}
+              />
+              
             </>
           ) : (
             <>
