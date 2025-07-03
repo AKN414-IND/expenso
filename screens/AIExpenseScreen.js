@@ -288,10 +288,10 @@ export default function CombinedExpenseScreen({ navigation }) {
 Analyze this receipt image and extract the following information. Return ONLY valid JSON with these exact fields:
 
 {
-  "merchant": "Store/restaurant name",
+  "merchant": "If the receipt shows only one item, return the item's name. If multiple items or a group, return the seller/store/restaurant name.",
   "amount": "Total amount as number (no currency symbols)",
   "category": "Category (Food, Shopping, Transportation, Entertainment, Healthcare, Utilities, Other)",
-  "date": "Date in YYYY-MM-DD format add todays date",
+  "date": "Date in YYYY-MM-DD format; if not found, use today's date",
   "items": ["item1", "item2", "item3"],
   "confidence": "High/Medium/Low"
 }
@@ -304,8 +304,13 @@ If any field cannot be determined, use these defaults:
 - items: []
 - confidence: "Low"
 
+Logic for "merchant":
+- If only one item is detected in the receipt, set "merchant" to the item's name.
+- If more than one item is detected, set "merchant" to the store/restaurant/seller name.
+
 Ensure the response is valid JSON only, no additional text or formatting.
 `;
+
 
     const requestBody = {
       contents: [
