@@ -13,10 +13,30 @@ import {
   RefreshControl,
   Dimensions,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import { Search, Filter, Plus, Edit3, Trash2, TrendingUp, DollarSign, Calendar } from "lucide-react-native";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
 
 const screenWidth = Dimensions.get("window").width;
+
+// Theme colors following the app's design system
+const THEME_COLORS = {
+  primary: '#06b6d4',      // Main buttons, active tabs, graph bars, icons
+  secondary: '#334155',    // Text, headers, borders, and inactive elements
+  background: '#f5f7fa',   // Screen backgrounds, cards
+  accent: '#facc15',       // Reminders, badges, pie chart highlights, alerts
+  white: '#ffffff',
+  gray100: '#f1f5f9',
+  gray200: '#e2e8f0',
+  gray300: '#cbd5e1',
+  gray400: '#94a3b8',
+  gray500: '#64748b',
+  gray600: '#475569',
+  success: '#10b981',
+  error: '#ef4444',
+  warning: '#f59e0b',
+};
 
 export default function AllExpensesScreen({ navigation }) {
   const { session } = useAuth();
@@ -259,33 +279,64 @@ export default function AllExpensesScreen({ navigation }) {
   };
 
   const renderExpenseItem = ({ item, index }) => (
-    <View style={[styles.expenseItem, index % 2 === 0 ? styles.evenItem : styles.oddItem]}>
-      <View style={styles.expenseInfo}>
-        <Text style={styles.expenseTitle}>{item.title || "Untitled"}</Text>
-        <View style={styles.expenseDetails}>
-          <Text style={styles.expenseCategory}>📁 {item.category || "Uncategorized"}</Text>
-          <Text style={styles.expenseDate}>📅 {item.date || "No date"}</Text>
+    <View style={styles.expenseCard}>
+      <View style={styles.expenseHeader}>
+        <View style={styles.expenseCategory}>
+          <View style={[styles.categoryDot, { backgroundColor: getCategoryColor(item.category) }]} />
+          <Text style={styles.categoryText}>{item.category || "Uncategorized"}</Text>
         </View>
+        <Text style={styles.expenseDate}>{formatDate(item.date)}</Text>
       </View>
-      <View style={styles.expenseActions}>
-        <Text style={styles.expenseAmount}>₹{parseFloat(item.amount || 0).toFixed(2)}</Text>
-        <View style={styles.actionButtons}>
+      
+      <View style={styles.expenseBody}>
+        <View style={styles.expenseInfo}>
+          <Text style={styles.expenseTitle}>{item.title || "Untitled"}</Text>
+          <Text style={styles.expenseAmount}>₹{parseFloat(item.amount || 0).toFixed(2)}</Text>
+        </View>
+        
+        <View style={styles.expenseActions}>
           <TouchableOpacity
             style={[styles.actionButton, styles.editButton]}
             onPress={() => handleEdit(item)}
           >
-            <Text style={styles.actionButtonText}>✏️</Text>
+            <Edit3 size={16} color={THEME_COLORS.primary} />
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.actionButton, styles.deleteButton]}
             onPress={() => handleDelete(item)}
           >
-            <Text style={styles.actionButtonText}>🗑️</Text>
+            <Trash2 size={16} color={THEME_COLORS.error} />
           </TouchableOpacity>
         </View>
       </View>
     </View>
   );
+
+  const getCategoryColor = (category) => {
+    const colors = {
+      "Food & Dining": "#FF6B6B",
+      "Transportation": THEME_COLORS.primary,
+      "Shopping": "#45B7D1",
+      "Entertainment": "#96CEB4",
+      "Bills & Utilities": THEME_COLORS.accent,
+      "Healthcare": "#FF9FF3",
+      "Education": "#54A0FF",
+      "Travel": "#5F27CD",
+      "Groceries": "#00D2D3",
+      "Other": THEME_COLORS.gray400,
+    };
+    return colors[category] || THEME_COLORS.gray400;
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return "No date";
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric',
+      year: 'numeric'
+    });
+  };
 
   const renderSortButton = (label, value) => (
     <TouchableOpacity
@@ -306,8 +357,13 @@ export default function AllExpensesScreen({ navigation }) {
         styles.sortButtonText,
         sortBy === value && styles.activeSortButtonText
       ]}>
-        {label} {sortBy === value ? (sortOrder === "asc" ? "↑" : "↓") : ""}
+        {label}
       </Text>
+      {sortBy === value && (
+        <Text style={styles.sortDirection}>
+          {sortOrder === "asc" ? "↑" : "↓"}
+        </Text>
+      )}
     </TouchableOpacity>
   );
 
@@ -331,7 +387,9 @@ export default function AllExpensesScreen({ navigation }) {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#4ECDC4" />
+        <View style={styles.emptyStateIcon}>
+          <ActivityIndicator size="large" color={THEME_COLORS.primary} />
+        </View>
         <Text style={styles.loadingText}>Loading all expenses...</Text>
       </View>
     );
@@ -339,64 +397,152 @@ export default function AllExpensesScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Text style={styles.backButtonText}>← Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>All Expenses</Text>
-        <TouchableOpacity 
-          style={styles.filterButton}
-          onPress={() => setFilterModalVisible(true)}
-        >
-          <Text style={styles.filterButtonText}>🔍 Filter</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Statistics Bar */}
-      <View style={styles.statsBar}>
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>{statistics.count}</Text>
-          <Text style={styles.statLabel}>Expenses</Text>
-        </View>
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>₹{statistics.total.toFixed(2)}</Text>
-          <Text style={styles.statLabel}>Total</Text>
-        </View>
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>₹{statistics.average.toFixed(2)}</Text>
-          <Text style={styles.statLabel}>Average</Text>
-        </View>
-      </View>
-
-      {/* Search Bar */}
-      <View style={styles.searchContainer}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search expenses..."
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
-        {searchQuery ? (
+      {/* Professional Header with Gradient */}
+      <LinearGradient
+        colors={[THEME_COLORS.primary, '#0891b2']}
+        style={styles.headerGradient}
+      >
+        <View style={styles.header}>
           <TouchableOpacity 
-            style={styles.clearSearchButton}
-            onPress={() => setSearchQuery("")}
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
           >
-            <Text style={styles.clearSearchText}>✕</Text>
+            <Text style={styles.backButtonText}>←</Text>
           </TouchableOpacity>
-        ) : null}
+          
+          <View style={styles.headerCenter}>
+            <Text style={styles.headerTitle}>All Expenses</Text>
+            <Text style={styles.headerSubtitle}>Track and manage your spending</Text>
+          </View>
+          
+          <TouchableOpacity 
+            style={styles.filterButton}
+            onPress={() => setFilterModalVisible(true)}
+          >
+            <Filter size={20} color={THEME_COLORS.white} />
+          </TouchableOpacity>
+        </View>
+      </LinearGradient>
+
+      {/* Enhanced Summary Cards */}
+      <View style={styles.summaryContainer}>
+        <View style={styles.summaryCard}>
+          <View style={styles.summaryIconContainer}>
+            <DollarSign size={24} color={THEME_COLORS.primary} />
+          </View>
+          <View style={styles.summaryContent}>
+            <Text style={styles.summaryValue}>₹{statistics.total.toFixed(2)}</Text>
+            <Text style={styles.summaryLabel}>Total Spent</Text>
+          </View>
+        </View>
+        
+        <View style={styles.summaryCard}>
+          <View style={styles.summaryIconContainer}>
+            <TrendingUp size={24} color={THEME_COLORS.success} />
+          </View>
+          <View style={styles.summaryContent}>
+            <Text style={styles.summaryValue}>{statistics.count}</Text>
+            <Text style={styles.summaryLabel}>Transactions</Text>
+          </View>
+        </View>
+        
+        <View style={styles.summaryCard}>
+          <View style={styles.summaryIconContainer}>
+            <Calendar size={24} color={THEME_COLORS.accent} />
+          </View>
+          <View style={styles.summaryContent}>
+            <Text style={styles.summaryValue}>₹{statistics.average.toFixed(2)}</Text>
+            <Text style={styles.summaryLabel}>Average</Text>
+          </View>
+        </View>
       </View>
 
-      {/* Quick Sort Buttons */}
+      {/* Enhanced Search & Filter Section */}
+      <View style={styles.searchFilterSection}>
+        {/* Search Bar */}
+        <View style={styles.searchContainer}>
+          <Search size={20} color={THEME_COLORS.gray400} style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search expenses..."
+            placeholderTextColor={THEME_COLORS.gray400}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+          {searchQuery ? (
+            <TouchableOpacity 
+              style={styles.clearSearchButton}
+              onPress={() => setSearchQuery("")}
+            >
+              <Text style={styles.clearSearchText}>✕</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
 
+        {/* Filter Chips */}
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false} 
+          style={styles.filterChipsContainer}
+          contentContainerStyle={styles.filterChipsContent}
+        >
+          {/* Quick Filter Chips */}
+          <TouchableOpacity 
+            style={[styles.filterChip, selectedCategory !== "All" && styles.activeFilterChip]}
+            onPress={() => setSelectedCategory("All")}
+          >
+            <Text style={[styles.filterChipText, selectedCategory !== "All" && styles.activeFilterChipText]}>
+              All
+            </Text>
+          </TouchableOpacity>
+          
+          {dateRange !== "all" && (
+            <TouchableOpacity 
+              style={[styles.filterChip, styles.activeFilterChip]}
+              onPress={() => setDateRange("all")}
+            >
+              <Text style={[styles.filterChipText, styles.activeFilterChipText]}>
+                {dateRange.charAt(0).toUpperCase() + dateRange.slice(1)} ✕
+              </Text>
+            </TouchableOpacity>
+          )}
+          
+          {selectedCategory !== "All" && (
+            <TouchableOpacity 
+              style={[styles.filterChip, styles.activeFilterChip]}
+              onPress={() => setSelectedCategory("All")}
+            >
+              <Text style={[styles.filterChipText, styles.activeFilterChipText]}>
+                {selectedCategory} ✕
+              </Text>
+            </TouchableOpacity>
+          )}
+          
+          {(minAmount || maxAmount) && (
+            <TouchableOpacity 
+              style={[styles.filterChip, styles.activeFilterChip]}
+              onPress={() => {
+                setMinAmount("");
+                setMaxAmount("");
+              }}
+            >
+              <Text style={[styles.filterChipText, styles.activeFilterChipText]}>
+                Amount Range ✕
+              </Text>
+            </TouchableOpacity>
+          )}
+        </ScrollView>
+      </View>
+
+      {/* Enhanced Sort Buttons */}
       <View style={styles.sortContainer}>
-      {renderSortButton("Date", "date")}
-        {renderSortButton("Amount", "amount")}
-        {renderSortButton("Title", "title")}
-        {renderSortButton("Category", "category")}
+        <Text style={styles.sortLabel}>Sort by:</Text>
+        <View style={styles.sortButtons}>
+          {renderSortButton("Date", "date")}
+          {renderSortButton("Amount", "amount")}
+          {renderSortButton("Title", "title")}
+          {renderSortButton("Category", "category")}
+        </View>
       </View>
       
         
@@ -411,18 +557,22 @@ export default function AllExpensesScreen({ navigation }) {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         ListEmptyComponent={
           <View style={styles.emptyState}>
+            <View style={styles.emptyStateIcon}>
+              <DollarSign size={48} color={THEME_COLORS.gray300} />
+            </View>
             <Text style={styles.emptyStateText}>No expenses found</Text>
             <Text style={styles.emptyStateSubtext}>
               {searchQuery || selectedCategory !== "All" ? 
-                "Try adjusting your filters" : 
-                "Add your first expense to get started!"
+                "Try adjusting your filters to see more results" : 
+                "Start tracking your expenses by adding your first transaction!"
               }
             </Text>
             <TouchableOpacity 
               style={styles.addExpenseButton}
               onPress={() => navigation.navigate("AddExpense")}
             >
-              <Text style={styles.addExpenseButtonText}>➕ Add Expense</Text>
+              <Plus size={20} color={THEME_COLORS.white} />
+              <Text style={styles.addExpenseButtonText}>Add Expense</Text>
             </TouchableOpacity>
           </View>
         }
@@ -578,391 +728,547 @@ export default function AllExpensesScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f8f9fa",
+    backgroundColor: THEME_COLORS.background,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#f8f9fa",
+    backgroundColor: THEME_COLORS.background,
   },
   loadingText: {
-    marginTop: 10,
+    marginTop: 16,
     fontSize: 16,
-    color: "#666",
+    color: THEME_COLORS.secondary,
+    fontWeight: "500",
+  },
+  
+  // Header Styles
+  headerGradient: {
+    paddingTop: 50,
+    paddingBottom: 0,
   },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 20,
-    paddingTop: 50,
-    paddingBottom: 15,
-    backgroundColor: "white",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    paddingVertical: 20,
   },
   backButton: {
-    padding: 8,
-  },
-  backButtonText: {
-    fontSize: 16,
-    color: "#4ECDC4",
-    fontWeight: "600",
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#333",
-  },
-  filterButton: {
-    backgroundColor: "#4ECDC4",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 15,
-  },
-  filterButtonText: {
-    color: "white",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  statsBar: {
-    flexDirection: "row",
-    backgroundColor: "white",
-    paddingVertical: 15,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
-  },
-  statItem: {
-    flex: 1,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: "center",
     alignItems: "center",
   },
-  statValue: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#333",
+  backButtonText: {
+    fontSize: 20,
+    color: THEME_COLORS.white,
+    fontWeight: "600",
   },
-  statLabel: {
+  headerCenter: {
+    flex: 1,
+    alignItems: "center",
+    paddingHorizontal: 20,
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: THEME_COLORS.white,
+    marginBottom: 4,
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontWeight: "400",
+  },
+  filterButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  
+  // Summary Cards Styles
+  summaryContainer: {
+    flexDirection: "row",
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 16,
+    gap: 12,
+  },
+  summaryCard: {
+    flex: 1,
+    backgroundColor: THEME_COLORS.white,
+    borderRadius: 16,
+    padding: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    shadowColor: THEME_COLORS.secondary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  summaryIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: THEME_COLORS.gray100,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  summaryContent: {
+    flex: 1,
+  },
+  summaryValue: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: THEME_COLORS.secondary,
+    marginBottom: 2,
+  },
+  summaryLabel: {
     fontSize: 12,
-    color: "#666",
-    marginTop: 2,
+    color: THEME_COLORS.gray500,
+    fontWeight: "500",
+  },
+  
+  // Search & Filter Styles
+  searchFilterSection: {
+    paddingHorizontal: 20,
+    marginBottom: 16,
   },
   searchContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "white",
-    marginHorizontal: 20,
-    marginVertical: 10,
-    borderRadius: 10,
-    paddingHorizontal: 15,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
+    backgroundColor: THEME_COLORS.white,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+    marginBottom: 16,
+    shadowColor: THEME_COLORS.secondary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
     elevation: 2,
+    borderWidth: 1,
+    borderColor: THEME_COLORS.gray200,
+  },
+  searchIcon: {
+    marginRight: 12,
   },
   searchInput: {
     flex: 1,
     paddingVertical: 12,
     fontSize: 16,
+    color: THEME_COLORS.secondary,
   },
   clearSearchButton: {
-    padding: 5,
+    padding: 8,
   },
   clearSearchText: {
-    color: "#999",
+    color: THEME_COLORS.gray400,
     fontSize: 16,
-  },
-  sortContainer: {
-    flexDirection:'row',
-    paddingHorizontal: 20,
-    marginBottom: 10,
-  },
-  sortButton: {
-    backgroundColor: "white",
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginRight: 5,
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
-    height:40,
-    width:'25%',
-    justifyContent:'center',
-    alignContent:'center',
-  },
-  activeSortButton: {
-    backgroundColor: "#4ECDC4",
-    borderColor: "#4ECDC4",
-  },
-  sortButtonText: {
-    fontSize: 12,
-    color: "#666",
     fontWeight: "600",
   },
-  activeSortButtonText: {
-    color: "white",
+  
+  filterChipsContainer: {
+    maxHeight: 50,
   },
+  filterChipsContent: {
+    paddingRight: 20,
+  },
+  filterChip: {
+    backgroundColor: THEME_COLORS.gray100,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: THEME_COLORS.gray200,
+  },
+  activeFilterChip: {
+    backgroundColor: THEME_COLORS.primary,
+    borderColor: THEME_COLORS.primary,
+  },
+  filterChipText: {
+    fontSize: 14,
+    color: THEME_COLORS.secondary,
+    fontWeight: "500",
+  },
+  activeFilterChipText: {
+    color: THEME_COLORS.white,
+  },
+  
+  // Sort Styles
+  sortContainer: {
+    paddingHorizontal: 20,
+    marginBottom: 16,
+  },
+  sortLabel: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: THEME_COLORS.secondary,
+    marginBottom: 12,
+  },
+  sortButtons: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  sortButton: {
+    flex: 1,
+    backgroundColor: THEME_COLORS.white,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: THEME_COLORS.gray200,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: THEME_COLORS.secondary,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  activeSortButton: {
+    backgroundColor: THEME_COLORS.primary,
+    borderColor: THEME_COLORS.primary,
+  },
+  sortButtonText: {
+    fontSize: 14,
+    color: THEME_COLORS.secondary,
+    fontWeight: "600",
+    marginRight: 4,
+  },
+  activeSortButtonText: {
+    color: THEME_COLORS.white,
+  },
+  sortDirection: {
+    fontSize: 14,
+    color: THEME_COLORS.white,
+    fontWeight: "600",
+  },
+  
+  // Expense List Styles
   expensesList: {
     flex: 1,
     paddingHorizontal: 20,
   },
-  expenseItem: {
-    backgroundColor: "white",
-    borderRadius: 12,
-    padding: 15,
-    marginBottom: 8,
+  expenseCard: {
+    backgroundColor: THEME_COLORS.white,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: THEME_COLORS.secondary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: THEME_COLORS.gray100,
+  },
+  expenseHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    marginBottom: 12,
   },
-  evenItem: {
-    backgroundColor: "#ffffff",
+  expenseCategory: {
+    flexDirection: "row",
+    alignItems: "center",
   },
-  oddItem: {
-    backgroundColor: "#fafafa",
+  categoryDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 8,
+  },
+  categoryText: {
+    fontSize: 12,
+    color: THEME_COLORS.gray500,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  expenseDate: {
+    fontSize: 12,
+    color: THEME_COLORS.gray400,
+    fontWeight: "500",
+  },
+  expenseBody: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
   expenseInfo: {
     flex: 1,
+    marginRight: 16,
   },
   expenseTitle: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#333",
-    marginBottom: 5,
-  },
-  expenseDetails: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  expenseCategory: {
-    fontSize: 12,
-    color: "#4ECDC4",
-    flex: 1,
-  },
-  expenseDate: {
-    fontSize: 11,
-    color: "#999",
-  },
-  expenseActions: {
-    alignItems: "flex-end",
+    color: THEME_COLORS.secondary,
+    marginBottom: 4,
   },
   expenseAmount: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#333",
-    marginBottom: 5,
+    fontSize: 20,
+    fontWeight: "700",
+    color: THEME_COLORS.primary,
   },
-  actionButtons: {
+  expenseActions: {
     flexDirection: "row",
+    gap: 8,
   },
   actionButton: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     justifyContent: "center",
     alignItems: "center",
-    marginLeft: 5,
+    backgroundColor: THEME_COLORS.gray100,
   },
   editButton: {
-    backgroundColor: "#FFEAA7",
+    backgroundColor: 'rgba(6, 182, 212, 0.1)',
   },
   deleteButton: {
-    backgroundColor: "#FFB3B3",
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
   },
-  actionButtonText: {
-    fontSize: 12,
-  },
+  
+  // Empty State Styles
   emptyState: {
     alignItems: "center",
-    paddingVertical: 60,
+    paddingVertical: 80,
+    paddingHorizontal: 40,
+  },
+  emptyStateIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: THEME_COLORS.gray100,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 24,
   },
   emptyStateText: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: "600",
-    color: "#333",
-    marginBottom: 5,
+    color: THEME_COLORS.secondary,
+    marginBottom: 8,
+    textAlign: "center",
   },
   emptyStateSubtext: {
-    fontSize: 14,
-    color: "#666",
+    fontSize: 16,
+    color: THEME_COLORS.gray500,
     textAlign: "center",
-    marginBottom: 20,
+    lineHeight: 24,
+    marginBottom: 32,
   },
   addExpenseButton: {
-    backgroundColor: "#4ECDC4",
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 25,
+    backgroundColor: THEME_COLORS.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+    borderRadius: 24,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    shadowColor: THEME_COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
   addExpenseButtonText: {
-    color: "white",
+    color: THEME_COLORS.white,
     fontWeight: "600",
+    fontSize: 16,
   },
+  
+  // Modal Styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
     justifyContent: "center",
     alignItems: "center",
   },
   filterModalContent: {
-    backgroundColor: "white",
-    borderRadius: 20,
-    padding: 20,
+    backgroundColor: THEME_COLORS.white,
+    borderRadius: 24,
+    padding: 24,
     width: screenWidth - 40,
-    maxHeight: "80%",
+    maxHeight: "85%",
+    shadowColor: THEME_COLORS.secondary,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
   },
   modalContent: {
-    backgroundColor: "white",
-    borderRadius: 20,
-    padding: 20,
+    backgroundColor: THEME_COLORS.white,
+    borderRadius: 24,
+    padding: 24,
     width: screenWidth - 40,
     maxHeight: "80%",
+    shadowColor: THEME_COLORS.secondary,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
   },
   modalTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#333",
+    fontSize: 24,
+    fontWeight: "700",
+    color: THEME_COLORS.secondary,
     textAlign: "center",
-    marginBottom: 20,
+    marginBottom: 24,
   },
+  
+  // Filter Modal Styles
   filterSectionTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: "600",
-    color: "#333",
-    marginTop: 15,
-    marginBottom: 10,
+    color: THEME_COLORS.secondary,
+    marginTop: 20,
+    marginBottom: 16,
   },
   categoryContainer: {
-    marginBottom: 10,
+    marginBottom: 16,
   },
   categoryButton: {
-    backgroundColor: "#f8f9fa",
-    paddingHorizontal: 15,
-    paddingVertical: 8,
+    backgroundColor: THEME_COLORS.gray100,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     borderRadius: 20,
-    marginRight: 10,
+    marginRight: 12,
     borderWidth: 1,
-    borderColor: "#e0e0e0",
+    borderColor: THEME_COLORS.gray200,
   },
   activeCategoryButton: {
-    backgroundColor: "#4ECDC4",
-    borderColor: "#4ECDC4",
+    backgroundColor: THEME_COLORS.primary,
+    borderColor: THEME_COLORS.primary,
   },
   categoryButtonText: {
-    fontSize: 12,
-    color: "#666",
+    fontSize: 14,
+    color: THEME_COLORS.secondary,
     fontWeight: "600",
   },
   activeCategoryButtonText: {
-    color: "white",
+    color: THEME_COLORS.white,
   },
   dateRangeContainer: {
     flexDirection: "row",
     flexWrap: "wrap",
-    marginBottom: 10,
+    marginBottom: 16,
+    gap: 8,
   },
   dateRangeButton: {
-    backgroundColor: "#f8f9fa",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 15,
-    marginRight: 8,
-    marginBottom: 8,
+    backgroundColor: THEME_COLORS.gray100,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#e0e0e0",
+    borderColor: THEME_COLORS.gray200,
   },
   activeDateRangeButton: {
-    backgroundColor: "#45B7D1",
-    borderColor: "#45B7D1",
+    backgroundColor: THEME_COLORS.primary,
+    borderColor: THEME_COLORS.primary,
   },
   dateRangeButtonText: {
-    fontSize: 12,
-    color: "#666",
+    fontSize: 14,
+    color: THEME_COLORS.secondary,
     fontWeight: "600",
   },
   activeDateRangeButtonText: {
-    color: "white",
+    color: THEME_COLORS.white,
   },
   amountRangeContainer: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 15,
+    marginBottom: 24,
+    gap: 12,
   },
   amountInput: {
     flex: 1,
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 8,
-    padding: 10,
-    fontSize: 14,
-    backgroundColor: "#f8f9fa",
+    borderWidth: 2,
+    borderColor: THEME_COLORS.gray200,
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 16,
+    backgroundColor: THEME_COLORS.gray100,
+    color: THEME_COLORS.secondary,
   },
   amountSeparator: {
-    marginHorizontal: 10,
-    color: "#666",
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 10,
-    padding: 12,
     fontSize: 16,
-    marginBottom: 15,
-    backgroundColor: "#f8f9fa",
+    color: THEME_COLORS.gray500,
+    fontWeight: "600",
   },
+  
+  // Form Input Styles
+  input: {
+    borderWidth: 2,
+    borderColor: THEME_COLORS.gray200,
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 16,
+    marginBottom: 16,
+    backgroundColor: THEME_COLORS.gray100,
+    color: THEME_COLORS.secondary,
+  },
+  
+  // Modal Button Styles
   modalButtons: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginTop: 10,
+    gap: 12,
+    marginTop: 8,
   },
   modalButton: {
     flex: 1,
-    padding: 15,
-    borderRadius: 10,
+    paddingVertical: 16,
+    borderRadius: 12,
     alignItems: "center",
-    marginHorizontal: 5,
+    justifyContent: "center",
   },
   clearButton: {
-    backgroundColor: "#f8f9fa",
-    borderWidth: 1,
-    borderColor: "#ddd",
+    backgroundColor: THEME_COLORS.gray100,
+    borderWidth: 2,
+    borderColor: THEME_COLORS.gray200,
   },
   applyButton: {
-    backgroundColor: "#4ECDC4",
+    backgroundColor: THEME_COLORS.primary,
   },
   cancelButton: {
-    backgroundColor: "#f8f9fa",
-    borderWidth: 1,
-    borderColor: "#ddd",
+    backgroundColor: THEME_COLORS.gray100,
+    borderWidth: 2,
+    borderColor: THEME_COLORS.gray200,
   },
   saveButton: {
-    backgroundColor: "#4ECDC4",
+    backgroundColor: THEME_COLORS.primary,
   },
   clearButtonText: {
-    color: "#666",
+    color: THEME_COLORS.secondary,
     fontWeight: "600",
+    fontSize: 16,
   },
   applyButtonText: {
-    color: "white",
+    color: THEME_COLORS.white,
     fontWeight: "600",
+    fontSize: 16,
   },
   cancelButtonText: {
-    color: "#666",
+    color: THEME_COLORS.secondary,
     fontWeight: "600",
+    fontSize: 16,
   },
   saveButtonText: {
-    color: "white",
+    color: THEME_COLORS.white,
     fontWeight: "600",
+    fontSize: 16,
   },
 });
