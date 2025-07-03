@@ -9,14 +9,14 @@ import {
   Linking,
   ScrollView,
 } from "react-native";
-import { ArrowLeft, Trash2, FileText, Bell } from "lucide-react-native";
+import { ArrowLeft, Trash2, FileText, Bell, Download } from "lucide-react-native";
 import * as Notifications from "expo-notifications";
 import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useAuth } from "../context/AuthContext";
 import { supabase } from "../lib/supabase";
-import Alert from "../components/Alert"; // Your custom Alert component
+import Alert from "../components/Alert";
 
 export default function AppSettingsScreen({ navigation }) {
   const { session } = useAuth();
@@ -111,23 +111,159 @@ export default function AppSettingsScreen({ navigation }) {
     });
   };
 
+  const createExcelWorkbook = (expenses, dateRange) => {
+    // Calculate summary statistics
+    const totalExpenses = expenses.reduce((sum, exp) => sum + parseFloat(exp.amount), 0);
+    const categoryTotals = expenses.reduce((acc, exp) => {
+      acc[exp.category] = (acc[exp.category] || 0) + parseFloat(exp.amount);
+      return acc;
+    }, {});
+  
+    // Create CSV content (Excel-compatible)
+    let csvContent = '';
+    
+    // Header information
+    csvContent += `Expense Report\n`;
+    csvContent += `Period: ${dateRange.from} to ${dateRange.to}\n`;
+    csvContent += `Generated: ${new Date().toLocaleDateString()}\n`;
+    csvContent += `Total Expenses: ₹${totalExpenses.toFixed(2)}\n\n`;
+    
+    // Summary by Category
+    csvContent += `CATEGORY SUMMARY\n`;
+    csvContent += `Category,Amount\n`;
+    Object.entries(categoryTotals).forEach(([category, amount]) => {
+      csvContent += `${category},₹${amount.toFixed(2)}\n`;
+    });
+    csvContent += `\n`;
+    
+    // Detailed Expenses
+    csvContent += `DETAILED EXPENSES\n`;
+    csvContent += `Date,Description,Category,Amount,Notes\n`;
+    expenses.forEach(exp => {
+      const notes = exp.notes || '';
+      csvContent += `${exp.date},"${exp.title}","${exp.category}",₹${parseFloat(exp.amount).toFixed(2)},"${notes}"\n`;
+    });
+    
+    return csvContent;
+  };
+  
+  const formatFileName = (dateRange) => {
+    const fromDate = dateRange.from.replace(/-/g, '');
+    const toDate = dateRange.to.replace(/-/g, '');
+    return `ExpenseReport_${fromDate}_to_${toDate}.csv`;
+  };
+  
+
+  const exportDataAsExcel = async () => {
+    if (!dateRange.from || !dateRange.to) {
+      showDateMissingAlert();
+      return;
+    }
+    
+    setIsLoading(true);
+    
+    try {
+      // Fetch expenses with additional details
+      const { data: expenses, error } = await supabase
+        .from("expenses")
+        .select("*")
+        .eq("user_id", session.user.id)
+        .gte("date", dateRange.from)
+        .lte("date", dateRange.to)
+        .order("date", { ascending: true });
+  
+      if (error) throw error;
+  
+      if (!expenses || expenses.length === 0) {
+        setAlertProps({
+          open: true,
+          title: "No Data Found",
+          message: "No expenses found for the selected date range. Please try a different period.",
+          confirmText: "OK",
+          icon: <FileText color="#fff" size={40} />,
+          iconBg: "#f59e0b",
+          confirmColor: "#f59e0b",
+          confirmTextColor: "#fff",
+          cancelText: null,
+          onConfirm: () => setAlertProps((a) => ({ ...a, open: false })),
+          onCancel: null,
+        });
+        setIsLoading(false);
+        return;
+      }
+  
+      // Create Excel-compatible CSV content
+      const csvContent = createExcelWorkbook(expenses, dateRange);
+      const fileName = formatFileName(dateRange);
+      const fileUri = FileSystem.cacheDirectory + fileName;
+  
+      await FileSystem.writeAsStringAsync(fileUri, csvContent);
+  
+      // Share the file
+      await Sharing.shareAsync(fileUri, {
+        mimeType: "text/csv",
+        dialogTitle: "Export Expense Report",
+        UTI: "public.comma-separated-values-text",
+      });
+  
+      // Show success message
+      setAlertProps({
+        open: true,
+        title: "Export Successful",
+        message: `Expense report exported successfully! ${expenses.length} expenses included.`,
+        confirmText: "OK",
+        icon: <Download color="#fff" size={40} />,
+        iconBg: "#10b981",
+        confirmColor: "#10b981",
+        confirmTextColor: "#fff",
+        cancelText: null,
+        onConfirm: () => setAlertProps((a) => ({ ...a, open: false })),
+        onCancel: null,
+      });
+  
+    } catch (error) {
+      console.error("Export error:", error);
+      setAlertProps({
+        open: true,
+        title: "Export Failed",
+        message: "Could not export data. Please check your connection and try again.",
+        confirmText: "Retry",
+        cancelText: "Cancel",
+        icon: <FileText color="#fff" size={40} />,
+        iconBg: "#ef4444",
+        confirmColor: "#ef4444",
+        confirmTextColor: "#fff",
+        cancelColor: "#f1f5f9",
+        cancelTextColor: "#334155",
+        onConfirm: () => {
+          setAlertProps((a) => ({ ...a, open: false }));
+          exportDataAsExcel();
+        },
+        onCancel: () => setAlertProps((a) => ({ ...a, open: false })),
+      });
+    }
+    
+    setIsLoading(false);
+  };
+  
+
   // Custom Alert for "Select Dates"
   const showDateMissingAlert = () => {
     setAlertProps({
       open: true,
-      title: "Missing Dates",
-      message: "Please select both start and end dates.",
+      title: "Date Selection Required",
+      message: "Please select both start and end dates to generate your expense report.",
       confirmText: "OK",
       icon: <FileText color="#fff" size={40} />,
-      iconBg: "#06b6d4",
-      confirmColor: "#06b6d4",
+      iconBg: "#f59e0b",
+      confirmColor: "#f59e0b",
       confirmTextColor: "#fff",
       cancelText: null,
       onConfirm: () => setAlertProps((a) => ({ ...a, open: false })),
       onCancel: null,
     });
   };
-
+  
   // Export Data Logic
   const exportDataAsPDF = async () => {
     if (!dateRange.from || !dateRange.to) {
@@ -244,33 +380,37 @@ export default function AppSettingsScreen({ navigation }) {
         </Card>
 
         {/* Export Data Card */}
-        <Card icon={<FileText color="#06b6d4" size={22} style={{ marginRight: 10 }} />} title="Export Data">
-          <Text style={styles.label}>Export Expenses as PDF</Text>
-          <View style={{ flexDirection: "row", marginTop: 14, marginBottom: 6 }}>
-            <TouchableOpacity
-              onPress={() => setShowDatePicker("from")}
-              style={styles.dateButton}
-            >
-              <Text style={styles.dateButtonText}>
-                {dateRange.from || "From Date"}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => setShowDatePicker("to")}
-              style={styles.dateButton}
-            >
-              <Text style={styles.dateButtonText}>
-                {dateRange.to || "To Date"}
-              </Text>
-            </TouchableOpacity>
-          </View>
-          <TouchableOpacity
-            style={styles.exportButton}
-            onPress={exportDataAsPDF}
-          >
-            <Text style={styles.exportButtonText}>Export</Text>
-          </TouchableOpacity>
-        </Card>
+        <Card icon={<Download color="#06b6d4" size={22} style={{ marginRight: 10 }} />} title="Export Data">
+  <Text style={styles.label}>Export Expenses as Excel Report</Text>
+  <Text style={styles.sublabel}>
+    Generate a detailed Excel report with expense summary and category breakdown
+  </Text>
+  <View style={{ flexDirection: "row", marginTop: 14, marginBottom: 6 }}>
+    <TouchableOpacity
+      onPress={() => setShowDatePicker("from")}
+      style={styles.dateButton}
+    >
+      <Text style={styles.dateButtonText}>
+        {dateRange.from || "Start Date"}
+      </Text>
+    </TouchableOpacity>
+    <TouchableOpacity
+      onPress={() => setShowDatePicker("to")}
+      style={styles.dateButton}
+    >
+      <Text style={styles.dateButtonText}>
+        {dateRange.to || "End Date"}
+      </Text>
+    </TouchableOpacity>
+  </View>
+  <TouchableOpacity
+    style={[styles.exportButton, { backgroundColor: "#10b981" }]}
+    onPress={exportDataAsExcel}
+  >
+    <Download color="#fff" size={18} style={{ marginRight: 8 }} /> 
+    <Text style={styles.exportButtonText}> Export Excel</Text>
+  </TouchableOpacity>
+</Card>
 
         {/* Danger Zone Card */}
         <Card
@@ -437,5 +577,34 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     fontSize: 15,
     letterSpacing: 0.2,
+  },
+  sublabel: {
+    fontSize: 14,
+    color: "#64748b",
+    marginTop: 4,
+    marginBottom: 8,
+    fontWeight: "500",
+  },
+  exportButton: {
+    backgroundColor: "#10b981",
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 12,
+    width: 140,
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    elevation: 2,
+    shadowColor: "#10b981",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+  },
+  exportButtonText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 15,
   },
 });
