@@ -1363,7 +1363,7 @@ const styles = StyleSheet.create({
   chartCard: {
     borderRadius: Math.max(screenWidth * 0.06, 16),
     padding: Math.max(screenWidth * 0.035, 12),
-    borderWidth: 2,
+    
     elevation: 3,
   },
   chartRow: {

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Modal, View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
-import { LogOut, FastForward } from 'lucide-react-native'; // Import whatever icons you need
+import { LogOut } from 'lucide-react-native';
+import { useTheme } from "../context/ThemeContext";
 
 const { width } = Dimensions.get('window');
 
@@ -12,14 +13,16 @@ const Alert = ({
   message = "",
   confirmText = "Yes",
   cancelText = "Cancel",
-  icon = <LogOut color="#fff" size={40} />, // Pass an icon element (or null)
-  iconBg = "#6366f1", // Pass background color for icon
-  confirmColor = "#ef4444", // Confirm button color
-  cancelColor = "#f1f5f9",  // Cancel button color
-  confirmTextColor = "#fff", // Confirm text color
-  cancelTextColor = "#334155", // Cancel text color
+  icon = <LogOut color="#fff" size={40} />,
+  iconBg,
+  confirmColor,
+  cancelColor,
+  confirmTextColor,
+  cancelTextColor,
   showIcon = true,
 }) => {
+  const { theme } = useTheme();
+
   return (
     <Modal
       visible={open}
@@ -27,29 +30,54 @@ const Alert = ({
       animationType="fade"
       onRequestClose={onCancel}
     >
-      <View style={styles.overlay}>
-        <View style={styles.container}>
+      <View style={[styles.overlay, { backgroundColor: theme.colors.overlay }]} >
+        <View style={[
+          styles.container,
+          {
+            backgroundColor: theme.colors.surface,
+            shadowColor: theme.colors.shadow,
+            borderColor: theme.colors.border,
+          }
+        ]}>
           {showIcon && (
-            <View style={[styles.iconWrapper, { backgroundColor: iconBg }]}>
+            <View style={[
+              styles.iconWrapper,
+              {
+                backgroundColor: iconBg || theme.colors.primary,
+                shadowColor: (iconBg || theme.colors.primary),
+              }
+            ]}>
               {icon}
             </View>
           )}
-          <Text style={styles.title}>{title}</Text>
-          <Text style={styles.message}>{message}</Text>
+          <Text style={[styles.title, { color: theme.colors.text }]}>{title}</Text>
+          <Text style={[styles.message, { color: theme.colors.textSecondary }]}>{message}</Text>
           <View style={{ height: 16 }} />
           <TouchableOpacity
-            style={[styles.confirmBtn, { backgroundColor: confirmColor }]}
+            style={[
+              styles.confirmBtn,
+              { backgroundColor: confirmColor || theme.colors.error, elevation: 2 }
+            ]}
             onPress={onConfirm}
             activeOpacity={0.85}
           >
-            <Text style={[styles.confirmText, { color: confirmTextColor }]}>{confirmText}</Text>
+            <Text style={[
+              styles.confirmText,
+              { color: confirmTextColor || theme.colors.surface }
+            ]}>{confirmText}</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.cancelBtn, { backgroundColor: cancelColor }]}
+            style={[
+              styles.cancelBtn,
+              { backgroundColor: cancelColor || theme.colors.background }
+            ]}
             onPress={onCancel}
             activeOpacity={0.8}
           >
-            <Text style={[styles.cancelText, { color: cancelTextColor }]}>{cancelText}</Text>
+            <Text style={[
+              styles.cancelText,
+              { color: cancelTextColor || theme.colors.text }
+            ]}>{cancelText}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -60,22 +88,18 @@ const Alert = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   container: {
     width: width * 0.85,
-    backgroundColor: 'rgba(255,255,255,0.93)',
     borderRadius: 24,
     padding: 28,
     alignItems: 'center',
-    shadowColor: '#000',
     shadowOpacity: 0.2,
     shadowRadius: 16,
     elevation: 10,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
   },
   iconWrapper: {
     width: 72,
@@ -84,7 +108,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 20,
-    shadowColor: '#6366f1',
     shadowOpacity: 0.18,
     shadowRadius: 8,
     elevation: 6,
@@ -92,13 +115,11 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: '#1e293b',
     marginBottom: 10,
     textAlign: 'center',
   },
   message: {
     fontSize: 16,
-    color: '#64748b',
     textAlign: 'center',
     marginBottom: 8,
   },
@@ -108,7 +129,6 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: 'center',
     marginBottom: 10,
-    elevation: 2,
   },
   confirmText: {
     fontWeight: 'bold',
