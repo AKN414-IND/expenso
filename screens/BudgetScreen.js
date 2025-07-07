@@ -17,6 +17,7 @@ import {
 } from "react-native";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
+import { useTheme } from "../context/ThemeContext";
 
 const { width } = Dimensions.get('window');
 
@@ -35,6 +36,7 @@ const EXPENSE_CATEGORIES = [
 
 export default function BudgetScreen({ navigation }) {
   const { session } = useAuth();
+  const { theme } = useTheme();
   const [expenses, setExpenses] = useState([]);
   const [budgets, setBudgets] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -350,15 +352,15 @@ export default function BudgetScreen({ navigation }) {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#06b6d4" />
-        <Text style={styles.loadingText}>Loading budget data...</Text>
+      <View style={[styles.loadingContainer, { backgroundColor: theme.colors.background }]}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
+        <Text style={[styles.loadingText, { color: theme.colors.textSecondary }]}>Loading budget data...</Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <ScrollView
         style={styles.scrollView}
         refreshControl={

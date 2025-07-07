@@ -26,6 +26,7 @@ import {
   Clock,
 } from "lucide-react-native";
 import { useAuth } from "../context/AuthContext";
+import { useTheme } from "../context/ThemeContext";
 import { supabase } from "../lib/supabase";
 import Alert from "../components/Alert";
 
@@ -33,6 +34,7 @@ const { width } = Dimensions.get("window");
 
 export default function AllExpensesScreen({ navigation }) {
   const { session } = useAuth();
+  const { theme } = useTheme();
   const [expenses, setExpenses] = useState([]);
   const [filteredExpenses, setFilteredExpenses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -517,18 +519,18 @@ export default function AllExpensesScreen({ navigation }) {
     );
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
         <TouchableOpacity
-          style={styles.backButton}
+          style={[styles.backButton, { backgroundColor: theme.colors.buttonSecondary }]}
           onPress={() => navigation.goBack()}
         >
-          <ArrowLeft color="#1e293b" size={24} />
+          <ArrowLeft color={theme.colors.text} size={24} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>All Expenses</Text>
+        <Text style={[styles.headerTitle, { color: theme.colors.text }]}>All Expenses</Text>
         <TouchableOpacity
-          style={styles.addButton}
+          style={[styles.addButton, { backgroundColor: theme.colors.buttonSecondary }]}
           onPress={() => navigation.navigate("AddExpense")}
         >
           <Plus color="#06b6d4" size={24} />
