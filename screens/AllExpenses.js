@@ -41,14 +41,13 @@ export default function AllExpensesScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
-  const [sortBy, setSortBy] = useState("date"); // date, amount, title
-  const [sortOrder, setSortOrder] = useState("desc"); // asc, desc
+  const [sortBy, setSortBy] = useState("date");
+  const [sortOrder, setSortOrder] = useState("desc");
   const [showFilters, setShowFilters] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingExpense, setEditingExpense] = useState(null);
 
-  // Categories for filtering
   const categories = [
     "All",
     "Food & Dining",
@@ -134,7 +133,6 @@ export default function AllExpensesScreen({ navigation }) {
     },
   ];
 
-  // Alert state
   const [alertProps, setAlertProps] = useState({
     open: false,
     title: "",
@@ -186,7 +184,6 @@ export default function AllExpensesScreen({ navigation }) {
   const filterAndSortExpenses = () => {
     let filtered = [...expenses];
 
-    // Search filter
     if (searchQuery) {
       filtered = filtered.filter(
         (expense) =>
@@ -196,14 +193,12 @@ export default function AllExpensesScreen({ navigation }) {
       );
     }
 
-    // Category filter
     if (selectedCategory !== "All") {
       filtered = filtered.filter(
         (expense) => expense.category === selectedCategory
       );
     }
 
-    // Sort
     filtered.sort((a, b) => {
       let aValue, bValue;
 
@@ -257,11 +252,11 @@ export default function AllExpensesScreen({ navigation }) {
       confirmText: "Delete",
       cancelText: "Cancel",
       icon: <Trash2 color="#fff" size={40} />,
-      iconBg: "#ef4444",
-      confirmColor: "#ef4444",
+      iconBg: theme.colors.error,
+      confirmColor: theme.colors.error,
       confirmTextColor: "#fff",
-      cancelColor: "#f1f5f9",
-      cancelTextColor: "#334155",
+      cancelColor: theme.colors.buttonSecondary,
+      cancelTextColor: theme.colors.text,
       onConfirm: () => {
         setAlertProps((prev) => ({ ...prev, open: false }));
         deleteExpense(expense.id);
@@ -277,8 +272,8 @@ export default function AllExpensesScreen({ navigation }) {
       message,
       confirmText: "OK",
       icon: <DollarSign color="#fff" size={40} />,
-      iconBg: "#06b6d4",
-      confirmColor: "#06b6d4",
+      iconBg: theme.colors.primary,
+      confirmColor: theme.colors.primary,
       confirmTextColor: "#fff",
       cancelText: null,
       onConfirm: () => setAlertProps((prev) => ({ ...prev, open: false })),
@@ -293,8 +288,8 @@ export default function AllExpensesScreen({ navigation }) {
       message,
       confirmText: "OK",
       icon: <Trash2 color="#fff" size={40} />,
-      iconBg: "#ef4444",
-      confirmColor: "#ef4444",
+      iconBg: theme.colors.error,
+      confirmColor: theme.colors.error,
       confirmTextColor: "#fff",
       cancelText: null,
       onConfirm: () => setAlertProps((prev) => ({ ...prev, open: false })),
@@ -337,58 +332,61 @@ export default function AllExpensesScreen({ navigation }) {
     <View
       style={[
         styles.expenseCard,
-        { marginBottom: index === filteredExpenses.length - 1 ? 20 : 12 },
+        {
+          marginBottom: index === filteredExpenses.length - 1 ? 20 : 12,
+          backgroundColor: theme.colors.surface,
+          borderColor: theme.colors.borderLight,
+        },
       ]}
     >
       <View style={styles.expenseHeader}>
-        <View style={styles.expenseIcon}>
+        <View style={[styles.expenseIcon, { backgroundColor: theme.colors.buttonSecondary }]}>
           <Text style={styles.categoryEmoji}>
             {getCategoryIcon(expense.category)}
           </Text>
         </View>
         <View style={styles.expenseInfo}>
-          <Text style={styles.expenseTitle} numberOfLines={1}>
+          <Text style={[styles.expenseTitle, { color: theme.colors.text }]} numberOfLines={1}>
             {expense.title}
           </Text>
-          <Text style={styles.expenseCategory}>{expense.category}</Text>
+          <Text style={[styles.expenseCategory, { color: theme.colors.textSecondary }]}>{expense.category}</Text>
           <View style={styles.expenseDate}>
-            <Clock color="#94a3b8" size={12} />
-            <Text style={styles.expenseDateText}>
+            <Clock color={theme.colors.textTertiary} size={12} />
+            <Text style={[styles.expenseDateText, { color: theme.colors.textTertiary }]}>
               {formatDate(expense.date)}
             </Text>
           </View>
         </View>
         <View style={styles.expenseAmount}>
-          <Text style={styles.amountText}>
+          <Text style={[styles.amountText, { color: theme.colors.primary }]}>
             ₹{parseFloat(expense.amount).toLocaleString()}
           </Text>
         </View>
       </View>
 
       {expense.description && (
-        <Text style={styles.expenseDescription} numberOfLines={2}>
+        <Text style={[styles.expenseDescription, { color: theme.colors.textSecondary }]} numberOfLines={2}>
           {expense.description}
         </Text>
       )}
 
       <View style={styles.expenseActions}>
         <TouchableOpacity
-          style={[styles.actionButton, styles.editButton]}
+          style={[styles.actionButton, { backgroundColor: theme.colors.warning + "15" }]}
           onPress={() => {
             setEditingExpense(expense);
             setShowEditModal(true);
           }}
         >
-          <Edit3 color="#facc15" size={16} />
-          <Text style={styles.editButtonText}>Edit</Text>
+          <Edit3 color={theme.colors.warning} size={16} />
+          <Text style={[styles.editButtonText, { color: theme.colors.warning }]}>Edit</Text>
         </TouchableOpacity>
-
         <TouchableOpacity
-          style={[styles.actionButton, styles.deleteButton]}
+          style={[styles.actionButton, { backgroundColor: theme.colors.error + "15" }]}
           onPress={() => confirmDelete(expense)}
         >
-          <Trash2 color="#ef4444" size={16} />
-          <Text style={styles.deleteButtonText}>Delete</Text>
+          <Trash2 color={theme.colors.error} size={16} />
+          <Text style={[styles.deleteButtonText, { color: theme.colors.error }]}>Delete</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -397,16 +395,15 @@ export default function AllExpensesScreen({ navigation }) {
   const FilterModal = () =>
     showFilters && (
       <View style={styles.filterOverlay}>
-        <View style={styles.filterModal}>
+        <View style={[styles.filterModal, { backgroundColor: theme.colors.surface }]}>
           <View style={styles.filterHeader}>
-            <Text style={styles.filterTitle}>Filter & Sort</Text>
+            <Text style={[styles.filterTitle, { color: theme.colors.text }]}>Filter & Sort</Text>
             <TouchableOpacity onPress={() => setShowFilters(false)}>
-              <Text style={styles.closeButton}>✕</Text>
+              <Text style={[styles.closeButton, { color: theme.colors.textTertiary }]}>✕</Text>
             </TouchableOpacity>
           </View>
-
           <View style={styles.filterSection}>
-            <Text style={styles.filterSectionTitle}>Categories</Text>
+            <Text style={[styles.filterSectionTitle, { color: theme.colors.text }]}>Categories</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               <View style={styles.categoryFilters}>
                 {categories.map((category) => (
@@ -414,15 +411,24 @@ export default function AllExpensesScreen({ navigation }) {
                     key={category}
                     style={[
                       styles.categoryFilter,
-                      selectedCategory === category && styles.activeFilter,
+                      {
+                        backgroundColor:
+                          selectedCategory === category
+                            ? theme.colors.primary
+                            : theme.colors.buttonSecondary,
+                      },
                     ]}
                     onPress={() => setSelectedCategory(category)}
                   >
                     <Text
                       style={[
                         styles.categoryFilterText,
-                        selectedCategory === category &&
-                          styles.activeFilterText,
+                        {
+                          color:
+                            selectedCategory === category
+                              ? "#fff"
+                              : theme.colors.textSecondary,
+                        },
                       ]}
                     >
                       {category}
@@ -432,9 +438,8 @@ export default function AllExpensesScreen({ navigation }) {
               </View>
             </ScrollView>
           </View>
-
           <View style={styles.filterSection}>
-            <Text style={styles.filterSectionTitle}>Sort By</Text>
+            <Text style={[styles.filterSectionTitle, { color: theme.colors.text }]}>Sort By</Text>
             <View style={styles.sortOptions}>
               {[
                 { key: "date", label: "Date" },
@@ -445,14 +450,24 @@ export default function AllExpensesScreen({ navigation }) {
                   key={option.key}
                   style={[
                     styles.sortOption,
-                    sortBy === option.key && styles.activeSortOption,
+                    {
+                      backgroundColor:
+                        sortBy === option.key
+                          ? theme.colors.primary
+                          : theme.colors.buttonSecondary,
+                    },
                   ]}
                   onPress={() => setSortBy(option.key)}
                 >
                   <Text
                     style={[
                       styles.sortOptionText,
-                      sortBy === option.key && styles.activeSortOptionText,
+                      {
+                        color:
+                          sortBy === option.key
+                            ? "#fff"
+                            : theme.colors.textSecondary,
+                      },
                     ]}
                   >
                     {option.label}
@@ -461,25 +476,34 @@ export default function AllExpensesScreen({ navigation }) {
               ))}
             </View>
           </View>
-
           <View style={styles.filterSection}>
-            <Text style={styles.filterSectionTitle}>Sort Order</Text>
+            <Text style={[styles.filterSectionTitle, { color: theme.colors.text }]}>Sort Order</Text>
             <View style={styles.sortOptions}>
               <TouchableOpacity
                 style={[
                   styles.sortOption,
-                  sortOrder === "desc" && styles.activeSortOption,
+                  {
+                    backgroundColor:
+                      sortOrder === "desc"
+                        ? theme.colors.primary
+                        : theme.colors.buttonSecondary,
+                  },
                 ]}
                 onPress={() => setSortOrder("desc")}
               >
                 <TrendingDown
-                  color={sortOrder === "desc" ? "#fff" : "#06b6d4"}
+                  color={sortOrder === "desc" ? "#fff" : theme.colors.primary}
                   size={16}
                 />
                 <Text
                   style={[
                     styles.sortOptionText,
-                    sortOrder === "desc" && styles.activeSortOptionText,
+                    {
+                      color:
+                        sortOrder === "desc"
+                          ? "#fff"
+                          : theme.colors.textSecondary,
+                    },
                   ]}
                 >
                   Descending
@@ -488,18 +512,28 @@ export default function AllExpensesScreen({ navigation }) {
               <TouchableOpacity
                 style={[
                   styles.sortOption,
-                  sortOrder === "asc" && styles.activeSortOption,
+                  {
+                    backgroundColor:
+                      sortOrder === "asc"
+                        ? theme.colors.primary
+                        : theme.colors.buttonSecondary,
+                  },
                 ]}
                 onPress={() => setSortOrder("asc")}
               >
                 <TrendingUp
-                  color={sortOrder === "asc" ? "#fff" : "#06b6d4"}
+                  color={sortOrder === "asc" ? "#fff" : theme.colors.primary}
                   size={16}
                 />
                 <Text
                   style={[
                     styles.sortOptionText,
-                    sortOrder === "asc" && styles.activeSortOptionText,
+                    {
+                      color:
+                        sortOrder === "asc"
+                          ? "#fff"
+                          : theme.colors.textSecondary,
+                    },
                   ]}
                 >
                   Ascending
@@ -507,9 +541,8 @@ export default function AllExpensesScreen({ navigation }) {
               </TouchableOpacity>
             </View>
           </View>
-
           <TouchableOpacity
-            style={styles.applyFiltersButton}
+            style={[styles.applyFiltersButton, { backgroundColor: theme.colors.primary }]}
             onPress={() => setShowFilters(false)}
           >
             <Text style={styles.applyFiltersText}>Apply Filters</Text>
@@ -520,7 +553,6 @@ export default function AllExpensesScreen({ navigation }) {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      {/* Header */}
       <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
         <TouchableOpacity
           style={[styles.backButton, { backgroundColor: theme.colors.buttonSecondary }]}
@@ -533,53 +565,47 @@ export default function AllExpensesScreen({ navigation }) {
           style={[styles.addButton, { backgroundColor: theme.colors.buttonSecondary }]}
           onPress={() => navigation.navigate("AddExpense")}
         >
-          <Plus color="#06b6d4" size={24} />
+          <Plus color={theme.colors.primary} size={24} />
         </TouchableOpacity>
       </View>
-
-      {/* Summary Card */}
-      <View style={styles.summaryCard}>
+      <View style={[styles.summaryCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.borderLight }]}>
         <View style={styles.summaryRow}>
           <View style={styles.summaryItem}>
-            <Text style={styles.summaryLabel}>Total Expenses</Text>
-            <Text style={styles.summaryValue}>{filteredExpenses.length}</Text>
+            <Text style={[styles.summaryLabel, { color: theme.colors.textTertiary }]}>Total Expenses</Text>
+            <Text style={[styles.summaryValue, { color: theme.colors.text }]}>{filteredExpenses.length}</Text>
           </View>
-          <View style={styles.summaryDivider} />
+          <View style={[styles.summaryDivider, { backgroundColor: theme.colors.borderLight }]} />
           <View style={styles.summaryItem}>
-            <Text style={styles.summaryLabel}>Total Amount</Text>
-            <Text style={styles.summaryAmount}>
+            <Text style={[styles.summaryLabel, { color: theme.colors.textTertiary }]}>Total Amount</Text>
+            <Text style={[styles.summaryAmount, { color: theme.colors.primary }]}>
               ₹{totalAmount.toLocaleString()}
             </Text>
           </View>
         </View>
       </View>
-
-      {/* Search and Filter */}
       <View style={styles.searchContainer}>
-        <View style={styles.searchBar}>
-          <Search color="#94a3b8" size={18} />
+        <View style={[styles.searchBar, { backgroundColor: theme.colors.surface, borderColor: theme.colors.borderLight }]}>
+          <Search color={theme.colors.textTertiary} size={18} />
           <TextInput
-            style={styles.searchInput}
+            style={[styles.searchInput, { color: theme.colors.text }]}
             placeholder="Search expenses..."
-            placeholderTextColor="#94a3b8"
+            placeholderTextColor={theme.colors.textTertiary}
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
         </View>
         <TouchableOpacity
-          style={styles.filterButton}
+          style={[styles.filterButton, { backgroundColor: theme.colors.surface, borderColor: theme.colors.borderLight }]}
           onPress={() => setShowFilters(true)}
         >
-          <Filter color="#06b6d4" size={20} />
+          <Filter color={theme.colors.primary} size={20} />
         </TouchableOpacity>
       </View>
-
-      {/* Active Filters */}
       {(selectedCategory !== "All" || searchQuery) && (
         <View style={styles.activeFilters}>
-          <Text style={styles.activeFiltersLabel}>Active filters:</Text>
+          <Text style={[styles.activeFiltersLabel, { color: theme.colors.textSecondary }]}>Active filters:</Text>
           {selectedCategory !== "All" && (
-            <View style={styles.activeFilterTag}>
+            <View style={[styles.activeFilterTag, { backgroundColor: theme.colors.primary }]}>
               <Text style={styles.activeFilterText}>{selectedCategory}</Text>
               <TouchableOpacity onPress={() => setSelectedCategory("All")}>
                 <Text style={styles.removeFilterText}>✕</Text>
@@ -587,7 +613,7 @@ export default function AllExpensesScreen({ navigation }) {
             </View>
           )}
           {searchQuery && (
-            <View style={styles.activeFilterTag}>
+            <View style={[styles.activeFilterTag, { backgroundColor: theme.colors.primary }]}>
               <Text style={styles.activeFilterText}>"{searchQuery}"</Text>
               <TouchableOpacity onPress={() => setSearchQuery("")}>
                 <Text style={styles.removeFilterText}>✕</Text>
@@ -596,8 +622,6 @@ export default function AllExpensesScreen({ navigation }) {
           )}
         </View>
       )}
-
-      {/* Expenses List */}
       <FlatList
         data={filteredExpenses}
         renderItem={({ item, index }) => (
@@ -611,15 +635,15 @@ export default function AllExpensesScreen({ navigation }) {
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <DollarSign color="#94a3b8" size={64} />
-            <Text style={styles.emptyStateTitle}>No expenses found</Text>
-            <Text style={styles.emptyStateText}>
+            <DollarSign color={theme.colors.textTertiary} size={64} />
+            <Text style={[styles.emptyStateTitle, { color: theme.colors.text }]}>{loading ? "Loading..." : "No expenses found"}</Text>
+            <Text style={[styles.emptyStateText, { color: theme.colors.textSecondary }]}>
               {searchQuery || selectedCategory !== "All"
                 ? "Try adjusting your search or filters"
                 : "Start tracking your expenses by adding your first expense"}
             </Text>
             <TouchableOpacity
-              style={styles.addExpenseButton}
+              style={[styles.addExpenseButton, { backgroundColor: theme.colors.primary }]}
               onPress={() => navigation.navigate("AddExpense")}
             >
               <Plus color="#fff" size={20} />
@@ -628,103 +652,57 @@ export default function AllExpensesScreen({ navigation }) {
           </View>
         }
       />
-
-      {/* Filter Modal */}
       <FilterModal />
-
-      {/* Alert */}
       <Alert {...alertProps} />
-
-      <Modal visible={showEditModal} animationType="slide">
-        <View style={{ flex: 1, padding: 24, backgroundColor: "#fff" }}>
-          <Text>Edit Expense</Text>
-          <TextInput
-            value={editingExpense?.title}
-            onChangeText={(text) =>
-              setEditingExpense({ ...editingExpense, title: text })
-            }
-            placeholder="Expense Title"
-          />
-          {/* Repeat for amount, category, date... */}
-          <TouchableOpacity
-            onPress={async () => {
-              // Update expense in Supabase
-              const { error } = await supabase
-                .from("expenses")
-                .update({
-                  title: editingExpense.title,
-                  amount: editingExpense.amount,
-                  // ...other fields
-                })
-                .eq("id", editingExpense.id);
-              if (!error) {
-                setShowEditModal(false);
-                fetchExpenses(); // reload
-              }
-            }}
-          >
-            <Text>Save</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => setShowEditModal(false)}>
-            <Text>Cancel</Text>
-          </TouchableOpacity>
-        </View>
-      </Modal>
-
-      {/* Edit Modal */}
       <Modal visible={showEditModal} animationType="slide" transparent={false}>
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
+        <View style={[styles.modalContainer, { backgroundColor: theme.colors.background }]}>
+          <View style={[styles.modalHeader, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
             <TouchableOpacity onPress={() => setShowEditModal(false)}>
-              <ArrowLeft color="#334155" size={24} />
+              <ArrowLeft color={theme.colors.text} size={24} />
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>Edit Expense</Text>
+            <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Edit Expense</Text>
             <View style={styles.placeholder} />
           </View>
-          
           <ScrollView style={styles.modalContent}>
             <View style={styles.modalSection}>
-              <Text style={styles.modalLabel}>Title</Text>
+              <Text style={[styles.modalLabel, { color: theme.colors.text }]}>Title</Text>
               <TextInput
-                style={styles.modalInput}
+                style={[styles.modalInput, { backgroundColor: theme.colors.surface, borderColor: theme.colors.borderLight, color: theme.colors.text }]}
                 value={editingExpense?.title}
                 onChangeText={(text) =>
                   setEditingExpense({ ...editingExpense, title: text })
                 }
                 placeholder="Expense Title"
-                placeholderTextColor="#94a3b8"
+                placeholderTextColor={theme.colors.textTertiary}
               />
             </View>
-
             <View style={styles.modalSection}>
-              <Text style={styles.modalLabel}>Amount</Text>
+              <Text style={[styles.modalLabel, { color: theme.colors.text }]}>Amount</Text>
               <TextInput
-                style={styles.modalInput}
+                style={[styles.modalInput, { backgroundColor: theme.colors.surface, borderColor: theme.colors.borderLight, color: theme.colors.text }]}
                 value={String(editingExpense?.amount)}
                 onChangeText={(text) =>
                   setEditingExpense({ ...editingExpense, amount: text })
                 }
                 placeholder="Amount"
-                placeholderTextColor="#94a3b8"
+                placeholderTextColor={theme.colors.textTertiary}
                 keyboardType="decimal-pad"
               />
             </View>
-
             <View style={styles.modalSection}>
-              <Text style={styles.modalLabel}>Date</Text>
+              <Text style={[styles.modalLabel, { color: theme.colors.text }]}>Date</Text>
               <TextInput
-                style={styles.modalInput}
+                style={[styles.modalInput, { backgroundColor: theme.colors.surface, borderColor: theme.colors.borderLight, color: theme.colors.text }]}
                 value={editingExpense?.date}
                 onChangeText={(text) =>
                   setEditingExpense({ ...editingExpense, date: text })
                 }
                 placeholder="YYYY-MM-DD"
-                placeholderTextColor="#94a3b8"
+                placeholderTextColor={theme.colors.textTertiary}
               />
             </View>
-
             <View style={styles.modalSection}>
-              <Text style={styles.modalLabel}>Category</Text>
+              <Text style={[styles.modalLabel, { color: theme.colors.text }]}>Category</Text>
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -768,33 +746,30 @@ export default function AllExpensesScreen({ navigation }) {
                 })}
               </ScrollView>
             </View>
-
             <View style={styles.modalSection}>
-              <Text style={styles.modalLabel}>Description</Text>
+              <Text style={[styles.modalLabel, { color: theme.colors.text }]}>Description</Text>
               <TextInput
-                style={[styles.modalInput, styles.modalTextArea]}
+                style={[styles.modalInput, styles.modalTextArea, { backgroundColor: theme.colors.surface, borderColor: theme.colors.borderLight, color: theme.colors.text }]}
                 value={editingExpense?.description || ""}
                 onChangeText={(text) =>
                   setEditingExpense({ ...editingExpense, description: text })
                 }
                 placeholder="Description (optional)"
-                placeholderTextColor="#94a3b8"
+                placeholderTextColor={theme.colors.textTertiary}
                 multiline
                 numberOfLines={4}
               />
             </View>
           </ScrollView>
-
-          <View style={styles.modalButtonContainer}>
+          <View style={[styles.modalButtonContainer, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border }]}>
             <TouchableOpacity
-              style={[styles.modalButton, styles.modalCancelButton]}
+              style={[styles.modalButton, styles.modalCancelButton, { backgroundColor: theme.colors.buttonSecondary, borderColor: theme.colors.border }]}
               onPress={() => setShowEditModal(false)}
             >
-              <Text style={styles.modalCancelButtonText}>Cancel</Text>
+              <Text style={[styles.modalCancelButtonText, { color: theme.colors.text }]}>Cancel</Text>
             </TouchableOpacity>
-            
             <TouchableOpacity
-              style={styles.modalButton}
+              style={[styles.modalButton, { backgroundColor: theme.colors.primary }]}
               onPress={async () => {
                 const { error } = await supabase
                   .from("expenses")
@@ -824,10 +799,11 @@ export default function AllExpensesScreen({ navigation }) {
   );
 }
 
+
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f7fa",
   },
   header: {
     flexDirection: "row",
@@ -835,36 +811,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 60,
     paddingBottom: 18,
-    backgroundColor: "#fff",
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(148, 163, 184, 0.1)",
     justifyContent: "space-between",
   },
   backButton: {
     padding: 8,
     borderRadius: 12,
-    backgroundColor: "#f8fafc",
   },
   headerTitle: {
     fontSize: 20,
     fontWeight: "700",
-    color: "#1e293b",
     flex: 1,
     textAlign: "center",
   },
   addButton: {
     padding: 8,
     borderRadius: 12,
-    backgroundColor: "#f8fafc",
   },
   summaryCard: {
-    backgroundColor: "#fff",
     marginHorizontal: 20,
     marginTop: 20,
     borderRadius: 16,
     padding: 20,
     borderWidth: 1,
-    borderColor: "rgba(148, 163, 184, 0.1)",
     elevation: 2,
   },
   summaryRow: {
@@ -878,24 +847,20 @@ const styles = StyleSheet.create({
   summaryDivider: {
     width: 1,
     height: 40,
-    backgroundColor: "rgba(148, 163, 184, 0.2)",
     marginHorizontal: 20,
   },
   summaryLabel: {
     fontSize: 14,
-    color: "#94a3b8",
     fontWeight: "600",
     marginBottom: 4,
   },
   summaryValue: {
     fontSize: 24,
     fontWeight: "700",
-    color: "#334155",
   },
   summaryAmount: {
     fontSize: 24,
     fontWeight: "700",
-    color: "#06b6d4",
   },
   searchContainer: {
     flexDirection: "row",
@@ -908,26 +873,21 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#fff",
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 1,
     borderWidth: 1,
-    borderColor: "rgba(148, 163, 184, 0.1)",
     elevation: 1,
   },
   searchInput: {
     flex: 1,
     marginLeft: 12,
     fontSize: 16,
-    color: "#334155",
   },
   filterButton: {
-    backgroundColor: "#fff",
     borderRadius: 12,
     padding: 12,
     borderWidth: 1,
-    borderColor: "rgba(148, 163, 184, 0.1)",
     elevation: 1,
   },
   activeFilters: {
@@ -939,26 +899,22 @@ const styles = StyleSheet.create({
   },
   activeFiltersLabel: {
     fontSize: 14,
-    color: "#64748b",
     marginRight: 8,
   },
   activeFilterTag: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#06b6d4",
     borderRadius: 16,
     paddingHorizontal: 12,
     paddingVertical: 4,
     marginRight: 8,
   },
   activeFilterText: {
-    color: "#fff",
     fontSize: 12,
     fontWeight: "600",
     marginRight: 4,
   },
   removeFilterText: {
-    color: "#fff",
     fontSize: 12,
     fontWeight: "700",
   },
@@ -967,11 +923,9 @@ const styles = StyleSheet.create({
     paddingTop: 10,
   },
   expenseCard: {
-    backgroundColor: "#fff",
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: "rgba(148, 163, 184, 0.1)",
     elevation: 2,
   },
   expenseHeader: {
@@ -982,7 +936,6 @@ const styles = StyleSheet.create({
   expenseIcon: {
     width: 48,
     height: 48,
-    backgroundColor: "#f8fafc",
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
@@ -998,12 +951,10 @@ const styles = StyleSheet.create({
   expenseTitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#1e293b",
     marginBottom: 4,
   },
   expenseCategory: {
     fontSize: 14,
-    color: "#64748b",
     marginBottom: 4,
   },
   expenseDate: {
@@ -1012,7 +963,6 @@ const styles = StyleSheet.create({
   },
   expenseDateText: {
     fontSize: 12,
-    color: "#94a3b8",
     marginLeft: 4,
   },
   expenseAmount: {
@@ -1021,11 +971,9 @@ const styles = StyleSheet.create({
   amountText: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#06b6d4",
   },
   expenseDescription: {
     fontSize: 14,
-    color: "#64748b",
     marginBottom: 12,
     lineHeight: 20,
   },
@@ -1034,7 +982,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: "rgba(148, 163, 184, 0.1)",
+    
   },
   actionButton: {
     flexDirection: "row",
@@ -1046,29 +994,17 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
     justifyContent: "center",
   },
-  viewButton: {
-    backgroundColor: "rgba(6, 182, 212, 0.1)",
-  },
   viewButtonText: {
-    color: "#06b6d4",
     fontWeight: "600",
     fontSize: 14,
     marginLeft: 4,
-  },
-  editButton: {
-    backgroundColor: "rgba(250, 204, 21, 0.1)",
   },
   editButtonText: {
-    color: "#facc15",
     fontWeight: "600",
     fontSize: 14,
     marginLeft: 4,
   },
-  deleteButton: {
-    backgroundColor: "rgba(239, 68, 68, 0.1)",
-  },
   deleteButtonText: {
-    color: "#ef4444",
     fontWeight: "600",
     fontSize: 14,
     marginLeft: 4,
@@ -1082,13 +1018,11 @@ const styles = StyleSheet.create({
   emptyStateTitle: {
     fontSize: 20,
     fontWeight: "700",
-    color: "#334155",
     marginTop: 16,
     marginBottom: 8,
   },
   emptyStateText: {
     fontSize: 16,
-    color: "#64748b",
     textAlign: "center",
     lineHeight: 24,
     marginBottom: 24,
@@ -1096,13 +1030,11 @@ const styles = StyleSheet.create({
   addExpenseButton: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#06b6d4",
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 12,
   },
   addExpenseButtonText: {
-    color: "#fff",
     fontWeight: "700",
     fontSize: 16,
     marginLeft: 8,
@@ -1113,11 +1045,9 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
     justifyContent: "flex-end",
   },
   filterModal: {
-    backgroundColor: "#fff",
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingHorizontal: 20,
@@ -1134,11 +1064,9 @@ const styles = StyleSheet.create({
   filterTitle: {
     fontSize: 20,
     fontWeight: "700",
-    color: "#1e293b",
   },
   closeButton: {
     fontSize: 24,
-    color: "#64748b",
     fontWeight: "300",
   },
   filterSection: {
@@ -1147,7 +1075,6 @@ const styles = StyleSheet.create({
   filterSectionTitle: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#334155",
     marginBottom: 12,
   },
   categoryFilters: {
@@ -1158,20 +1085,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: "#f1f5f9",
     marginRight: 8,
   },
-  activeFilter: {
-    backgroundColor: "#06b6d4",
-  },
+  
   categoryFilterText: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#64748b",
+    
   },
-  activeFilterText: {
-    color: "#fff",
-  },
+  
   sortOptions: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -1183,38 +1105,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 10,
-    backgroundColor: "#f1f5f9",
     borderWidth: 1,
-    borderColor: "rgba(148, 163, 184, 0.1)",
-  },
-  activeSortOption: {
-    backgroundColor: "#06b6d4",
   },
   sortOptionText: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#64748b",
     marginLeft: 6,
   },
-  activeSortOptionText: {
-    color: "#fff",
-  },
   applyFiltersButton: {
-    backgroundColor: "#06b6d4",
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: "center",
     marginTop: 20,
   },
   applyFiltersText: {
-    color: "#fff",
     fontSize: 16,
     fontWeight: "700",
   },
   // Modal Styles
   modalContainer: {
     flex: 1,
-    backgroundColor: "#f5f7fa",
   },
   modalHeader: {
     flexDirection: "row",
@@ -1223,14 +1133,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 60,
     paddingBottom: 20,
-    backgroundColor: "#fff",
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(148, 163, 184, 0.15)",
   },
   modalTitle: {
     fontSize: 20,
     fontWeight: "700",
-    color: "#334155",
     letterSpacing: 0.3,
   },
   modalContent: {
@@ -1242,19 +1149,16 @@ const styles = StyleSheet.create({
   },
   modalLabel: {
     fontSize: 16,
-    color: "#334155",
     marginBottom: 8,
     fontWeight: "600",
     letterSpacing: 0.2,
   },
   modalInput: {
-    backgroundColor: "#fff",
     borderRadius: 16,
     padding: 16,
     fontSize: 16,
     borderWidth: 1,
-    borderColor: "rgba(148, 163, 184, 0.2)",
-    color: "#334155",
+
     fontWeight: "500",
   },
   modalTextArea: {
@@ -1270,9 +1174,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     borderRadius: 20,
-    backgroundColor: "rgba(148, 163, 184, 0.1)",
     borderWidth: 1,
-    borderColor: "rgba(148, 163, 184, 0.2)",
     paddingHorizontal: 16,
     paddingVertical: 10,
   },
@@ -1283,52 +1185,37 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginRight: 8,
   },
-  categoryEditChipEmojiActive: {
-    color: "#fff",
-  },
   categoryEditChipText: {
     fontSize: 14,
-    color: "#334155",
     fontWeight: "600",
   },
   categoryEditChipTextActive: {
-    color: "#fff",
     fontWeight: "700",
   },
   modalButtonContainer: {
     flexDirection: "row",
     padding: 20,
     gap: 16,
-    backgroundColor: "#fff",
     borderTopWidth: 1,
-    borderTopColor: "rgba(148, 163, 184, 0.15)",
   },
   modalButton: {
     flex: 1,
     paddingVertical: 16,
     borderRadius: 16,
     alignItems: "center",
-    backgroundColor: "#06b6d4",
-    shadowColor: "#06b6d4",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 8,
   },
   modalButtonText: {
-    color: "#fff",
     fontWeight: "700",
     fontSize: 16,
     letterSpacing: 0.3,
   },
   modalCancelButton: {
-    backgroundColor: "rgba(148, 163, 184, 0.1)",
     shadowColor: "transparent",
     elevation: 0,
     borderWidth: 1,
-    borderColor: "rgba(148, 163, 184, 0.3)",
-  },
-  modalCancelButtonText: {
-    color: "#334155",
-  },
+  }
 });

@@ -18,6 +18,7 @@ import { useAuth } from "../context/AuthContext";
 import Alert from "../components/Alert";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import * as Notifications from "expo-notifications";
+import { useTheme } from "../context/ThemeContext";
 import {
   setupNotificationCategories,
   scheduleNotification as scheduleReminderNotification,
@@ -54,6 +55,7 @@ const CATEGORY_OPTIONS = [
 
 export default function PaymentReminderScreen({ navigation }) {
   const { session } = useAuth();
+  const { theme } = useTheme();
 
   const [reminders, setReminders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -79,27 +81,22 @@ export default function PaymentReminderScreen({ navigation }) {
     category: "",
   });
 
-  // ----- Notification Integration -----
-
   useEffect(() => {
     if (session?.user) {
       initializeNotifications();
       fetchReminders();
     }
-    // Remove notification listener on unmount
     return () => {
-      Notifications.removeAllNotificationListeners && Notifications.removeAllNotificationListeners();
+      Notifications.removeAllNotificationListeners &&
+        Notifications.removeAllNotificationListeners();
     };
-    // eslint-disable-next-line
   }, [session]);
 
-  // 1. Notification Setup & Permission
   const initializeNotifications = async () => {
     try {
       await setupNotificationCategories();
       const status = await requestNotificationPermissions();
       setNotificationPermission(status);
-
       if (status !== "granted") {
         Alert({
           title: "Notification Permission Required",
@@ -110,23 +107,24 @@ export default function PaymentReminderScreen({ navigation }) {
           open: true,
         });
       }
-      // Add notification response handler
-      const subscription = Notifications.addNotificationResponseReceivedListener(
-        handleNotificationResponse
-      );
+      const subscription =
+        Notifications.addNotificationResponseReceivedListener(
+          handleNotificationResponse
+        );
       return () => subscription.remove();
-    } catch (error) {
-      console.error("Error initializing notifications:", error);
-    }
+    } catch (error) {}
   };
 
-  // 2. Notification Response Handler
   const handleNotificationResponse = (response) => {
-    const { screen, params, reminderId } = response.notification.request.content.data || {};
+    const { screen, params, reminderId } =
+      response.notification.request.content.data || {};
     const actionIdentifier = response.actionIdentifier;
     if (actionIdentifier === "mark_paid") {
       markReminderAsPaid(reminderId);
-    } else if (actionIdentifier === "urgent_pay" || actionIdentifier === "view_details") {
+    } else if (
+      actionIdentifier === "urgent_pay" ||
+      actionIdentifier === "view_details"
+    ) {
       navigation.navigate("PaymentReminder", params);
     } else if (actionIdentifier === "snooze") {
       snoozeReminder(reminderId);
@@ -135,15 +133,16 @@ export default function PaymentReminderScreen({ navigation }) {
     }
   };
 
-  // 3. Notification Scheduling
   const scheduleNotification = async (reminder) => {
     return await scheduleReminderNotification(reminder, form.reminder_time);
   };
 
-  // 4. Helper: Mark as Paid
   const markReminderAsPaid = async (reminderId) => {
     try {
-      await supabase.from("payment_reminders").update({ is_active: false }).eq("id", reminderId);
+      await supabase
+        .from("payment_reminders")
+        .update({ is_active: false })
+        .eq("id", reminderId);
       fetchReminders();
       await Notifications.scheduleNotificationAsync({
         content: {
@@ -152,12 +151,9 @@ export default function PaymentReminderScreen({ navigation }) {
         },
         trigger: null,
       });
-    } catch (error) {
-      console.error("Error marking reminder as paid:", error);
-    }
+    } catch (error) {}
   };
 
-  // 5. Helper: Snooze
   const snoozeReminder = async (reminderId) => {
     try {
       const reminder = reminders.find((r) => r.id === reminderId);
@@ -173,12 +169,9 @@ export default function PaymentReminderScreen({ navigation }) {
           trigger: snoozeTime,
         });
       }
-    } catch (error) {
-      console.error("Error snoozing reminder:", error);
-    }
+    } catch (error) {}
   };
 
-  // 6. Reminder CRUD
   const fetchReminders = async () => {
     try {
       const { data, error } = await supabase
@@ -202,14 +195,16 @@ export default function PaymentReminderScreen({ navigation }) {
       }
     } catch (err) {
       setReminders([]);
-      Alert({ title: "Error", message: "Network error. Please check your connection.", open: true });
+      Alert({
+        title: "Error",
+        message: "Network error. Please check your connection.",
+        open: true,
+      });
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
-
-  // ----- UI & Other Logic -----
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -231,20 +226,21 @@ export default function PaymentReminderScreen({ navigation }) {
     try {
       for (const reminder of overdueReminders) {
         const daysPast = Math.floor(
-          (new Date() - new Date(reminder.next_due_date)) / (1000 * 60 * 60 * 24)
+          (new Date() - new Date(reminder.next_due_date)) /
+            (1000 * 60 * 60 * 24)
         );
         await Notifications.scheduleNotificationAsync({
           content: {
             title: "⚠️ Overdue Payment Reminder",
-            body: `${reminder.title} was due ${daysPast} day(s) ago. Amount: ₹${reminder.amount || "Not specified"}`,
+            body: `${reminder.title} was due ${daysPast} day(s) ago. Amount: ₹${
+              reminder.amount || "Not specified"
+            }`,
             data: { reminderId: reminder.id, type: "overdue" },
           },
           trigger: null,
         });
       }
-    } catch (error) {
-      console.error("Error sending overdue notifications:", error);
-    }
+    } catch (error) {}
   };
 
   const calculateNextDueDate = (currentDate, frequency) => {
@@ -270,9 +266,17 @@ export default function PaymentReminderScreen({ navigation }) {
     if (!form.title.trim()) errors.push("Title is required");
     if (!form.next_due_date.trim()) errors.push("Due date is required");
     if (!form.category?.trim()) errors.push("Category is required");
-    if (form.amount && (isNaN(parseFloat(form.amount)) || parseFloat(form.amount) < 0)) errors.push("Amount must be a valid positive number");
+    if (
+      form.amount &&
+      (isNaN(parseFloat(form.amount)) || parseFloat(form.amount) < 0)
+    )
+      errors.push("Amount must be a valid positive number");
     if (errors.length > 0) {
-      Alert({ title: "Validation Error", message: errors.join("\n"), open: true });
+      Alert({
+        title: "Validation Error",
+        message: errors.join("\n"),
+        open: true,
+      });
       return false;
     }
     return true;
@@ -352,7 +356,6 @@ export default function PaymentReminderScreen({ navigation }) {
         savedReminder = data;
       }
       if (!error && savedReminder) {
-        // Schedule notification
         const notificationId = await scheduleNotification({
           ...savedReminder,
           notification_enabled: form.notification_enabled,
@@ -363,9 +366,11 @@ export default function PaymentReminderScreen({ navigation }) {
             .update({ notification_id: notificationId })
             .eq("id", savedReminder.id);
         }
-        // Next due for recurring
         if (form.frequency !== "one-time") {
-          const nextDueDate = calculateNextDueDate(form.next_due_date, form.frequency);
+          const nextDueDate = calculateNextDueDate(
+            form.next_due_date,
+            form.frequency
+          );
           if (nextDueDate) {
             await supabase
               .from("payment_reminders")
@@ -378,18 +383,25 @@ export default function PaymentReminderScreen({ navigation }) {
         fetchReminders();
         Alert({
           title: "Success",
-          message: `Reminder ${editingReminder ? "updated" : "created"} successfully!`,
+          message: `Reminder ${
+            editingReminder ? "updated" : "created"
+          } successfully!`,
           open: true,
         });
       } else {
         Alert({
           title: "Error",
-          message: error?.message || "Failed to save reminder. Please try again.",
+          message:
+            error?.message || "Failed to save reminder. Please try again.",
           open: true,
         });
       }
     } catch (err) {
-      Alert({ title: "Error", message: "Network error. Please try again.", open: true });
+      Alert({
+        title: "Error",
+        message: "Network error. Please try again.",
+        open: true,
+      });
     } finally {
       setSaving(false);
     }
@@ -399,7 +411,9 @@ export default function PaymentReminderScreen({ navigation }) {
     try {
       const reminderToDelete = reminders.find((r) => r.id === reminderId);
       if (reminderToDelete?.notification_id) {
-        await Notifications.cancelScheduledNotificationAsync(reminderToDelete.notification_id);
+        await Notifications.cancelScheduledNotificationAsync(
+          reminderToDelete.notification_id
+        );
       }
       const { error } = await supabase
         .from("payment_reminders")
@@ -407,21 +421,35 @@ export default function PaymentReminderScreen({ navigation }) {
         .eq("id", reminderId);
       if (!error) {
         fetchReminders();
-        Alert({ title: "Success", message: "Reminder deleted successfully!", open: true });
+        Alert({
+          title: "Success",
+          message: "Reminder deleted successfully!",
+          open: true,
+        });
       } else {
-        Alert({ title: "Error", message: "Failed to delete reminder. Please try again.", open: true });
+        Alert({
+          title: "Error",
+          message: "Failed to delete reminder. Please try again.",
+          open: true,
+        });
       }
     } catch (err) {
-      Alert({ title: "Error", message: "Network error. Please try again.", open: true });
+      Alert({
+        title: "Error",
+        message: "Network error. Please try again.",
+        open: true,
+      });
     }
   };
 
-  // Date/time input handlers
   const onDateChange = (event, selectedDate) => {
     setShowDatePicker(Platform.OS === "ios");
     if (selectedDate) {
       setSelectedDate(selectedDate);
-      setForm({ ...form, next_due_date: selectedDate.toISOString().split("T")[0] });
+      setForm({
+        ...form,
+        next_due_date: selectedDate.toISOString().split("T")[0],
+      });
     }
   };
   const onTimeChange = (event, selectedTime) => {
@@ -433,72 +461,14 @@ export default function PaymentReminderScreen({ navigation }) {
     }
   };
 
-  // --- Render ---
-
-  const renderReminder = ({ item }) => (
-    <View style={[styles.reminderCard, { borderLeftColor: getStatusColor(item) }]}>
-      <View style={styles.reminderHeader}>
-        <View style={styles.reminderTitleRow}>
-          <Text style={styles.reminderIcon}>{getFrequencyIcon(item.frequency)}</Text>
-          <View style={styles.reminderTitleContainer}>
-            <Text style={[styles.reminderTitle, !item.is_active && styles.inactiveText]}>
-              {item.title}
-            </Text>
-            {item.description && (
-              <Text style={styles.reminderDescription}>{item.description}</Text>
-            )}
-          </View>
-          <View style={styles.reminderStatusContainer}>
-            <TouchableOpacity
-              style={[styles.statusToggle, { backgroundColor: getStatusColor(item) }]}
-              onPress={() => toggleReminderStatus(item)}
-            >
-              <CheckCircle2 size={16} color="white" style={{ opacity: item.is_active ? 1 : 0.6 }} />
-            </TouchableOpacity>
-            {item.notification_enabled === false && (
-              <AlertCircle size={16} color="#f59e0b" style={{ marginLeft: 4 }} />
-            )}
-          </View>
-        </View>
-        <View style={styles.reminderDetails}>
-          <View style={styles.reminderInfo}>
-            <Calendar size={14} color="#64748b" />
-            <Text style={styles.reminderDate}>{formatDate(item.next_due_date)}</Text>
-          </View>
-          {item.amount && (
-            <View style={styles.reminderInfo}>
-              <Text style={styles.reminderAmount}>₹{item.amount}</Text>
-            </View>
-          )}
-        </View>
-        <Text style={[styles.statusText, { color: getStatusColor(item) }]}>
-          {getStatusText(item)}
-        </Text>
-      </View>
-      <View style={styles.reminderActions}>
-        <TouchableOpacity style={styles.actionButton} onPress={() => openEditModal(item)}>
-          <Edit3 size={16} color="#06b6d4" />
-          <Text style={styles.actionButtonText}>Edit</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.actionButton, styles.deleteButton]}
-          onPress={() => {
-            setReminderToDelete(item);
-            setShowDeleteAlert(true);
-          }}
-        >
-          <Trash2 size={16} color="#ef4444" />
-          <Text style={[styles.actionButtonText, styles.deleteButtonText]}>Delete</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-
-  // --- Util UI ---
   function formatDate(dateString) {
     try {
       const date = new Date(dateString);
-      return date.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+      return date.toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      });
     } catch (error) {
       return dateString;
     }
@@ -515,11 +485,11 @@ export default function PaymentReminderScreen({ navigation }) {
     }
   }
   function getStatusColor(reminder) {
-    if (!reminder.is_active) return "#94a3b8";
+    if (!reminder.is_active) return theme.colors.textTertiary;
     const daysUntil = getDaysUntilDue(reminder.next_due_date);
-    if (daysUntil < 0) return "#ef4444";
-    if (daysUntil <= 3) return "#f59e0b";
-    return "#10b981";
+    if (daysUntil < 0) return theme.colors.error;
+    if (daysUntil <= 3) return theme.colors.warning;
+    return theme.colors.success;
   }
   function getStatusText(reminder) {
     if (!reminder.is_active) return "Inactive";
@@ -547,7 +517,9 @@ export default function PaymentReminderScreen({ navigation }) {
             })
             .eq("id", reminder.id);
         } else {
-          await Notifications.cancelScheduledNotificationAsync(reminder.notification_id);
+          await Notifications.cancelScheduledNotificationAsync(
+            reminder.notification_id
+          );
           await supabase
             .from("payment_reminders")
             .update({
@@ -557,52 +529,234 @@ export default function PaymentReminderScreen({ navigation }) {
             .eq("id", reminder.id);
         }
       } else {
-        await supabase.from("payment_reminders").update({ is_active: newStatus }).eq("id", reminder.id);
+        await supabase
+          .from("payment_reminders")
+          .update({ is_active: newStatus })
+          .eq("id", reminder.id);
       }
       fetchReminders();
     } catch (err) {
-      Alert({ title: "Error", message: "Failed to update reminder status.", open: true });
+      Alert({
+        title: "Error",
+        message: "Failed to update reminder status.",
+        open: true,
+      });
     }
   };
 
+  const renderReminder = ({ item }) => (
+    <View
+      style={[
+        styles.reminderCard,
+        {
+          backgroundColor: theme.colors.surface,
+          borderLeftColor: getStatusColor(item),
+          borderColor: theme.colors.border,
+        },
+      ]}
+    >
+      <View style={styles.reminderHeader}>
+        <View style={styles.reminderTitleRow}>
+          <Text style={styles.reminderIcon}>
+            {getFrequencyIcon(item.frequency)}
+          </Text>
+          <View style={styles.reminderTitleContainer}>
+            <Text
+              style={[
+                styles.reminderTitle,
+                !item.is_active && styles.inactiveText,
+                { color: theme.colors.text },
+              ]}
+            >
+              {item.title}
+            </Text>
+            {item.description && (
+              <Text
+                style={[
+                  styles.reminderDescription,
+                  { color: theme.colors.textTertiary },
+                ]}
+              >
+                {item.description}
+              </Text>
+            )}
+          </View>
+          <View style={styles.reminderStatusContainer}>
+            <TouchableOpacity
+              style={[
+                styles.statusToggle,
+                { backgroundColor: getStatusColor(item) },
+              ]}
+              onPress={() => toggleReminderStatus(item)}
+            >
+              <CheckCircle2
+                size={16}
+                color="#fff"
+                style={{ opacity: item.is_active ? 1 : 0.6 }}
+              />
+            </TouchableOpacity>
+            {item.notification_enabled === false && (
+              <AlertCircle
+                size={16}
+                color={theme.colors.warning}
+                style={{ marginLeft: 4 }}
+              />
+            )}
+          </View>
+        </View>
+        <View style={styles.reminderDetails}>
+          <View style={styles.reminderInfo}>
+            <Calendar size={14} color={theme.colors.textTertiary} />
+            <Text
+              style={[
+                styles.reminderDate,
+                { color: theme.colors.textTertiary },
+              ]}
+            >
+              {formatDate(item.next_due_date)}
+            </Text>
+          </View>
+          {item.amount && (
+            <View style={styles.reminderInfo}>
+              <Text
+                style={[styles.reminderAmount, { color: theme.colors.primary }]}
+              >
+                ₹{item.amount}
+              </Text>
+            </View>
+          )}
+        </View>
+        <Text style={[styles.statusText, { color: getStatusColor(item) }]}>
+          {getStatusText(item)}
+        </Text>
+      </View>
+      <View style={styles.reminderActions}>
+        <TouchableOpacity
+          style={[
+            styles.actionButton,
+            { backgroundColor: theme.colors.buttonSecondary },
+          ]}
+          onPress={() => openEditModal(item)}
+        >
+          <Edit3 size={16} color={theme.colors.primary} />
+          <Text
+            style={[styles.actionButtonText, { color: theme.colors.primary }]}
+          >
+            Edit
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.actionButton,
+            styles.deleteButton,
+            { backgroundColor: theme.colors.error + "18" },
+          ]}
+          onPress={() => {
+            setReminderToDelete(item);
+            setShowDeleteAlert(true);
+          }}
+        >
+          <Trash2 size={16} color={theme.colors.error} />
+          <Text
+            style={[
+              styles.actionButtonText,
+              styles.deleteButtonText,
+              { color: theme.colors.error },
+            ]}
+          >
+            Delete
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#4ECDC4" />
-        <Text style={styles.loadingText}>Loading reminders...</Text>
+      <View
+        style={[
+          styles.loadingContainer,
+          { backgroundColor: theme.colors.background },
+        ]}
+      >
+        <ActivityIndicator size="large" color={theme.colors.primary} />
+        <Text
+          style={[styles.loadingText, { color: theme.colors.textTertiary }]}
+        >
+          Loading reminders...
+        </Text>
       </View>
     );
   }
 
   return (
     <>
-      <View style={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-            <ArrowLeft size={24} color="#1e293b" />
+      <View
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
+      >
+        <View
+          style={[
+            styles.header,
+            {
+              backgroundColor: theme.colors.surface,
+              borderBottomColor: theme.colors.border,
+            },
+          ]}
+        >
+          <TouchableOpacity
+            style={[
+              styles.backButton,
+              { backgroundColor: theme.colors.buttonSecondary },
+            ]}
+            onPress={() => navigation.goBack()}
+          >
+            <ArrowLeft size={24} color={theme.colors.text} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Payment Reminders</Text>
-          <TouchableOpacity style={styles.addHeaderButton} onPress={openAddModal}>
-            <Plus size={24} color="#06b6d4" />
+          <Text style={[styles.headerTitle, { color: theme.colors.text }]}>
+            Payment Reminders
+          </Text>
+          <TouchableOpacity
+            style={[
+              styles.addHeaderButton,
+              { backgroundColor: theme.colors.buttonSecondary },
+            ]}
+            onPress={openAddModal}
+          >
+            <Plus size={24} color={theme.colors.primary} />
           </TouchableOpacity>
         </View>
-        {/* Notification Banner */}
         {notificationPermission !== "granted" && (
-          <View style={styles.permissionBanner}>
-            <AlertCircle size={20} color="#f59e0b" />
-            <Text style={styles.permissionText}>
+          <View
+            style={[
+              styles.permissionBanner,
+              {
+                backgroundColor: theme.colors.warning + "22",
+                borderBottomColor: theme.colors.warning,
+              },
+            ]}
+          >
+            <AlertCircle size={20} color={theme.colors.warning} />
+            <Text
+              style={[styles.permissionText, { color: theme.colors.warning }]}
+            >
               Enable notifications to receive payment reminders
             </Text>
-            <TouchableOpacity style={styles.enableButton} onPress={initializeNotifications}>
+            <TouchableOpacity
+              style={[
+                styles.enableButton,
+                { backgroundColor: theme.colors.warning },
+              ]}
+              onPress={initializeNotifications}
+            >
               <Text style={styles.enableButtonText}>Enable</Text>
             </TouchableOpacity>
           </View>
         )}
-        {/* List */}
         <ScrollView
           style={styles.content}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
         >
           {reminders.length > 0 ? (
             <FlatList
@@ -613,73 +767,183 @@ export default function PaymentReminderScreen({ navigation }) {
               showsVerticalScrollIndicator={false}
             />
           ) : (
-            <View style={styles.emptyState}>
-              <Bell size={64} color="#cbd5e1" />
-              <Text style={styles.emptyStateTitle}>No Payment Reminders</Text>
-              <Text style={styles.emptyStateText}>
-                Create your first payment reminder to stay on top of your bills and subscriptions.
+            <View
+              style={[
+                styles.emptyState,
+                { backgroundColor: theme.colors.surface },
+              ]}
+            >
+              <Bell size={64} color={theme.colors.border} />
+              <Text
+                style={[
+                  styles.emptyStateTitle,
+                  { color: theme.colors.textTertiary },
+                ]}
+              >
+                No Payment Reminders
               </Text>
-              <TouchableOpacity style={styles.emptyStateButton} onPress={openAddModal}>
+              <Text
+                style={[
+                  styles.emptyStateText,
+                  { color: theme.colors.textTertiary },
+                ]}
+              >
+                Create your first payment reminder to stay on top of your bills
+                and subscriptions.
+              </Text>
+              <TouchableOpacity
+                style={[
+                  styles.emptyStateButton,
+                  { backgroundColor: theme.colors.primary },
+                ]}
+                onPress={openAddModal}
+              >
                 <Plus size={20} color="white" />
                 <Text style={styles.emptyStateButtonText}>Add Reminder</Text>
               </TouchableOpacity>
             </View>
           )}
         </ScrollView>
-        <TouchableOpacity style={styles.fab} onPress={openAddModal}>
-          <Plus size={24} color="white" />
+        <TouchableOpacity
+          style={[styles.fab, { backgroundColor: theme.colors.primary }]}
+          onPress={openAddModal}
+        >
+          <Plus size={24} color="#fff" />
         </TouchableOpacity>
       </View>
 
-      {/* Add/Edit Modal */}
-      <Modal animationType="slide" transparent={true} visible={modalVisible} onRequestClose={() => setModalVisible(false)}>
-        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-          <View style={styles.modalContent}>
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={modalVisible}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
+          <View
+            style={[
+              styles.modalContent,
+              { backgroundColor: theme.colors.surface },
+            ]}
+          >
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
+              <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
                 {editingReminder ? "Edit Reminder" : "Add Reminder"}
               </Text>
-              <TouchableOpacity style={styles.modalCloseButton} onPress={() => setModalVisible(false)}>
-                <Text style={styles.modalCloseText}>✕</Text>
+              <TouchableOpacity
+                style={[
+                  styles.modalCloseButton,
+                  { backgroundColor: theme.colors.buttonSecondary },
+                ]}
+                onPress={() => setModalVisible(false)}
+              >
+                <Text
+                  style={[
+                    styles.modalCloseText,
+                    { color: theme.colors.textTertiary },
+                  ]}
+                >
+                  ✕
+                </Text>
               </TouchableOpacity>
             </View>
             <ScrollView style={styles.modalForm}>
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Title *</Text>
+                <Text
+                  style={[
+                    styles.inputLabel,
+                    { color: theme.colors.textSecondary },
+                  ]}
+                >
+                  Title *
+                </Text>
                 <TextInput
-                  style={styles.input}
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: theme.colors.buttonSecondary,
+                      color: theme.colors.text,
+                      borderColor: theme.colors.border,
+                    },
+                  ]}
                   placeholder="e.g., Netflix Subscription"
+                  placeholderTextColor={theme.colors.textTertiary}
                   value={form.title}
                   onChangeText={(text) => setForm({ ...form, title: text })}
                   maxLength={100}
                 />
               </View>
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Amount (Optional)</Text>
+                <Text
+                  style={[
+                    styles.inputLabel,
+                    { color: theme.colors.textSecondary },
+                  ]}
+                >
+                  Amount (Optional)
+                </Text>
                 <TextInput
-                  style={styles.input}
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: theme.colors.buttonSecondary,
+                      color: theme.colors.text,
+                      borderColor: theme.colors.border,
+                    },
+                  ]}
                   placeholder="0.00"
+                  placeholderTextColor={theme.colors.textTertiary}
                   value={form.amount}
                   onChangeText={(text) => setForm({ ...form, amount: text })}
                   keyboardType="numeric"
                 />
               </View>
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Category *</Text>
+                <Text
+                  style={[
+                    styles.inputLabel,
+                    { color: theme.colors.textSecondary },
+                  ]}
+                >
+                  Category *
+                </Text>
                 <View style={[styles.frequencyOptions, { marginBottom: 8 }]}>
                   {CATEGORY_OPTIONS.map((option) => (
                     <TouchableOpacity
                       key={option.value}
                       style={[
                         styles.frequencyOption,
-                        form.category === option.value && styles.frequencyOptionSelected,
+                        form.category === option.value && {
+                          backgroundColor: theme.colors.primary,
+                          borderColor: theme.colors.primaryDark,
+                        },
+                        {
+                          backgroundColor:
+                            form.category === option.value
+                              ? theme.colors.primary
+                              : theme.colors.buttonSecondary,
+                          borderColor:
+                            form.category === option.value
+                              ? theme.colors.primaryDark
+                              : theme.colors.borderLight,
+                        },
                       ]}
-                      onPress={() => setForm({ ...form, category: option.value })}
+                      onPress={() =>
+                        setForm({ ...form, category: option.value })
+                      }
                     >
                       <Text
                         style={[
                           styles.frequencyLabel,
-                          form.category === option.value && styles.frequencyLabelSelected,
+                          form.category === option.value && { color: "#fff" },
+                          {
+                            color:
+                              form.category === option.value
+                                ? "#fff"
+                                : theme.colors.textTertiary,
+                          },
                         ]}
                       >
                         {option.label}
@@ -689,22 +953,50 @@ export default function PaymentReminderScreen({ navigation }) {
                 </View>
               </View>
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Frequency</Text>
+                <Text
+                  style={[
+                    styles.inputLabel,
+                    { color: theme.colors.textSecondary },
+                  ]}
+                >
+                  Frequency
+                </Text>
                 <View style={styles.frequencyOptions}>
                   {FREQUENCY_OPTIONS.map((option) => (
                     <TouchableOpacity
                       key={option.value}
                       style={[
                         styles.frequencyOption,
-                        form.frequency === option.value && styles.frequencyOptionSelected,
+                        form.frequency === option.value && {
+                          backgroundColor: theme.colors.primary,
+                          borderColor: theme.colors.primaryDark,
+                        },
+                        {
+                          backgroundColor:
+                            form.frequency === option.value
+                              ? theme.colors.primary
+                              : theme.colors.buttonSecondary,
+                          borderColor:
+                            form.frequency === option.value
+                              ? theme.colors.primaryDark
+                              : theme.colors.borderLight,
+                        },
                       ]}
-                      onPress={() => setForm({ ...form, frequency: option.value })}
+                      onPress={() =>
+                        setForm({ ...form, frequency: option.value })
+                      }
                     >
                       <Text style={styles.frequencyIcon}>{option.icon}</Text>
                       <Text
                         style={[
                           styles.frequencyLabel,
-                          form.frequency === option.value && styles.frequencyLabelSelected,
+                          form.frequency === option.value && { color: "#fff" },
+                          {
+                            color:
+                              form.frequency === option.value
+                                ? "#fff"
+                                : theme.colors.textTertiary,
+                          },
                         ]}
                       >
                         {option.label}
@@ -714,11 +1006,34 @@ export default function PaymentReminderScreen({ navigation }) {
                 </View>
               </View>
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Due Date *</Text>
-                <TouchableOpacity style={styles.datePickerButton} onPress={() => setShowDatePicker(true)}>
-                  <Calendar size={20} color="#64748b" />
-                  <Text style={styles.datePickerText}>
-                    {form.next_due_date ? formatDate(form.next_due_date) : "Select Date"}
+                <Text
+                  style={[
+                    styles.inputLabel,
+                    { color: theme.colors.textSecondary },
+                  ]}
+                >
+                  Due Date *
+                </Text>
+                <TouchableOpacity
+                  style={[
+                    styles.datePickerButton,
+                    {
+                      backgroundColor: theme.colors.buttonSecondary,
+                      borderColor: theme.colors.border,
+                    },
+                  ]}
+                  onPress={() => setShowDatePicker(true)}
+                >
+                  <Calendar size={20} color={theme.colors.textTertiary} />
+                  <Text
+                    style={[
+                      styles.datePickerText,
+                      { color: theme.colors.text },
+                    ]}
+                  >
+                    {form.next_due_date
+                      ? formatDate(form.next_due_date)
+                      : "Select Date"}
                   </Text>
                 </TouchableOpacity>
                 {showDatePicker && (
@@ -732,10 +1047,33 @@ export default function PaymentReminderScreen({ navigation }) {
                 )}
               </View>
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Reminder Time *</Text>
-                <TouchableOpacity style={styles.datePickerButton} onPress={() => setShowTimePicker(true)}>
-                  <Clock size={20} color="#64748b" />
-                  <Text style={styles.datePickerText}>{form.reminder_time || "Select Time"}</Text>
+                <Text
+                  style={[
+                    styles.inputLabel,
+                    { color: theme.colors.textSecondary },
+                  ]}
+                >
+                  Reminder Time *
+                </Text>
+                <TouchableOpacity
+                  style={[
+                    styles.datePickerButton,
+                    {
+                      backgroundColor: theme.colors.buttonSecondary,
+                      borderColor: theme.colors.border,
+                    },
+                  ]}
+                  onPress={() => setShowTimePicker(true)}
+                >
+                  <Clock size={20} color={theme.colors.textTertiary} />
+                  <Text
+                    style={[
+                      styles.datePickerText,
+                      { color: theme.colors.text },
+                    ]}
+                  >
+                    {form.reminder_time || "Select Time"}
+                  </Text>
                 </TouchableOpacity>
                 {showTimePicker && (
                   <DateTimePicker
@@ -751,12 +1089,30 @@ export default function PaymentReminderScreen({ navigation }) {
                 )}
               </View>
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Description (Optional)</Text>
+                <Text
+                  style={[
+                    styles.inputLabel,
+                    { color: theme.colors.textSecondary },
+                  ]}
+                >
+                  Description (Optional)
+                </Text>
                 <TextInput
-                  style={[styles.input, styles.textArea]}
+                  style={[
+                    styles.input,
+                    styles.textArea,
+                    {
+                      backgroundColor: theme.colors.buttonSecondary,
+                      color: theme.colors.text,
+                      borderColor: theme.colors.border,
+                    },
+                  ]}
                   placeholder="Additional notes..."
+                  placeholderTextColor={theme.colors.textTertiary}
                   value={form.description}
-                  onChangeText={(text) => setForm({ ...form, description: text })}
+                  onChangeText={(text) =>
+                    setForm({ ...form, description: text })
+                  }
                   multiline
                   numberOfLines={3}
                   maxLength={500}
@@ -764,9 +1120,24 @@ export default function PaymentReminderScreen({ navigation }) {
               </View>
               <View style={styles.inputGroup}>
                 <View style={styles.switchContainer}>
-                  <Text style={styles.inputLabel}>Enable Notifications</Text>
+                  <Text
+                    style={[
+                      styles.inputLabel,
+                      { color: theme.colors.textSecondary },
+                    ]}
+                  >
+                    Enable Notifications
+                  </Text>
                   <TouchableOpacity
-                    style={[styles.switch, form.notification_enabled && styles.switchActive]}
+                    style={[
+                      styles.switch,
+                      form.notification_enabled && {
+                        backgroundColor: theme.colors.primary,
+                      },
+                      !form.notification_enabled && {
+                        backgroundColor: theme.colors.border,
+                      },
+                    ]}
                     onPress={() =>
                       setForm({
                         ...form,
@@ -775,12 +1146,20 @@ export default function PaymentReminderScreen({ navigation }) {
                     }
                   >
                     <View
-                      style={[styles.switchThumb, form.notification_enabled && styles.switchThumbActive]}
+                      style={[
+                        styles.switchThumb,
+                        form.notification_enabled && styles.switchThumbActive,
+                      ]}
                     />
                   </TouchableOpacity>
                 </View>
                 {notificationPermission !== "granted" && (
-                  <Text style={styles.permissionWarning}>
+                  <Text
+                    style={[
+                      styles.permissionWarning,
+                      { color: theme.colors.warning },
+                    ]}
+                  >
                     ⚠️ Notification permission required
                   </Text>
                 )}
@@ -788,19 +1167,38 @@ export default function PaymentReminderScreen({ navigation }) {
             </ScrollView>
             <View style={styles.modalButtons}>
               <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
+                style={[
+                  styles.modalButton,
+                  styles.cancelButton,
+                  {
+                    backgroundColor: theme.colors.buttonSecondary,
+                    borderColor: theme.colors.border,
+                  },
+                ]}
                 onPress={() => setModalVisible(false)}
                 disabled={saving}
               >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
+                <Text
+                  style={[
+                    styles.cancelButtonText,
+                    { color: theme.colors.textSecondary },
+                  ]}
+                >
+                  Cancel
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.modalButton, styles.saveButton, saving && styles.saveButtonDisabled]}
+                style={[
+                  styles.modalButton,
+                  styles.saveButton,
+                  { backgroundColor: theme.colors.primary },
+                  saving && { backgroundColor: theme.colors.textTertiary },
+                ]}
                 onPress={saveReminder}
                 disabled={saving}
               >
                 {saving ? (
-                  <ActivityIndicator size="small" color="white" />
+                  <ActivityIndicator size="small" color="#fff" />
                 ) : (
                   <Text style={styles.saveButtonText}>
                     {editingReminder ? "Update" : "Create"}
@@ -812,7 +1210,6 @@ export default function PaymentReminderScreen({ navigation }) {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* Custom Alert for Delete */}
       <Alert
         open={showDeleteAlert}
         onConfirm={async () => {
@@ -831,33 +1228,20 @@ export default function PaymentReminderScreen({ navigation }) {
         confirmText="Delete"
         cancelText="Cancel"
         icon={<Trash2 color="#fff" size={40} />}
-        iconBg="#ef4444"
-        confirmColor="#ef4444"
+        iconBg={theme.colors.error}
+        confirmColor={theme.colors.error}
         confirmTextColor="#fff"
-        cancelColor="#f1f5f9"
-        cancelTextColor="#334155"
+        cancelColor={theme.colors.buttonSecondary}
+        cancelTextColor={theme.colors.textSecondary}
       />
     </>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#f5f7fa",
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#f5f7fa",
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: "#64748b",
-    fontWeight: "500",
-  },
+  container: { flex: 1 },
+  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
+  loadingText: { marginTop: 16, fontSize: 16, fontWeight: "500" },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -865,51 +1249,42 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 60,
     paddingBottom: 24,
-    backgroundColor: "#fff",
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(148, 163, 184, 0.1)",
     elevation: 2,
   },
   backButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "#f8fafc",
     justifyContent: "center",
     alignItems: "center",
   },
   headerTitle: {
     fontSize: 20,
     fontWeight: "700",
-    color: "#1e293b",
     letterSpacing: -0.3,
   },
   addHeaderButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "#f8fafc",
     justifyContent: "center",
     alignItems: "center",
   },
   permissionBanner: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#fef3c7",
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#fbbf24",
   },
   permissionText: {
     flex: 1,
     fontSize: 14,
-    color: "#92400e",
     fontWeight: "500",
     marginLeft: 8,
   },
   enableButton: {
-    backgroundColor: "#f59e0b",
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 6,
@@ -925,55 +1300,33 @@ const styles = StyleSheet.create({
     paddingTop: 20,
   },
   reminderCard: {
-    backgroundColor: "#fff",
     borderRadius: 16,
     padding: 20,
     marginBottom: 16,
     borderLeftWidth: 4,
     borderWidth: 1,
-    borderColor: "rgba(148, 163, 184, 0.1)",
     elevation: 2,
     shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 8,
   },
-  reminderHeader: {
-    marginBottom: 12,
-  },
+  reminderHeader: { marginBottom: 12 },
   reminderTitleRow: {
     flexDirection: "row",
     alignItems: "flex-start",
     marginBottom: 12,
   },
-  reminderIcon: {
-    fontSize: 20,
-    marginRight: 12,
-    marginTop: 2,
-  },
-  reminderTitleContainer: {
-    flex: 1,
-  },
+  reminderIcon: { fontSize: 20, marginRight: 12, marginTop: 2 },
+  reminderTitleContainer: { flex: 1 },
   reminderTitle: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#1e293b",
     marginBottom: 4,
     letterSpacing: -0.3,
   },
-  inactiveText: {
-    opacity: 0.6,
-    textDecorationLine: "line-through",
-  },
-  reminderDescription: {
-    fontSize: 14,
-    color: "#64748b",
-    fontWeight: "500",
-    lineHeight: 18,
-  },
+  inactiveText: { opacity: 0.6, textDecorationLine: "line-through" },
+  reminderDescription: { fontSize: 14, fontWeight: "500", lineHeight: 18 },
   reminderStatusContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -992,22 +1345,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 8,
   },
-  reminderInfo: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  reminderDate: {
-    fontSize: 14,
-    color: "#64748b",
-    fontWeight: "600",
-    marginLeft: 6,
-  },
-  reminderAmount: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#06b6d4",
-    letterSpacing: -0.2,
-  },
+  reminderInfo: { flexDirection: "row", alignItems: "center" },
+  reminderDate: { fontSize: 14, fontWeight: "600", marginLeft: 6 },
+  reminderAmount: { fontSize: 16, fontWeight: "700", letterSpacing: -0.2 },
   statusText: {
     fontSize: 12,
     fontWeight: "600",
@@ -1020,7 +1360,6 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: "rgba(148, 163, 184, 0.1)",
   },
   actionButton: {
     flexDirection: "row",
@@ -1028,20 +1367,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
-    backgroundColor: "#f8fafc",
   },
-  deleteButton: {
-    backgroundColor: "#fef2f2",
-  },
-  actionButtonText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#06b6d4",
-    marginLeft: 4,
-  },
-  deleteButtonText: {
-    color: "#ef4444",
-  },
+  deleteButton: {},
+  actionButtonText: { fontSize: 12, fontWeight: "600", marginLeft: 4 },
+  deleteButtonText: {},
   emptyState: {
     flex: 1,
     justifyContent: "center",
@@ -1052,14 +1381,12 @@ const styles = StyleSheet.create({
   emptyStateTitle: {
     fontSize: 24,
     fontWeight: "700",
-    color: "#64748b",
     marginTop: 20,
     marginBottom: 12,
     textAlign: "center",
   },
   emptyStateText: {
     fontSize: 16,
-    color: "#94a3b8",
     textAlign: "center",
     lineHeight: 24,
     marginBottom: 32,
@@ -1067,7 +1394,6 @@ const styles = StyleSheet.create({
   emptyStateButton: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#06b6d4",
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 25,
@@ -1086,26 +1412,17 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: "#06b6d4",
     justifyContent: "center",
     alignItems: "center",
     elevation: 8,
-    shadowColor: "#06b6d4",
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
   },
   modalOverlay: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    backgroundColor: "rgba(0,0,0,0.5)",
   },
   modalContent: {
-    backgroundColor: "#fff",
     borderRadius: 20,
     width: "95%",
     maxHeight: "90%",
@@ -1119,99 +1436,41 @@ const styles = StyleSheet.create({
     paddingTop: 24,
     paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(148, 163, 184, 0.1)",
   },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#1e293b",
-  },
+  modalTitle: { fontSize: 20, fontWeight: "700" },
   modalCloseButton: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: "#f1f5f9",
     justifyContent: "center",
     alignItems: "center",
   },
-  modalCloseText: {
-    fontSize: 16,
-    color: "#64748b",
-    fontWeight: "600",
-  },
-  modalForm: {
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    maxHeight: 400,
-  },
-  inputGroup: {
-    marginBottom: 20,
-  },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#374151",
-    marginBottom: 8,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    backgroundColor: "#f8fafc",
-    color: "#1e293b",
-  },
-  textArea: {
-    height: 80,
-    textAlignVertical: "top",
-  },
-  frequencyOptions: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 12,
-  },
+  modalCloseText: { fontSize: 16, fontWeight: "600" },
+  modalForm: { paddingHorizontal: 24, paddingVertical: 16, maxHeight: 400 },
+  inputGroup: { marginBottom: 20 },
+  inputLabel: { fontSize: 14, fontWeight: "600", marginBottom: 8 },
+  input: { borderWidth: 1, borderRadius: 12, padding: 16, fontSize: 16 },
+  textArea: { height: 80, textAlignVertical: "top" },
+  frequencyOptions: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
   frequencyOption: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 12,
-    backgroundColor: "#f8fafc",
     borderWidth: 1,
-    borderColor: "#e2e8f0",
     minWidth: 100,
   },
-  frequencyOptionSelected: {
-    backgroundColor: "#06b6d4",
-    borderColor: "#06b6d4",
-  },
-  frequencyIcon: {
-    fontSize: 16,
-    marginRight: 8,
-  },
-  frequencyLabel: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#374151",
-  },
-  frequencyLabelSelected: {
-    color: "white",
-  },
+  frequencyLabel: { fontSize: 14, fontWeight: "600" },
+  frequencyIcon: { fontSize: 16, marginRight: 8 },
   datePickerButton: {
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#e2e8f0",
     borderRadius: 12,
     padding: 16,
-    backgroundColor: "#f8fafc",
   },
-  datePickerText: {
-    fontSize: 16,
-    color: "#1e293b",
-    marginLeft: 12,
-  },
+  datePickerText: { fontSize: 16, marginLeft: 12 },
   switchContainer: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -1221,13 +1480,10 @@ const styles = StyleSheet.create({
     width: 50,
     height: 30,
     borderRadius: 15,
-    backgroundColor: "#e2e8f0",
     justifyContent: "center",
     paddingHorizontal: 2,
   },
-  switchActive: {
-    backgroundColor: "#06b6d4",
-  },
+  switchActive: {},
   switchThumb: {
     width: 26,
     height: 26,
@@ -1235,15 +1491,8 @@ const styles = StyleSheet.create({
     backgroundColor: "white",
     alignSelf: "flex-start",
   },
-  switchThumbActive: {
-    alignSelf: "flex-end",
-  },
-  permissionWarning: {
-    fontSize: 12,
-    color: "#f59e0b",
-    fontWeight: "500",
-    marginTop: 4,
-  },
+  switchThumbActive: { alignSelf: "flex-end" },
+  permissionWarning: { fontSize: 12, fontWeight: "500", marginTop: 4 },
   modalButtons: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -1258,25 +1507,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: "center",
   },
-  cancelButton: {
-    backgroundColor: "#f1f5f9",
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-  },
-  saveButton: {
-    backgroundColor: "#06b6d4",
-  },
-  saveButtonDisabled: {
-    backgroundColor: "#94a3b8",
-  },
-  cancelButtonText: {
-    color: "#334155",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  saveButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
+  cancelButton: { borderWidth: 1 },
+  saveButton: {},
+  saveButtonDisabled: {},
+  cancelButtonText: { fontSize: 16, fontWeight: "600" },
+  saveButtonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
 });

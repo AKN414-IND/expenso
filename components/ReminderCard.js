@@ -1,9 +1,11 @@
 import React from "react";
 import { TouchableOpacity, View, Text, StyleSheet } from "react-native";
 import { Bell, AlertCircle, Calendar, Clock } from "lucide-react-native";
+import { useTheme } from "../context/ThemeContext";
 
 const ReminderCard = ({ item, onPress }) => {
-  // Returns days until the next due date
+  const { theme } = useTheme();
+
   const getDaysUntilDue = (dueDate) => {
     const today = new Date();
     const due = new Date(dueDate);
@@ -12,38 +14,36 @@ const ReminderCard = ({ item, onPress }) => {
     return diffDays;
   };
 
-  // Sets label/color per daysUntil
   const getReminderPriority = (daysUntil) => {
     if (daysUntil < 0)
       return {
-        color: "#ef4444",
+        color: theme.colors.error,
         label: "Overdue",
-        bg: "#fef2f2",
-        border: "#fecaca",
+        bg: theme.colors.error + "18",
+        border: theme.colors.error + "30",
       };
     if (daysUntil === 0)
       return {
-        color: "#f59e0b",
+        color: theme.colors.warning,
         label: "Due Today",
-        bg: "#fffbeb",
-        border: "#fed7aa",
+        bg: theme.colors.warning + "18",
+        border: theme.colors.warning + "30",
       };
     if (daysUntil <= 3)
       return {
-        color: "#f59e0b",
+        color: theme.colors.warning,
         label: "Due Soon",
-        bg: "#fffbeb",
-        border: "#fed7aa",
+        bg: theme.colors.warning + "10",
+        border: theme.colors.warning + "30",
       };
     return {
-      color: "#06b6d4",
+      color: theme.colors.primary,
       label: "Upcoming",
-      bg: "#f0f9ff",
-      border: "#bae6fd",
+      bg: theme.colors.primary + "18",
+      border: theme.colors.primary + "30",
     };
   };
 
-  // Date format: "Mon, Jul 2"
   const formatDate = (dateString) => {
     if (!dateString) return "";
     return new Date(dateString).toLocaleDateString("en-US", {
@@ -53,7 +53,6 @@ const ReminderCard = ({ item, onPress }) => {
     });
   };
 
-  // Time format: "12:30 PM"
   const formatTime = (timeString) => {
     if (!timeString) return "9:00 AM";
     const [hours, minutes] = timeString.split(":");
@@ -67,18 +66,16 @@ const ReminderCard = ({ item, onPress }) => {
 
   return (
     <TouchableOpacity
-      style={[styles.reminderCard, { borderColor: priority.border }]}
+      style={[styles.reminderCard, { borderColor: priority.border, backgroundColor: theme.colors.surface }]}
       onPress={onPress}
       activeOpacity={0.85}
     >
-      {/* Faint Background */}
       <View
         style={[
           styles.reminderGradient,
           { backgroundColor: priority.bg },
         ]}
       />
-      {/* Badge */}
       <View
         style={[
           styles.reminderStatusBadge,
@@ -87,49 +84,42 @@ const ReminderCard = ({ item, onPress }) => {
       >
         <Text style={styles.reminderStatusText}>{priority.label}</Text>
       </View>
-
       <View style={styles.reminderMainContent}>
-        {/* Header */}
         <View style={styles.reminderHeaderSection}>
           <View style={styles.reminderTitleContainer}>
-            <View style={styles.reminderIconWrapper}>
+            <View style={[styles.reminderIconWrapper, { backgroundColor: priority.color + "13" }]}>
               {daysUntil < 0 ? (
                 <AlertCircle size={18} color={priority.color} />
               ) : (
                 <Bell size={18} color={priority.color} />
               )}
             </View>
-            <Text style={styles.reminderTitle} numberOfLines={2}>
+            <Text style={[styles.reminderTitle, { color: theme.colors.text }]} numberOfLines={2}>
               {item.title}
             </Text>
           </View>
         </View>
-        {/* Info Section */}
         <View style={styles.reminderInfoSection}>
           <View style={styles.reminderInfoGrid}>
-            {/* Date */}
-            <View style={styles.reminderInfoItem}>
+            <View style={[styles.reminderInfoItem, { backgroundColor: theme.colors.buttonSecondary, borderColor: theme.colors.border }]}>
               <View style={styles.reminderInfoIcon}>
-                <Calendar size={14} color="#64748b" />
+                <Calendar size={14} color={theme.colors.textTertiary} />
               </View>
-              <Text style={styles.reminderInfoText}>
+              <Text style={[styles.reminderInfoText, { color: theme.colors.textSecondary }]}>
                 {formatDate(item.next_due_date)}
               </Text>
             </View>
-            {/* Time */}
-            <View style={styles.reminderInfoItem}>
+            <View style={[styles.reminderInfoItem, { backgroundColor: theme.colors.buttonSecondary, borderColor: theme.colors.border }]}>
               <View style={styles.reminderInfoIcon}>
-                <Clock size={14} color="#64748b" />
+                <Clock size={14} color={theme.colors.textTertiary} />
               </View>
-              <Text style={styles.reminderInfoText}>
+              <Text style={[styles.reminderInfoText, { color: theme.colors.textSecondary }]}>
                 {formatTime(item.reminder_time)}
               </Text>
             </View>
           </View>
         </View>
-        {/* Footer */}
         <View style={styles.reminderFooterSection}>
-          {/* Days Counter */}
           <View
             style={[
               styles.reminderDaysChip,
@@ -149,9 +139,8 @@ const ReminderCard = ({ item, onPress }) => {
                 : `${daysUntil} days left`}
             </Text>
           </View>
-          {/* Amount */}
           {item.amount && (
-            <View style={styles.reminderAmountChip}>
+            <View style={[styles.reminderAmountChip, { backgroundColor: theme.colors.primary }]}>
               <Text style={styles.reminderAmountText}>
                 ₹
                 {parseFloat(item.amount).toLocaleString("en-IN", {
@@ -162,7 +151,6 @@ const ReminderCard = ({ item, onPress }) => {
           )}
         </View>
       </View>
-      {/* Priority Color Line */}
       <View
         style={[styles.reminderPriorityLine, { backgroundColor: priority.color }]}
       />
@@ -172,10 +160,8 @@ const ReminderCard = ({ item, onPress }) => {
 
 const styles = StyleSheet.create({
   reminderCard: {
-    backgroundColor: "#fff",
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
@@ -226,7 +212,6 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: "rgba(6,182,212,0.13)",
     alignItems: "center",
     justifyContent: "center",
     marginRight: 10,
@@ -234,7 +219,6 @@ const styles = StyleSheet.create({
   reminderTitle: {
     fontSize: 17,
     fontWeight: "700",
-    color: "#1e293b",
     lineHeight: 22,
     flex: 1,
     letterSpacing: 0.1,
@@ -251,12 +235,10 @@ const styles = StyleSheet.create({
   reminderInfoItem: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#f1f5f9",
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
     marginRight: 10,
   },
   reminderInfoIcon: {
@@ -267,7 +249,6 @@ const styles = StyleSheet.create({
   },
   reminderInfoText: {
     fontSize: 13,
-    color: "#334155",
     fontWeight: "600",
     letterSpacing: 0.15,
   },
@@ -282,17 +263,14 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 10,
     borderWidth: 1,
-    backgroundColor: "#f8fafc",
     marginRight: 8,
   },
   reminderDaysText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#64748b",
     letterSpacing: 0.1,
   },
   reminderAmountChip: {
-    backgroundColor: "#06b6d4",
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 10,
