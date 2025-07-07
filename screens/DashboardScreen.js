@@ -23,6 +23,7 @@ import {
 } from "react-native";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
+import { useTheme } from "../context/ThemeContext";
 import { PieChart } from "react-native-chart-kit";
 import Alert from "../components/Alert";
 import { LogOut, Trash2, X, ArrowLeft, ArrowRight } from "lucide-react-native";
@@ -556,6 +557,7 @@ const BudgetBar = ({ label, spent, budget, color, icon }) => {
 
 export default function DashboardScreen({ navigation }) {
   const { session } = useAuth();
+  const { theme } = useTheme();
   const targetRefs = useRef({});
   const scrollViewRef = useRef(null);
 
@@ -888,9 +890,9 @@ export default function DashboardScreen({ navigation }) {
 
   if (loading || !session?.user) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#4ECDC4" />
-        <Text style={styles.loadingText}>Loading your dashboard...</Text>
+      <View style={[styles.loadingContainer, { backgroundColor: theme.colors.background }]}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
+        <Text style={[styles.loadingText, { color: theme.colors.textSecondary }]}>Loading your dashboard...</Text>
       </View>
     );
   }
@@ -940,7 +942,7 @@ export default function DashboardScreen({ navigation }) {
   return (
     <>
       <ScrollView
-        style={styles.container}
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
         ref={scrollViewRef}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
@@ -948,12 +950,12 @@ export default function DashboardScreen({ navigation }) {
         showsVerticalScrollIndicator={false}
       >
         {/* --- Header Section --- */}
-        <View style={styles.header}>
+        <View style={[styles.header, { backgroundColor: theme.colors.surface }]}>
           <View style={styles.headerContent}>
-            <Text style={styles.welcomeText}>
+            <Text style={[styles.welcomeText, { color: theme.colors.text }]}>
               Good Morning, {profile?.full_name || "User"}!
             </Text>
-            <Text style={styles.subGreeting}>
+            <Text style={[styles.subGreeting, { color: theme.colors.textSecondary }]}>
               Let's keep your spending on Track
             </Text>
           </View>
@@ -974,15 +976,15 @@ export default function DashboardScreen({ navigation }) {
             style={styles.statsContainer}
             ref={(ref) => setTargetRef("stats-container", ref)}
           >
-            <View style={[styles.statCard, styles.statCardMargin]}>
-              <Text style={styles.statValue}>
+            <View style={[styles.statCard, styles.statCardMargin, { backgroundColor: theme.colors.surface }]}>
+              <Text style={[styles.statValue, { color: theme.colors.primary }]}>
                 ₹{monthlyExpenses.toFixed(2)}
               </Text>
-              <Text style={styles.statLabel}>This Month</Text>
+              <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>This Month</Text>
             </View>
-            <View style={styles.statCard}>
-              <Text style={styles.statValue}>₹{todaysTotal.toFixed(2)}</Text>
-              <Text style={styles.statLabel}>Today's Total</Text>
+            <View style={[styles.statCard, { backgroundColor: theme.colors.surface }]}>
+              <Text style={[styles.statValue, { color: theme.colors.primary }]}>₹{todaysTotal.toFixed(2)}</Text>
+              <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Today's Total</Text>
             </View>
           </View>
 
@@ -991,7 +993,7 @@ export default function DashboardScreen({ navigation }) {
               style={styles.chartsContainer}
               ref={(ref) => setTargetRef("chart-container", ref)}
             >
-              <View style={styles.chartCard}>
+              <View style={[styles.chartCard, { backgroundColor: theme.colors.surface }]}>
                 <View style={styles.chartRow}>
                   <View style={styles.chartSide}>
                     <PieChart
@@ -999,9 +1001,9 @@ export default function DashboardScreen({ navigation }) {
                       width={screenWidth}
                       height={200}
                       chartConfig={{
-                        backgroundColor: "#fff",
-                        backgroundGradientFrom: "#fff",
-                        backgroundGradientTo: "#fff",
+                        backgroundColor: theme.colors.surface,
+                        backgroundGradientFrom: theme.colors.surface,
+                        backgroundGradientTo: theme.colors.surface,
                         color: (opacity = 1) => `rgba(6,182,212,${opacity})`,
                       }}
                       accessor={"amount"}

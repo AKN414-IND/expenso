@@ -9,17 +9,19 @@ import {
   Linking,
   ScrollView,
 } from "react-native";
-import { ArrowLeft, Trash2, FileText, Bell, Download, HelpCircle } from "lucide-react-native";
+import { ArrowLeft, Trash2, FileText, Bell, Download, HelpCircle, Moon, Sun, Palette } from "lucide-react-native";
 import * as Notifications from "expo-notifications";
 import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useAuth } from "../context/AuthContext";
+import { useTheme } from "../context/ThemeContext";
 import { supabase } from "../lib/supabase";
 import Alert from "../components/Alert";
 
 export default function AppSettingsScreen({ navigation }) {
   const { session } = useAuth();
+  const { theme, currentTheme, setTheme } = useTheme();
   const [notificationStatus, setNotificationStatus] = useState("unknown");
   const [isLoading, setIsLoading] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(null); // 'from' or 'to'
@@ -333,26 +335,26 @@ export default function AppSettingsScreen({ navigation }) {
 
   // Card UI Helper
   const Card = ({ icon, title, children, style }) => (
-    <View style={[styles.card, style]}>
+    <View style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }, style]}>
       <View style={styles.cardHeader}>
         {icon}
-        <Text style={styles.cardTitle}>{title}</Text>
+        <Text style={[styles.cardTitle, { color: theme.colors.text }]}>{title}</Text>
       </View>
       {children}
     </View>
   );
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
         <TouchableOpacity
-          style={styles.backButton}
+          style={[styles.backButton, { backgroundColor: theme.colors.buttonSecondary }]}
           onPress={() => navigation.goBack()}
         >
-          <ArrowLeft color="#1e293b" size={24} />
+          <ArrowLeft color={theme.colors.text} size={24} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>App Settings</Text>
+        <Text style={[styles.headerTitle, { color: theme.colors.text }]}>App Settings</Text>
         <View style={{ width: 38 }} /> {/* Spacer for center title */}
       </View>
 
@@ -362,65 +364,103 @@ export default function AppSettingsScreen({ navigation }) {
         showsVerticalScrollIndicator={false}
       >
         {/* Notifications Card */}
-        <Card icon={<Bell color="#06b6d4" size={22} style={{ marginRight: 10 }} />} title="Notifications">
+        <Card icon={<Bell color={theme.colors.primary} size={22} style={{ marginRight: 10 }} />} title="Notifications">
           <View style={styles.cardRow}>
-            <Text style={styles.label}>Push Notifications</Text>
+            <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Push Notifications</Text>
             <Text style={[
               styles.status,
               notificationStatus === "granted"
-                ? styles.statusOn
-                : styles.statusOff
+                ? [styles.statusOn, { color: theme.colors.primary }]
+                : [styles.statusOff, { color: theme.colors.error }]
             ]}>
               {notificationStatus === "granted" ? "Enabled" : "Disabled"}
             </Text>
-            <TouchableOpacity style={styles.manageButton} onPress={openSettings}>
-              <Text style={styles.manageButtonText}>Manage</Text>
+            <TouchableOpacity style={[styles.manageButton, { backgroundColor: theme.colors.buttonSecondary }]} onPress={openSettings}>
+              <Text style={[styles.manageButtonText, { color: theme.colors.primary }]}>Manage</Text>
             </TouchableOpacity>
           </View>
         </Card>
 
-        {/* App Tour Card */}
-        <Card icon={<HelpCircle color="#06b6d4" size={22} style={{ marginRight: 10 }} />} title="Help & Tour">
+        {/* Theme Card */}
+        <Card icon={<Palette color={theme.colors.primary} size={22} style={{ marginRight: 10 }} />} title="Appearance">
           <View style={styles.cardRow}>
-            <Text style={styles.label}>App Tour</Text>
+            <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Theme</Text>
+            <View style={styles.themeOptions}>
+              <TouchableOpacity 
+                style={[
+                  styles.themeOption,
+                  { backgroundColor: currentTheme === 'light' ? theme.colors.primary : theme.colors.buttonSecondary }
+                ]}
+                onPress={() => setTheme('light')}
+              >
+                <Sun color={currentTheme === 'light' ? '#fff' : theme.colors.textTertiary} size={16} />
+                <Text style={[
+                  styles.themeOptionText,
+                  { color: currentTheme === 'light' ? '#fff' : theme.colors.textTertiary }
+                ]}>Light</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[
+                  styles.themeOption,
+                  { backgroundColor: currentTheme === 'dark' ? theme.colors.primary : theme.colors.buttonSecondary }
+                ]}
+                onPress={() => setTheme('dark')}
+              >
+                <Moon color={currentTheme === 'dark' ? '#fff' : theme.colors.textTertiary} size={16} />
+                <Text style={[
+                  styles.themeOptionText,
+                  { color: currentTheme === 'dark' ? '#fff' : theme.colors.textTertiary }
+                ]}>Dark</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+          <Text style={[styles.sublabel, { color: theme.colors.textTertiary }]}>
+            Choose your preferred theme for better viewing experience
+          </Text>
+        </Card>
+
+        {/* App Tour Card */}
+        <Card icon={<HelpCircle color={theme.colors.primary} size={22} style={{ marginRight: 10 }} />} title="Help & Tour">
+          <View style={styles.cardRow}>
+            <Text style={[styles.label, { color: theme.colors.textSecondary }]}>App Tour</Text>
             <TouchableOpacity 
-              style={styles.tourButton} 
+              style={[styles.tourButton, { backgroundColor: theme.colors.primary }]} 
               onPress={() => navigation.navigate('Dashboard', { showOnboarding: true })}
             >
               <Text style={styles.tourButtonText}>Show Tour</Text>
             </TouchableOpacity>
           </View>
-          <Text style={styles.sublabel}>
+          <Text style={[styles.sublabel, { color: theme.colors.textTertiary }]}>
             Replay the interactive tour to learn about all app features
           </Text>
         </Card>
 
         {/* Export Data Card */}
-        <Card icon={<Download color="#06b6d4" size={22} style={{ marginRight: 10 }} />} title="Export Data">
-  <Text style={styles.label}>Export Expenses as Excel Report</Text>
-  <Text style={styles.sublabel}>
+        <Card icon={<Download color={theme.colors.primary} size={22} style={{ marginRight: 10 }} />} title="Export Data">
+  <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Export Expenses as Excel Report</Text>
+  <Text style={[styles.sublabel, { color: theme.colors.textTertiary }]}>
     Generate a detailed Excel report with expense summary and category breakdown
   </Text>
   <View style={{ flexDirection: "row", marginTop: 14, marginBottom: 6 }}>
     <TouchableOpacity
       onPress={() => setShowDatePicker("from")}
-      style={styles.dateButton}
+      style={[styles.dateButton, { backgroundColor: theme.colors.buttonSecondary }]}
     >
-      <Text style={styles.dateButtonText}>
+      <Text style={[styles.dateButtonText, { color: theme.colors.textSecondary }]}>
         {dateRange.from || "Start Date"}
       </Text>
     </TouchableOpacity>
     <TouchableOpacity
       onPress={() => setShowDatePicker("to")}
-      style={styles.dateButton}
+      style={[styles.dateButton, { backgroundColor: theme.colors.buttonSecondary }]}
     >
-      <Text style={styles.dateButtonText}>
+      <Text style={[styles.dateButtonText, { color: theme.colors.textSecondary }]}>
         {dateRange.to || "End Date"}
       </Text>
     </TouchableOpacity>
   </View>
   <TouchableOpacity
-    style={[styles.exportButton, { backgroundColor: "#10b981" }]}
+    style={[styles.exportButton, { backgroundColor: theme.colors.success }]}
     onPress={exportDataAsExcel}
   >
     <Download color="#fff" size={18} style={{ marginRight: 8 }} /> 
@@ -430,13 +470,13 @@ export default function AppSettingsScreen({ navigation }) {
 
         {/* Danger Zone Card */}
         <Card
-          icon={<Trash2 color="#ef4444" size={22} style={{ marginRight: 10 }} />}
+          icon={<Trash2 color={theme.colors.error} size={22} style={{ marginRight: 10 }} />}
           title="Danger Zone"
-          style={styles.dangerCard}
+          style={[styles.dangerCard, { borderColor: theme.colors.error, backgroundColor: currentTheme === 'light' ? '#fdf2f8' : '#451a1a' }]}
         >
           <TouchableOpacity
             onPress={confirmDeleteAllData}
-            style={styles.deleteButton}
+            style={[styles.deleteButton, { backgroundColor: theme.colors.error }]}
           >
             <Text style={styles.deleteButtonText}>Delete All Data</Text>
           </TouchableOpacity>
@@ -445,7 +485,7 @@ export default function AppSettingsScreen({ navigation }) {
         {isLoading && (
           <ActivityIndicator
             size="large"
-            color="#06b6d4"
+            color={theme.colors.primary}
             style={{ marginTop: 30 }}
           />
         )}
@@ -477,37 +517,31 @@ export default function AppSettingsScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f5f7fa" },
+  container: { flex: 1 },
   header: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 20,
     paddingTop: 60,
     paddingBottom: 18,
-    backgroundColor: "#fff",
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(148, 163, 184, 0.1)",
     justifyContent: "space-between",
   },
   backButton: {
     padding: 8,
     borderRadius: 12,
-    backgroundColor: "#f8fafc",
   },
   headerTitle: {
     fontSize: 20,
     fontWeight: "700",
-    color: "#1e293b",
     flex: 1,
     textAlign: "center",
   },
   card: {
-    backgroundColor: "#fff",
     borderRadius: 18,
     padding: 20,
     marginBottom: 18,
     borderWidth: 1,
-    borderColor: "rgba(148, 163, 184, 0.09)",
     elevation: 2,
   },
   cardHeader: {
@@ -518,7 +552,6 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 17,
     fontWeight: "700",
-    color: "#1e293b",
   },
   cardRow: {
     flexDirection: "row",
@@ -528,7 +561,6 @@ const styles = StyleSheet.create({
   label: {
     flex: 1,
     fontSize: 16,
-    color: "#334155",
     fontWeight: "600",
   },
   status: {
@@ -536,39 +568,57 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginRight: 12,
   },
-  statusOn: { color: "#06b6d4" },
-  statusOff: { color: "#ef4444" },
+  statusOn: {},
+  statusOff: {},
   manageButton: {
-    backgroundColor: "#f1f5f9",
     borderRadius: 10,
     paddingVertical: 7,
     paddingHorizontal: 16,
   },
   manageButtonText: {
-    color: "#06b6d4",
     fontWeight: "700",
     fontSize: 14,
   },
+  themeOptions: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  themeOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    gap: 6,
+  },
+  themeOptionText: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
   dateButton: {
-    backgroundColor: "#f1f5f9",
     borderRadius: 10,
     paddingVertical: 7,
     paddingHorizontal: 14,
     marginRight: 10,
   },
   dateButtonText: {
-    color: "#334155",
     fontWeight: "600",
     fontSize: 15,
   },
   exportButton: {
-    backgroundColor: "#06b6d4",
-    borderRadius: 10,
+    borderRadius: 12,
     paddingVertical: 12,
+    paddingHorizontal: 20,
     alignItems: "center",
-    marginTop: 8,
-    width: 120,
+    justifyContent: "center",
+    marginTop: 12,
+    width: 140,
     alignSelf: "flex-start",
+    flexDirection: "row",
+    elevation: 2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
   },
   exportButtonText: {
     color: "#fff",
@@ -576,11 +626,9 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   dangerCard: {
-    borderColor: "#ef4444",
-    backgroundColor: "#fdf2f8",
+    borderWidth: 1,
   },
   deleteButton: {
-    backgroundColor: "#ef4444",
     borderRadius: 10,
     paddingVertical: 13,
     alignItems: "center",
@@ -596,35 +644,11 @@ const styles = StyleSheet.create({
   },
   sublabel: {
     fontSize: 14,
-    color: "#64748b",
     marginTop: 4,
     marginBottom: 8,
     fontWeight: "500",
   },
-  exportButton: {
-    backgroundColor: "#10b981",
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 12,
-    width: 140,
-    alignSelf: "flex-start",
-    flexDirection: "row",
-    elevation: 2,
-    shadowColor: "#10b981",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-  },
-  exportButtonText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 15,
-  },
   tourButton: {
-    backgroundColor: "#06b6d4",
     borderRadius: 10,
     paddingVertical: 7,
     paddingHorizontal: 16,
