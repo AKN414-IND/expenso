@@ -386,15 +386,7 @@ const OnboardingOverlay = ({ isVisible, onComplete, onStepChange }) => {
             setTooltipMeasured(true);
           }}
         >
-          {/* Progress bar */}
-          <View style={styles.progressContainer}>
-            <View style={styles.progressBar}>
-              <View style={[styles.progressFill, { width: `${progress}%` }]} />
-            </View>
-            <Text style={styles.progressText}>
-              {currentStep + 1} of {ONBOARDING_STEPS.length}
-            </Text>
-          </View>
+          
 
           {/* Skip button */}
           <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
@@ -404,6 +396,16 @@ const OnboardingOverlay = ({ isVisible, onComplete, onStepChange }) => {
           {/* Content */}
           <Text style={styles.tooltipTitle}>{step.title}</Text>
           <Text style={styles.tooltipDescription}>{step.description}</Text>
+
+          {/* Progress bar */}
+          <View style={styles.progressContainer}>
+            <View style={styles.progressBar}>
+              <View style={[styles.progressFill, { width: `${progress}%` }]} />
+            </View>
+            <Text style={styles.progressText}>
+              {currentStep + 1} of {ONBOARDING_STEPS.length}
+            </Text>
+          </View>
 
           {/* Navigation buttons */}
           <View style={styles.tooltipButtons}>
@@ -898,7 +900,6 @@ export default function DashboardScreen({ navigation }) {
     .reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0);
 
     const handleOnboardingStepChange = (stepId) => {
-      // For budget-section: scroll so it's roughly centered (half screen visible above)
       if (
         stepId === "budget" &&
         scrollViewRef.current &&
@@ -906,13 +907,11 @@ export default function DashboardScreen({ navigation }) {
       ) {
         global.targetRefs["budget-section"].measure(
           (x, y, width, height, pageX, pageY) => {
-            // Center section by offsetting half the screen height (or tweak as needed)
             const offset = pageY - (Dimensions.get("window").height / 2) + (height / 2);
             scrollViewRef.current.scrollTo({ y: Math.max(offset, 0), animated: true });
           }
         );
       }
-      // For recent-section: original scroll behavior
       if (
         stepId === "recent" &&
         scrollViewRef.current &&
@@ -1656,8 +1655,11 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "300",
     lineHeight: 32,
+  },  // --- Onboarding Overlay Styles (Cleaned & Structured) ---
+  onboardingOverlay: {
+    flex: 1,
+    backgroundColor: "transparent",
   },
-  onboardingOverlay: { flex: 1, backgroundColor: "transparent" },
   overlayBackground: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(0, 0, 0, 0.7)",
@@ -1675,6 +1677,7 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   tooltip: {
+    position: "absolute", // ensures placement can be controlled
     backgroundColor: "#fff",
     borderRadius: Math.max(screenWidth * 0.05, 14),
     padding: Math.max(screenWidth * 0.04, 12),
@@ -1686,6 +1689,8 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 15,
   },
+
+  // Progress Bar
   progressContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -1710,6 +1715,8 @@ const styles = StyleSheet.create({
     color: "#64748b",
     fontWeight: "500",
   },
+
+  // Skip Button (top-right)
   skipButton: {
     position: "absolute",
     top: 15,
@@ -1720,7 +1727,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#f1f5f9",
     justifyContent: "center",
     alignItems: "center",
+    zIndex: 2,
   },
+
+  // Tooltip Content
   tooltipTitle: {
     fontSize: Math.max(Math.min(screenWidth * 0.048, 19), 13),
     fontWeight: "700",
@@ -1734,6 +1744,8 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginBottom: 20,
   },
+
+  // Buttons Row
   tooltipButtons: {
     flexDirection: "row",
     justifyContent: "space-between",

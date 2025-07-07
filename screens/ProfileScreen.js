@@ -347,6 +347,19 @@ export default function ProfileScreen({ navigation }) {
               <Text style={styles.settingText}>Privacy & Security</Text>
             </View>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.settingItem}
+            onPress={() =>
+              navigation.navigate("Dashboard", { showOnboarding: true })
+            }
+          >
+            <View style={styles.settingRow}>
+              <View style={styles.settingIconContainer}>
+                <Text style={{ fontSize: 20 }}>🎓</Text>
+              </View>
+              <Text style={styles.settingText}>Start App Tutorial</Text>
+            </View>
+          </TouchableOpacity>
 
           {/* Help & Support */}
           <TouchableOpacity
@@ -361,7 +374,9 @@ export default function ProfileScreen({ navigation }) {
               <View style={styles.settingIconContainer}>
                 <HelpCircle color="#64748b" size={20} />
               </View>
-              <Text style={styles.settingText}>Help & Support (will be by what's app)</Text>
+              <Text style={styles.settingText}>
+                Help & Support (will be by what's app)
+              </Text>
             </View>
           </TouchableOpacity>
 
