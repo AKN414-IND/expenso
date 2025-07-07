@@ -496,7 +496,7 @@ const styles = StyleSheet.create({
   backButton: {
     padding: 8,
     borderRadius: 12,
-    backgroundColor: "#f8fafc",
+    
   },
   headerTitle: {
     fontSize: 20,
@@ -549,7 +549,7 @@ const styles = StyleSheet.create({
     marginBottom: 30,
   },
   infoCard: {
-    backgroundColor: "#fff",
+    
     borderRadius: 16,
     padding: 20,
     marginBottom: 12,
