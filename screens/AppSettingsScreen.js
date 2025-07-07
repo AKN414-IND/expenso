@@ -9,7 +9,7 @@ import {
   Linking,
   ScrollView,
 } from "react-native";
-import { ArrowLeft, Trash2, FileText, Bell, Download } from "lucide-react-native";
+import { ArrowLeft, Trash2, FileText, Bell, Download, HelpCircle } from "lucide-react-native";
 import * as Notifications from "expo-notifications";
 import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
@@ -379,6 +379,22 @@ export default function AppSettingsScreen({ navigation }) {
           </View>
         </Card>
 
+        {/* App Tour Card */}
+        <Card icon={<HelpCircle color="#06b6d4" size={22} style={{ marginRight: 10 }} />} title="Help & Tour">
+          <View style={styles.cardRow}>
+            <Text style={styles.label}>App Tour</Text>
+            <TouchableOpacity 
+              style={styles.tourButton} 
+              onPress={() => navigation.navigate('Dashboard', { showOnboarding: true })}
+            >
+              <Text style={styles.tourButtonText}>Show Tour</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.sublabel}>
+            Replay the interactive tour to learn about all app features
+          </Text>
+        </Card>
+
         {/* Export Data Card */}
         <Card icon={<Download color="#06b6d4" size={22} style={{ marginRight: 10 }} />} title="Export Data">
   <Text style={styles.label}>Export Expenses as Excel Report</Text>
@@ -606,5 +622,16 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "700",
     fontSize: 15,
+  },
+  tourButton: {
+    backgroundColor: "#06b6d4",
+    borderRadius: 10,
+    paddingVertical: 7,
+    paddingHorizontal: 16,
+  },
+  tourButtonText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 14,
   },
 });

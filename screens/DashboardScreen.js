@@ -593,6 +593,17 @@ export default function DashboardScreen({ navigation }) {
     }, [session])
   );
 
+  // Check for manual onboarding trigger from navigation params
+  useFocusEffect(
+    useCallback(() => {
+      if (navigation.getState().routes[navigation.getState().index].params?.showOnboarding) {
+        setShowOnboarding(true);
+        // Clear the parameter to prevent repeated triggers
+        navigation.setParams({ showOnboarding: undefined });
+      }
+    }, [navigation])
+  );
+
   const checkFirstVisit = async () => {
     try {
       // Check if user has completed onboarding
