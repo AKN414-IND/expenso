@@ -23,6 +23,7 @@ import {
 } from "react-native";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
+import { useTheme } from "../context/ThemeContext";
 import { PieChart } from "react-native-chart-kit";
 import Alert from "../components/Alert";
 import { LogOut, Trash2, X, ArrowLeft, ArrowRight } from "lucide-react-native";
@@ -515,47 +516,48 @@ const Avatar = ({ name, email, size = 50, style, onPress, nativeID }) => {
 };
 
 // --- BudgetBar Component ---
-const BudgetBar = ({ label, spent, budget, color, icon }) => {
+const BudgetBar = ({ label, spent, budget, color, icon, theme }) => {
   const percent = budget > 0 ? Math.min((spent / budget) * 100, 100) : 0;
   const isOverBudget = spent > budget && budget > 0;
 
   return (
-    <View style={styles.budgetBarContainer}>
+    <View style={[styles.budgetBarContainer, { backgroundColor: theme.colors.surface }]}>
       <View style={styles.budgetBarHeader}>
         {icon && <Text style={styles.budgetBarIcon}>{icon}</Text>}
-        <Text style={styles.budgetBarLabel}>{label}</Text>
+        <Text style={[styles.budgetBarLabel, { color: theme.colors.textSecondary }]}>{label}</Text>
         <Text
           style={[
             styles.budgetBarAmount,
-            { color: isOverBudget ? "#ef4444" : "#06b6d4" },
+            { color: isOverBudget ? theme.colors.error : theme.colors.primary },
           ]}
         >
           ₹{spent.toFixed(0)} / ₹{budget.toFixed(0)}
         </Text>
       </View>
-      <View style={styles.budgetBarTrack}>
+      <View style={[styles.budgetBarTrack, { backgroundColor: theme.colors.border }]}>
         <View
           style={[
             styles.budgetBarFill,
             {
               width: `${percent}%`,
-              backgroundColor: isOverBudget ? "#ef4444" : color,
+              backgroundColor: isOverBudget ? theme.colors.error : color,
             },
           ]}
         />
       </View>
       {isOverBudget && (
-        <Text style={styles.budgetBarOverage}>
+        <Text style={[styles.budgetBarOverage, { color: theme.colors.error }]}>
           Over budget by ₹{(spent - budget).toFixed(0)}
         </Text>
       )}
-      <Text style={styles.budgetBarPercent}>{percent.toFixed(1)}% used</Text>
+      <Text style={[styles.budgetBarPercent, { color: theme.colors.textTertiary }]}>{percent.toFixed(1)}% used</Text>
     </View>
   );
 };
 
 export default function DashboardScreen({ navigation }) {
   const { session } = useAuth();
+  const { theme } = useTheme();
   const targetRefs = useRef({});
   const scrollViewRef = useRef(null);
 
@@ -863,34 +865,34 @@ export default function DashboardScreen({ navigation }) {
 
   const renderExpenseItem = useCallback(({ item }) => (
     <TouchableOpacity
-      style={styles.expenseItem}
+      style={[styles.expenseItem, { backgroundColor: theme.colors.surface }]}
       onLongPress={() => handleDelete(item)}
       activeOpacity={0.7}
     >
       <View style={styles.expenseInfo}>
-        <Text style={styles.expenseTitle}>{item.title || "Untitled"}</Text>
-        <Text style={styles.expenseDate}>
+        <Text style={[styles.expenseTitle, { color: theme.colors.textSecondary }]}>{item.title || "Untitled"}</Text>
+        <Text style={[styles.expenseDate, { color: theme.colors.textSecondary }]}>
           {item.date ? new Date(item.date).toLocaleDateString() : "No date"}
         </Text>
         {item.category && (
-          <Text style={styles.expenseCategory}>
+          <Text style={[styles.expenseCategory, { color: theme.colors.textSecondary }]}>
             {EXPENSE_CATEGORIES.find((cat) => cat.name === item.category)
               ?.icon || "📝"}{" "}
             {item.category}
           </Text>
         )}
       </View>
-      <Text style={styles.expenseAmount}>
+      <Text style={[styles.expenseAmount, { color: theme.colors.primary }]}>
         ₹{(parseFloat(item.amount) || 0).toFixed(2)}
       </Text>
     </TouchableOpacity>
-  ));
+  ), [handleDelete, theme]);
 
   if (loading || !session?.user) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#4ECDC4" />
-        <Text style={styles.loadingText}>Loading your dashboard...</Text>
+      <View style={[styles.loadingContainer, { backgroundColor: theme.colors.background }]}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
+        <Text style={[styles.loadingText, { color: theme.colors.textSecondary }]}>Loading your dashboard...</Text>
       </View>
     );
   }
@@ -940,7 +942,7 @@ export default function DashboardScreen({ navigation }) {
   return (
     <>
       <ScrollView
-        style={styles.container}
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
         ref={scrollViewRef}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
@@ -948,12 +950,12 @@ export default function DashboardScreen({ navigation }) {
         showsVerticalScrollIndicator={false}
       >
         {/* --- Header Section --- */}
-        <View style={styles.header}>
+        <View style={[styles.header, { backgroundColor: theme.colors.surface }]}>
           <View style={styles.headerContent}>
-            <Text style={styles.welcomeText}>
+            <Text style={[styles.welcomeText, { color: theme.colors.text }]}>
               Good Morning, {profile?.full_name || "User"}!
             </Text>
-            <Text style={styles.subGreeting}>
+            <Text style={[styles.subGreeting, { color: theme.colors.textSecondary }]}>
               Let's keep your spending on Track
             </Text>
           </View>
@@ -974,15 +976,15 @@ export default function DashboardScreen({ navigation }) {
             style={styles.statsContainer}
             ref={(ref) => setTargetRef("stats-container", ref)}
           >
-            <View style={[styles.statCard, styles.statCardMargin]}>
-              <Text style={styles.statValue}>
+            <View style={[styles.statCard, styles.statCardMargin, { backgroundColor: theme.colors.surface }]}>
+              <Text style={[styles.statValue, { color: theme.colors.primary }]}>
                 ₹{monthlyExpenses.toFixed(2)}
               </Text>
-              <Text style={styles.statLabel}>This Month</Text>
+              <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>This Month</Text>
             </View>
-            <View style={styles.statCard}>
-              <Text style={styles.statValue}>₹{todaysTotal.toFixed(2)}</Text>
-              <Text style={styles.statLabel}>Today's Total</Text>
+            <View style={[styles.statCard, { backgroundColor: theme.colors.surface }]}>
+              <Text style={[styles.statValue, { color: theme.colors.primary }]}>₹{todaysTotal.toFixed(2)}</Text>
+              <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Today's Total</Text>
             </View>
           </View>
 
@@ -991,7 +993,7 @@ export default function DashboardScreen({ navigation }) {
               style={styles.chartsContainer}
               ref={(ref) => setTargetRef("chart-container", ref)}
             >
-              <View style={styles.chartCard}>
+              <View style={[styles.chartCard, { backgroundColor: theme.colors.surface }]}>
                 <View style={styles.chartRow}>
                   <View style={styles.chartSide}>
                     <PieChart
@@ -999,9 +1001,9 @@ export default function DashboardScreen({ navigation }) {
                       width={screenWidth}
                       height={200}
                       chartConfig={{
-                        backgroundColor: "#fff",
-                        backgroundGradientFrom: "#fff",
-                        backgroundGradientTo: "#fff",
+                        backgroundColor: theme.colors.surface,
+                        backgroundGradientFrom: theme.colors.surface,
+                        backgroundGradientTo: theme.colors.surface,
                         color: (opacity = 1) => `rgba(6,182,212,${opacity})`,
                       }}
                       accessor={"amount"}
@@ -1022,7 +1024,7 @@ export default function DashboardScreen({ navigation }) {
                               { backgroundColor: item.color },
                             ]}
                           />
-                          <Text style={styles.legendText}>
+                          <Text style={[styles.legendText, { color: theme.colors.textSecondary }]}>
                             {item.icon} {item.name}: ₹{item.amount.toFixed(0)}
                           </Text>
                         </View>
@@ -1042,11 +1044,11 @@ export default function DashboardScreen({ navigation }) {
             ref={(ref) => setTargetRef("reminders-section", ref)}
           >
             <View style={styles.sectionHeader2}>
-              <Text style={styles.sectionTitle}>Payment Reminders</Text>
+              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Payment Reminders</Text>
               <TouchableOpacity
                 onPress={() => navigation.navigate("PaymentReminder")}
               >
-                <Text style={styles.seeAllText}>View All</Text>
+                <Text style={[styles.seeAllText, { color: theme.colors.primary }]}>View All</Text>
               </TouchableOpacity>
             </View>
             <Carousel
@@ -1072,11 +1074,11 @@ export default function DashboardScreen({ navigation }) {
           ref={(ref) => setTargetRef("budget-section", ref)}
         >
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Budget Progress</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Budget Progress</Text>
             <TouchableOpacity
               onPress={() => navigation.navigate("BudgetScreen")}
             >
-              <Text style={styles.seeAllText}>
+              <Text style={[styles.seeAllText, { color: theme.colors.primary }]}>
                 {budgets.length > 0 ? "Manage" : "Create Budget"}
               </Text>
             </TouchableOpacity>
@@ -1088,8 +1090,9 @@ export default function DashboardScreen({ navigation }) {
                   label="Total Budget"
                   spent={totalSpentForBudgets}
                   budget={totalBudgetAmount}
-                  color="#06b6d4"
+                  color={theme.colors.primary}
                   icon="💰"
+                  theme={theme}
                 />
               )}
               {budgetProgress.map((item) => (
@@ -1100,13 +1103,14 @@ export default function DashboardScreen({ navigation }) {
                   budget={parseFloat(item.amount) || 0}
                   color={item.color}
                   icon={item.icon}
+                  theme={theme}
                 />
               ))}
             </>
           ) : (
-            <View style={styles.emptyBudgetState}>
-              <Text style={styles.emptyStateText}>No budgets set</Text>
-              <Text style={styles.emptyStateSubtext}>
+            <View style={[styles.emptyBudgetState, { backgroundColor: theme.colors.surface }]}>
+              <Text style={[styles.emptyStateText, { color: theme.colors.textSecondary }]}>No budgets set</Text>
+              <Text style={[styles.emptyStateSubtext, { color: theme.colors.textTertiary }]}>
                 Create your first budget to track spending!
               </Text>
             </View>
@@ -1119,11 +1123,11 @@ export default function DashboardScreen({ navigation }) {
           ref={(ref) => setTargetRef("recent-section", ref)}
         >
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Recent Expenses</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Recent Expenses</Text>
             <TouchableOpacity
               onPress={() => navigation.navigate("AllExpenses")}
             >
-              <Text style={styles.seeAllText}>See All</Text>
+              <Text style={[styles.seeAllText, { color: theme.colors.primary }]}>See All</Text>
             </TouchableOpacity>
           </View>
           {recentExpenses.length > 0 ? (
@@ -1137,9 +1141,9 @@ export default function DashboardScreen({ navigation }) {
               showsVerticalScrollIndicator={false}
             />
           ) : (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyStateText}>No expenses yet</Text>
-              <Text style={styles.emptyStateSubtext}>
+            <View style={[styles.emptyState, { backgroundColor: theme.colors.surface }]}>
+              <Text style={[styles.emptyStateText, { color: theme.colors.textSecondary }]}>No expenses yet</Text>
+              <Text style={[styles.emptyStateSubtext, { color: theme.colors.textTertiary }]}>
                 Add your first expense to get started!
               </Text>
             </View>
@@ -1150,11 +1154,11 @@ export default function DashboardScreen({ navigation }) {
       {/* --- Floating Taskbar --- */}
       <View style={styles.taskbarContainer}>
         <View
-          style={styles.taskbar}
+          style={[styles.taskbar, { backgroundColor: theme.colors.surface }]}
           ref={(ref) => setTargetRef("taskbar", ref)}
         >
           <TouchableOpacity
-            style={styles.actionButton}
+            style={[styles.actionButton, { backgroundColor: theme.colors.buttonSecondary }]}
             onPress={() => navigation.navigate("BudgetScreen")}
             activeOpacity={0.7}
             ref={(ref) => setTargetRef("budget-btn", ref)}
@@ -1162,7 +1166,7 @@ export default function DashboardScreen({ navigation }) {
             <Text style={styles.actionIcon}>💰</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.actionButton}
+            style={[styles.actionButton, { backgroundColor: theme.colors.buttonSecondary }]}
             onPress={() => navigation.navigate("PaymentReminder")}
             activeOpacity={0.7}
             ref={(ref) => setTargetRef("reminders-btn", ref)}
@@ -1170,7 +1174,7 @@ export default function DashboardScreen({ navigation }) {
             <Text style={styles.actionIcon}>🔔</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.addButton}
+            style={[styles.addButton, { backgroundColor: theme.colors.primary }]}
             onPress={() => navigation.navigate("AddExpense")}
             activeOpacity={0.8}
             ref={(ref) => setTargetRef("add-button", ref)}
@@ -1178,7 +1182,7 @@ export default function DashboardScreen({ navigation }) {
             <Text style={styles.addIcon}>+</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.actionButton}
+            style={[styles.actionButton, { backgroundColor: theme.colors.buttonSecondary }]}
             onPress={() => navigation.navigate("AllExpenses")}
             activeOpacity={0.7}
             ref={(ref) => setTargetRef("expenses-btn", ref)}
@@ -1187,7 +1191,7 @@ export default function DashboardScreen({ navigation }) {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.actionButton}
+            style={[styles.actionButton, { backgroundColor: theme.colors.buttonSecondary }]}
             onPress={() => navigation.navigate("SmartInsights")}
             activeOpacity={0.7}
             ref={(ref) => setTargetRef("insights-btn", ref)}
@@ -1250,18 +1254,15 @@ export default function DashboardScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f7fa",
   },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#f5f7fa",
   },
   loadingText: {
     marginTop: screenHeight * 0.02,
     fontSize: Math.max(Math.min(screenWidth * 0.04, 18), 12),
-    color: "#334155",
     fontWeight: "500",
   },
   header: {
@@ -1271,11 +1272,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: Math.max(screenWidth * 0.05, 16),
     paddingTop: Math.max(screenHeight * 0.07, 36),
     paddingBottom: Math.max(screenHeight * 0.03, 18),
-    backgroundColor: "#06b6d4",
     borderBottomLeftRadius: Math.max(screenWidth * 0.06, 15),
     borderBottomRightRadius: Math.max(screenWidth * 0.06, 15),
     elevation: 8,
-    shadowColor: "#06b6d4",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -1284,13 +1283,11 @@ const styles = StyleSheet.create({
   welcomeText: {
     fontSize: Math.max(Math.min(screenWidth * 0.05, 22), 14),
     fontWeight: "700",
-    color: "#fff",
     letterSpacing: -0.5,
     marginBottom: 4,
   },
   subGreeting: {
     fontSize: Math.max(Math.min(screenWidth * 0.035, 16), 11),
-    color: "rgba(255, 255, 255, 0.9)",
     fontWeight: "500",
   },
   headerActions: {
@@ -1355,7 +1352,6 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     fontSize: Math.max(Math.min(screenWidth * 0.032, 13), 10),
-    color: "#334155",
     textAlign: "center",
     fontWeight: "500",
     lineHeight: 16,
@@ -1365,11 +1361,9 @@ const styles = StyleSheet.create({
     marginVertical: Math.max(screenWidth * 0.02, 8),
   },
   chartCard: {
-    backgroundColor: "#fff",
     borderRadius: Math.max(screenWidth * 0.06, 16),
     padding: Math.max(screenWidth * 0.035, 12),
     borderWidth: 2,
-    borderColor: "rgba(6, 182, 212, 0.1)",
     elevation: 3,
   },
   chartRow: {

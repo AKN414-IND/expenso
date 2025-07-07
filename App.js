@@ -3,6 +3,7 @@ import { LogBox } from "react-native";
 import * as SecureStore from "expo-secure-store";
 import AppNavigator from "./AppNavigator";
 import { AuthProvider } from "./context/AuthContext";
+import { ThemeProvider } from "./context/ThemeContext";
 import Toast, { BaseToast, ErrorToast } from "react-native-toast-message";
 import * as Notifications from 'expo-notifications';
 
@@ -32,18 +33,20 @@ export default function App() {
   }, []);
 
   return (
-    <AuthProvider>
-      <AppNavigator />
-      <Toast
-        config={{
-          success: (props) => (
-            <BaseToast {...props} style={{ borderLeftColor: "#22c55e" }} />
-          ),
-          error: (props) => (
-            <ErrorToast {...props} text1Style={{ fontWeight: "bold" }} />
-          ),
-        }}
-      />
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <AppNavigator />
+        <Toast
+          config={{
+            success: (props) => (
+              <BaseToast {...props} style={{ borderLeftColor: "#22c55e" }} />
+            ),
+            error: (props) => (
+              <ErrorToast {...props} text1Style={{ fontWeight: "bold" }} />
+            ),
+          }}
+        />
+      </AuthProvider>
+    </ThemeProvider>
   );
 }
