@@ -534,7 +534,6 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     textAlign: "center",
   },
-  },
   userEmail: {
     fontSize: 16,
     color: "#64748b",
