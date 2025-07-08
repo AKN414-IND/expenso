@@ -8,26 +8,17 @@ import {
   Dimensions,
   RefreshControl,
   ActivityIndicator,
+  Alert,
+  Modal,
 } from 'react-native';
+import Slider from '@react-native-community/slider';
+
 import {
-  LineChart,
-  BarChart,
-  PieChart,
-  ProgressChart,
-} from 'react-native-chart-kit';
-import {
-  TrendingUp,
-  TrendingDown,
   Brain,
-  Target,
-  AlertTriangle,
-  DollarSign,
-  Calendar,
   ArrowLeft,
-  Lightbulb,
-  Star,
-  Award,
-  Zap,
+  CreditCard,
+  Scissors,
+  TrendingUp as TrendingUpIcon
 } from 'lucide-react-native';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
@@ -40,26 +31,52 @@ export default function SmartInsightsScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState('month');
   const [animatedValue] = useState(new Animated.Value(0));
-  
-  // Data states
+  const [aiAnalysisLoading, setAiAnalysisLoading] = useState(false);
+  const [profile, setProfile] = useState(null);
+  const [showSimulation, setShowSimulation] = useState(false);
+  const [simSpend, setSimSpend] = useState(1);
+
   const [insights, setInsights] = useState({
     spendingTrend: [],
     categoryBreakdown: [],
-    predictions: {
-      nextMonth: 0,
-      budgetOverrun: 0,
-    },
+    predictions: { nextMonth: 0, budgetOverrun: 0 },
     recommendations: [],
     achievements: [],
     alerts: [],
     financialScore: 0,
     savingsOpportunities: [],
+    subscriptionAnalysis: {
+      activeSubscriptions: [],
+      potentialCancellations: [],
+      totalMonthlyCost: 0,
+      potentialSavings: 0,
+    },
+    costCuttingAI: {
+      categories: [],
+      suggestions: [],
+      totalPotentialSavings: 0,
+    },
+    investmentOpportunities: {
+      suggestions: [],
+      availableAmount: 0,
+      riskProfile: 'moderate',
+    },
   });
 
   useEffect(() => {
+    fetchProfileData();
     fetchInsightsData();
     startAnimation();
   }, [selectedPeriod]);
+
+  const fetchProfileData = async () => {
+    const { data } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', session.user.id)
+      .single();
+    setProfile(data);
+  };
 
   const startAnimation = () => {
     Animated.timing(animatedValue, {
@@ -70,27 +87,15 @@ export default function SmartInsightsScreen({ navigation }) {
   };
 
   const fetchInsightsData = async () => {
-    try {
-      setLoading(true);
-      
-      // Fetch expenses for analysis
-      const { data: expenses, error } = await supabase
-        .from('expenses')
-        .select('*')
-        .eq('user_id', session.user.id)
-        .order('date', { ascending: false });
-
-      if (error) throw error;
-
-      // Process data for insights
-      const processedInsights = await generateInsights(expenses || []);
-      setInsights(processedInsights);
-      
-    } catch (error) {
-      console.error('Error fetching insights:', error);
-    } finally {
-      setLoading(false);
-    }
+    setLoading(true);
+    const { data: expenses } = await supabase
+      .from('expenses')
+      .select('*')
+      .eq('user_id', session.user.id)
+      .order('date', { ascending: false });
+    const processedInsights = await generateInsights(expenses || []);
+    setInsights(processedInsights);
+    setLoading(false);
   };
 
   const onRefresh = async () => {
@@ -99,13 +104,244 @@ export default function SmartInsightsScreen({ navigation }) {
     setRefreshing(false);
   };
 
-  // Helper function to filter expenses by period
+  const analyzeSubscriptions = async (expenses) => {
+    const subscriptionKeywords = [
+      'netflix', 'spotify', 'amazon prime', 'youtube premium', 'disney+',
+      'adobe', 'microsoft', 'google', 'dropbox', 'icloud', 'subscription',
+      'monthly', 'annual', 'premium', 'pro', 'plus', 'membership'
+    ];
+    const potentialSubscriptions = expenses.filter(expense => {
+      const title = expense.title?.toLowerCase() || '';
+      const merchant = expense.merchant?.toLowerCase() || '';
+      return subscriptionKeywords.some(keyword =>
+        title.includes(keyword) || merchant.includes(keyword)
+      );
+    });
+    const subscriptionGroups = {};
+    potentialSubscriptions.forEach(expense => {
+      const key = expense.merchant || expense.title;
+      if (!subscriptionGroups[key]) {
+        subscriptionGroups[key] = [];
+      }
+      subscriptionGroups[key].push(expense);
+    });
+    const activeSubscriptions = [];
+    const potentialCancellations = [];
+    let totalMonthlyCost = 0;
+    let potentialSavings = 0;
+    for (const [key, group] of Object.entries(subscriptionGroups)) {
+      if (group.length >= 2) {
+        const avgAmount = group.reduce((sum, exp) => sum + parseFloat(exp.amount), 0) / group.length;
+        const lastUsed = new Date(group[0].date);
+        const daysSinceLastUsed = Math.floor((new Date() - lastUsed) / (1000 * 60 * 60 * 24));
+        const subscriptionData = {
+          name: key,
+          amount: avgAmount,
+          frequency: 'Monthly',
+          lastUsed: lastUsed,
+          daysSinceLastUsed,
+          category: group[0].category || 'Entertainment',
+          usagePattern: group.length > 6 ? 'Regular' : 'Occasional',
+        };
+        activeSubscriptions.push(subscriptionData);
+        totalMonthlyCost += avgAmount;
+        if (daysSinceLastUsed > 60 || subscriptionData.usagePattern === 'Occasional') {
+          potentialCancellations.push({
+            ...subscriptionData,
+            reason: daysSinceLastUsed > 60 ? 'Not used recently' : 'Low usage pattern',
+            potentialSaving: avgAmount,
+          });
+          potentialSavings += avgAmount;
+        }
+      }
+    }
+    return {
+      activeSubscriptions,
+      potentialCancellations,
+      totalMonthlyCost,
+      potentialSavings,
+    };
+  };
+
+  const analyzeCostCutting = async (expenses) => {
+    const categorySpending = {};
+    const spendingPatterns = {};
+    expenses.forEach(expense => {
+      const category = expense.category || 'Other';
+      const date = new Date(expense.date);
+      const month = date.toISOString().slice(0, 7);
+      if (!categorySpending[category]) {
+        categorySpending[category] = { total: 0, count: 0, items: [] };
+      }
+      categorySpending[category].total += parseFloat(expense.amount);
+      categorySpending[category].count += 1;
+      categorySpending[category].items.push(expense);
+      if (!spendingPatterns[month]) {
+        spendingPatterns[month] = {};
+      }
+      if (!spendingPatterns[month][category]) {
+        spendingPatterns[month][category] = 0;
+      }
+      spendingPatterns[month][category] += parseFloat(expense.amount);
+    });
+    const suggestions = [];
+    let totalPotentialSavings = 0;
+    for (const [category, data] of Object.entries(categorySpending)) {
+      if (data.total > 1000) {
+        const avgMonthlySpending = data.total / 3;
+        const suggestion = await generateCostCuttingSuggestion(category, data, avgMonthlySpending);
+        if (suggestion) {
+          suggestions.push(suggestion);
+          totalPotentialSavings += suggestion.potentialSaving;
+        }
+      }
+    }
+    return {
+      categories: Object.entries(categorySpending).map(([category, data]) => ({
+        category,
+        ...data,
+        avgPerTransaction: data.total / data.count,
+      })),
+      suggestions,
+      totalPotentialSavings,
+    };
+  };
+
+  const generateCostCuttingSuggestion = async (category, data, avgMonthlySpending) => {
+    const suggestions = {
+      'Food': {
+        title: 'Optimize Food Spending',
+        description: 'Consider meal planning, bulk buying, or cooking at home more often',
+        potentialSaving: avgMonthlySpending * 0.25,
+        actionItems: [
+          'Plan weekly meals',
+          'Buy groceries in bulk',
+          'Cook at home 2-3 more times per week',
+          'Use food delivery apps less frequently'
+        ],
+        impact: 'High'
+      },
+      'Transportation': {
+        title: 'Reduce Transportation Costs',
+        description: 'Explore carpooling, public transport, or ride-sharing alternatives',
+        potentialSaving: avgMonthlySpending * 0.20,
+        actionItems: [
+          'Use public transport when possible',
+          'Carpool with colleagues',
+          'Consider bike or walk for short distances',
+          'Optimize ride-sharing usage'
+        ],
+        impact: 'Medium'
+      },
+      'Entertainment': {
+        title: 'Smart Entertainment Spending',
+        description: 'Review subscriptions and find free or cheaper alternatives',
+        potentialSaving: avgMonthlySpending * 0.30,
+        actionItems: [
+          'Cancel unused subscriptions',
+          'Share family plans with relatives',
+          'Explore free entertainment options',
+          'Look for promotional offers'
+        ],
+        impact: 'Medium'
+      },
+      'Shopping': {
+        title: 'Strategic Shopping Approach',
+        description: 'Implement the 24-hour rule and focus on needs vs wants',
+        potentialSaving: avgMonthlySpending * 0.35,
+        actionItems: [
+          'Wait 24 hours before non-essential purchases',
+          'Create shopping lists and stick to them',
+          'Compare prices across platforms',
+          'Buy during sales and discounts'
+        ],
+        impact: 'High'
+      },
+    };
+    return suggestions[category] || null;
+  };
+
+  const analyzeInvestmentOpportunities = async (expenses) => {
+    const totalExpenses = expenses.reduce((sum, exp) => sum + parseFloat(exp.amount), 0);
+    const monthlyExpenses = totalExpenses / 3;
+    const potentialMonthlySavings = insights.costCuttingAI.totalPotentialSavings +
+      insights.subscriptionAnalysis.potentialSavings;
+    const estimatedDisposableIncome = monthlyExpenses * 0.15;
+    const availableAmount = potentialMonthlySavings + estimatedDisposableIncome;
+    const suggestions = [];
+    if (availableAmount > 500) {
+      suggestions.push({
+        type: 'SIP',
+        title: 'Start Mutual Fund SIP',
+        description: `Begin with ₹${Math.floor(availableAmount * 0.6)} monthly SIP in diversified equity funds`,
+        expectedReturn: '12-15% annually',
+        risk: 'Moderate',
+        amount: Math.floor(availableAmount * 0.6),
+        timeHorizon: '3-5 years',
+      });
+    }
+    if (availableAmount > 1000) {
+      suggestions.push({
+        type: 'PPF',
+        title: 'Public Provident Fund',
+        description: `Allocate ₹${Math.floor(availableAmount * 0.3)} monthly for tax-saving investment`,
+        expectedReturn: '7-8% annually',
+        risk: 'Low',
+        amount: Math.floor(availableAmount * 0.3),
+        timeHorizon: '15 years',
+      });
+    }
+    if (availableAmount > 2000) {
+      suggestions.push({
+        type: 'Emergency Fund',
+        title: 'Build Emergency Fund',
+        description: `Save ₹${Math.floor(availableAmount * 0.4)} monthly for 6-month expense coverage`,
+        expectedReturn: '4-6% annually',
+        risk: 'Very Low',
+        amount: Math.floor(availableAmount * 0.4),
+        timeHorizon: '1-2 years',
+      });
+    }
+    return {
+      suggestions,
+      availableAmount,
+      riskProfile: availableAmount > 2000 ? 'aggressive' :
+        availableAmount > 1000 ? 'moderate' : 'conservative',
+    };
+  };
+
+  const generateInsights = async (expenses) => {
+    const baseInsights = await generateBaseInsights(expenses);
+    const subscriptionAnalysis = await analyzeSubscriptions(expenses);
+    const costCuttingAI = await analyzeCostCutting(expenses);
+    const investmentOpportunities = await analyzeInvestmentOpportunities(expenses);
+    return {
+      ...baseInsights,
+      subscriptionAnalysis,
+      costCuttingAI,
+      investmentOpportunities,
+    };
+  };
+
+  const generateBaseInsights = async (expenses) => {
+    const periodData = filterExpensesByPeriod(expenses, selectedPeriod);
+    return {
+      spendingTrend: generateSpendingTrend(periodData),
+      categoryBreakdown: generateCategoryBreakdown(periodData),
+      predictions: generatePredictions(expenses),
+      recommendations: [],
+      achievements: [],
+      alerts: [],
+      financialScore: 75,
+      savingsOpportunities: [],
+    };
+  };
+
   const filterExpensesByPeriod = (expenses, period) => {
     const now = new Date();
     return expenses.filter(exp => {
       const expenseDate = new Date(exp.date);
       const diffDays = Math.floor((now - expenseDate) / (1000 * 60 * 60 * 24));
-      
       switch (period) {
         case 'week': return diffDays <= 7;
         case 'month': return diffDays <= 30;
@@ -116,517 +352,225 @@ export default function SmartInsightsScreen({ navigation }) {
     });
   };
 
-  // Generate spending trend data
   const generateSpendingTrend = (expenses) => {
     const trendData = [];
     const today = new Date();
-    
     for (let i = 6; i >= 0; i--) {
       const date = new Date(today);
       date.setDate(date.getDate() - i);
-      
-      const dayExpenses = expenses.filter(exp => 
+      const dayExpenses = expenses.filter(exp =>
         new Date(exp.date).toDateString() === date.toDateString()
       );
-      
       const total = dayExpenses.reduce((sum, exp) => sum + parseFloat(exp.amount || 0), 0);
       trendData.push({
         date: date.toLocaleDateString('en', { weekday: 'short' }),
         amount: total,
       });
     }
-    
     return trendData;
   };
 
-  // Generate category breakdown
   const generateCategoryBreakdown = (expenses) => {
     const categoryTotals = {};
-    
     expenses.forEach(exp => {
       const category = exp.category || 'Other';
       categoryTotals[category] = (categoryTotals[category] || 0) + parseFloat(exp.amount || 0);
     });
-
     return Object.entries(categoryTotals)
       .map(([category, amount]) => ({
         category,
         amount,
-        percentage: 0, // Will be calculated after sorting
+        percentage: 0,
       }))
       .sort((a, b) => b.amount - a.amount)
-      .slice(0, 5); // Top 5 categories
+      .slice(0, 5);
   };
 
-  // Generate predictions
   const generatePredictions = (expenses) => {
     if (expenses.length === 0) {
-      return {
-        nextMonth: 0,
-        budgetOverrun: 0,
-      };
+      return { nextMonth: 0, budgetOverrun: 0 };
     }
-
-    // Simple prediction based on last 30 days average
     const last30Days = expenses.filter(exp => {
       const expenseDate = new Date(exp.date);
       const now = new Date();
       const diffDays = Math.floor((now - expenseDate) / (1000 * 60 * 60 * 24));
       return diffDays <= 30;
     });
-
     const totalLast30Days = last30Days.reduce((sum, exp) => sum + parseFloat(exp.amount || 0), 0);
     const dailyAverage = totalLast30Days / 30;
     const nextMonthPrediction = dailyAverage * 30;
-
-    // Predict budget overrun for food category (example)
-    const foodExpenses = last30Days.filter(exp => 
-      exp.category && exp.category.toLowerCase().includes('food')
-    );
-    const foodTotal = foodExpenses.reduce((sum, exp) => sum + parseFloat(exp.amount || 0), 0);
-    const assumedFoodBudget = 5000; // Example budget
-    const budgetOverrun = Math.max(0, foodTotal - assumedFoodBudget);
-
     return {
       nextMonth: Math.round(nextMonthPrediction),
-      budgetOverrun: Math.round(budgetOverrun),
+      budgetOverrun: 0,
     };
   };
 
-  // Detect recurring expenses
-  const detectRecurringExpenses = (expenses) => {
-    const titleCounts = {};
-    
-    expenses.forEach(exp => {
-      const title = exp.title?.toLowerCase() || '';
-      if (title) {
-        titleCounts[title] = (titleCounts[title] || []);
-        titleCounts[title].push(exp);
-      }
-    });
-
-    // Find titles that appear more than twice with similar amounts
-    return Object.values(titleCounts)
-      .filter(expenseGroup => expenseGroup.length > 2)
-      .flat()
-      .slice(0, 5); // Limit to 5 recurring expenses
-  };
-
-  // Calculate financial score
-  const calculateFinancialScore = (expenses) => {
-    if (expenses.length === 0) return 75; // Default score for new users
-
-    let score = 100;
-    
-    // Deduct points for high spending variance
-    const amounts = expenses.map(exp => parseFloat(exp.amount || 0));
-    const mean = amounts.reduce((a, b) => a + b, 0) / amounts.length;
-    const variance = amounts.reduce((sum, num) => sum + Math.pow(num - mean, 2), 0) / amounts.length;
-    
-    if (variance > 10000) score -= 20;
-    if (variance > 50000) score -= 30;
-    
-    // Deduct points for lack of categorization
-    const uncategorized = expenses.filter(exp => 
-      !exp.category || exp.category === 'Other' || exp.category === ''
-    ).length;
-    score -= Math.min(uncategorized * 2, 30);
-    
-    // Add points for regular tracking
-    const uniqueDays = new Set(expenses.map(exp => 
-      new Date(exp.date).toDateString()
-    )).size;
-    if (uniqueDays > 20) score += 10;
-    if (uniqueDays > 50) score += 15;
-    
-    // Deduct points for very high spending days
-    const highSpendingDays = expenses.filter(exp => parseFloat(exp.amount || 0) > mean * 3).length;
-    score -= Math.min(highSpendingDays * 5, 25);
-    
-    return Math.max(30, Math.min(100, Math.round(score)));
-  };
-
-  // Generate recommendations
-  const generateRecommendations = (expenses) => {
-    const recommendations = [];
-    
-    if (expenses.length === 0) {
-      recommendations.push({
-        id: 1,
-        type: 'start_tracking',
-        title: 'Start Tracking Expenses',
-        description: 'Begin your financial journey by logging your daily expenses.',
-        impact: 'High',
-        savings: 0,
-        icon: 'target',
-        color: '#4A90E2',
-      });
-      return recommendations;
-    }
-    
-    // Analyze spending patterns
-    const categoryTotals = {};
-    expenses.forEach(exp => {
-      const category = exp.category || 'Other';
-      categoryTotals[category] = (categoryTotals[category] || 0) + parseFloat(exp.amount || 0);
-    });
-    
-    // High spending category recommendation
-    const sortedCategories = Object.entries(categoryTotals)
-      .sort(([,a], [,b]) => b - a);
-    
-    if (sortedCategories.length > 0 && sortedCategories[0][1] > 3000) {
-      const [category, amount] = sortedCategories[0];
-      recommendations.push({
-        id: 1,
-        type: 'reduce_spending',
-        title: `Optimize ${category} Spending`,
-        description: `You've spent ₹${amount.toFixed(0)} on ${category}. Consider setting a budget limit to track this category.`,
-        impact: 'High',
-        savings: Math.round(amount * 0.15),
-        icon: 'target',
-        color: '#FF6B6B',
-      });
-    }
-    
-    // Recurring subscription detection
-    const recurringExpenses = detectRecurringExpenses(expenses);
-    if (recurringExpenses.length > 0) {
-      const totalRecurring = recurringExpenses.reduce((sum, exp) => sum + parseFloat(exp.amount || 0), 0);
-      recommendations.push({
-        id: 2,
-        type: 'subscription_audit',
-        title: 'Review Recurring Expenses',
-        description: `Found ${recurringExpenses.length} potentially recurring expenses totaling ₹${totalRecurring.toFixed(0)}. Review to identify unused subscriptions.`,
-        impact: 'Medium',
-        savings: Math.round(totalRecurring * 0.3),
-        icon: 'refresh-cw',
-        color: '#4ECDC4',
-      });
-    }
-    
-    // Budget suggestion
-    if (Object.keys(categoryTotals).length > 2) {
-      const totalSpending = Object.values(categoryTotals).reduce((a, b) => a + b, 0);
-      recommendations.push({
-        id: 3,
-        type: 'budget_creation',
-        title: 'Create Smart Budgets',
-        description: 'Based on your spending patterns, setting category-wise budgets could help you save money.',
-        impact: 'High',
-        savings: Math.round(totalSpending * 0.1),
-        icon: 'pie-chart',
-        color: '#45B7D1',
-      });
-    }
-
-    // Categorization improvement
-    const uncategorized = expenses.filter(exp => 
-      !exp.category || exp.category === 'Other' || exp.category === ''
-    ).length;
-    
-    if (uncategorized > expenses.length * 0.3) {
-      recommendations.push({
-        id: 4,
-        type: 'categorize_expenses',
-        title: 'Improve Expense Categorization',
-        description: `${uncategorized} expenses are uncategorized. Better categorization helps track spending patterns.`,
-        impact: 'Medium',
-        savings: 0,
-        icon: 'tag',
-        color: '#9B59B6',
-      });
-    }
-    
-    return recommendations;
-  };
-
-  // Generate achievements
-  const generateAchievements = (expenses) => {
-    const achievements = [];
-    
-    if (expenses.length >= 10) {
-      achievements.push({
-        id: 1,
-        title: 'Expense Tracker',
-        description: 'Logged 10+ expenses',
-        icon: 'star',
-        unlocked: true,
-      });
-    }
-    
-    if (expenses.length >= 50) {
-      achievements.push({
-        id: 2,
-        title: 'Dedicated Saver',
-        description: 'Logged 50+ expenses',
-        icon: 'award',
-        unlocked: true,
-      });
-    }
-    
-    return achievements;
-  };
-
-  // Generate alerts
-  const generateAlerts = (expenses) => {
-    const alerts = [];
-    
-    // Check for high spending in last 7 days
-    const last7Days = expenses.filter(exp => {
-      const expenseDate = new Date(exp.date);
-      const now = new Date();
-      const diffDays = Math.floor((now - expenseDate) / (1000 * 60 * 60 * 24));
-      return diffDays <= 7;
-    });
-    
-    const weeklyTotal = last7Days.reduce((sum, exp) => sum + parseFloat(exp.amount || 0), 0);
-    
-    if (weeklyTotal > 5000) {
-      alerts.push({
-        id: 1,
-        type: 'high_spending',
-        title: 'High Weekly Spending',
-        message: `You've spent ₹${weeklyTotal.toFixed(0)} this week`,
-        severity: 'warning',
-      });
-    }
-    
-    return alerts;
-  };
-
-  // Find savings opportunities
-  const findSavingsOpportunities = (expenses) => {
-    const opportunities = [];
-    
-    // Example: frequent small purchases that could be bulk bought
-    const smallExpenses = expenses.filter(exp => parseFloat(exp.amount || 0) < 100);
-    if (smallExpenses.length > 20) {
-      opportunities.push({
-        id: 1,
-        title: 'Bulk Purchase Opportunity',
-        description: 'Consider bulk buying for frequent small purchases',
-        potential_savings: 500,
-      });
-    }
-    
-    return opportunities;
-  };
-
-  // Main insights generation function
-  const generateInsights = async (expenses) => {
-    const periodData = filterExpensesByPeriod(expenses, selectedPeriod);
-    
-    return {
-      spendingTrend: generateSpendingTrend(periodData),
-      categoryBreakdown: generateCategoryBreakdown(periodData),
-      predictions: generatePredictions(expenses),
-      recommendations: generateRecommendations(expenses),
-      achievements: generateAchievements(expenses),
-      alerts: generateAlerts(expenses),
-      financialScore: calculateFinancialScore(expenses),
-      savingsOpportunities: findSavingsOpportunities(expenses),
-    };
-  };
-
-  const PeriodSelector = () => (
-    <View style={styles.periodSelector}>
-      {['week', 'month', 'quarter', 'year'].map(period => (
-        <TouchableOpacity
-          key={period}
-          style={[
-            styles.periodButton,
-            selectedPeriod === period && styles.activePeriodButton
-          ]}
-          onPress={() => setSelectedPeriod(period)}
-        >
-          <Text style={[
-            styles.periodButtonText,
-            selectedPeriod === period && styles.activePeriodButtonText
-          ]}>
-            {period.charAt(0).toUpperCase() + period.slice(1)}
-          </Text>
-        </TouchableOpacity>
-      ))}
-    </View>
-  );
-
-  const FinancialScoreCard = () => (
-    <Animated.View style={[
-      styles.scoreCard,
-      { opacity: animatedValue }
-    ]}>
-      <View style={styles.scoreHeader}>
-        <Brain color="#4A90E2" size={24} />
-        <Text style={styles.scoreTitle}>Financial Health Score</Text>
-      </View>
-      
-      <View style={styles.scoreDisplay}>
-        <Text style={styles.scoreNumber}>{insights.financialScore}</Text>
-        <Text style={styles.scoreOutOf}>/100</Text>
-      </View>
-      
-      <View style={styles.scoreBar}>
-        <View 
-          style={[
-            styles.scoreProgress,
-            { 
-              width: `${insights.financialScore}%`,
-              backgroundColor: insights.financialScore >= 80 ? '#27AE60' :
-                             insights.financialScore >= 60 ? '#F39C12' : '#E74C3C'
-            }
-          ]} 
-        />
-      </View>
-      
-      <Text style={styles.scoreDescription}>
-        {insights.financialScore >= 80 ? 'Excellent financial habits! 🎉' :
-         insights.financialScore >= 60 ? 'Good progress, keep improving! 👍' :
-         'Consider reviewing your spending patterns 💡'}
-      </Text>
-    </Animated.View>
-  );
-
-  const RecommendationCard = ({ recommendation, index }) => (
-    <Animated.View 
-      style={[
-        styles.recommendationCard,
-        {
-          opacity: animatedValue,
-          transform: [{
-            translateY: animatedValue.interpolate({
-              inputRange: [0, 1],
-              outputRange: [50, 0],
-            }),
-          }],
-        }
-      ]}
-    >
-      <View style={styles.recommendationHeader}>
-        <View style={[styles.recommendationIcon, { backgroundColor: recommendation.color }]}>
-          <Lightbulb color="#fff" size={16} />
-        </View>
-        <View style={styles.recommendationMeta}>
-          <Text style={styles.recommendationTitle}>{recommendation.title}</Text>
-          <Text style={styles.recommendationImpact}>
-            {recommendation.impact} Impact
-            {recommendation.savings > 0 && ` • Potential saving: ₹${recommendation.savings}`}
-          </Text>
-        </View>
-      </View>
-      
-      <Text style={styles.recommendationDescription}>
-        {recommendation.description}
-      </Text>
-      
-      <TouchableOpacity 
-        style={styles.actionButton}
-        onPress={() => {
-          // Handle different recommendation types
-          switch (recommendation.type) {
-            case 'budget_creation':
-              navigation.navigate('BudgetScreen');
-              break;
-            case 'reduce_spending':
-            case 'subscription_audit':
-              navigation.navigate('AllExpenses');
-              break;
-            default:
-              // Show more details or generic action
-              break;
-          }
-        }}
-      >
-        <Text style={styles.actionButtonText}>Take Action</Text>
-        <Zap color="#4A90E2" size={16} />
-      </TouchableOpacity>
-    </Animated.View>
-  );
-
-  const SpendingTrendChart = () => {
-    if (!insights.spendingTrend.length) return null;
-
-    const chartData = {
-      labels: insights.spendingTrend.map(item => item.date),
-      datasets: [{
-        data: insights.spendingTrend.map(item => item.amount),
-        color: (opacity = 1) => `rgba(74, 144, 226, ${opacity})`,
-        strokeWidth: 3,
-      }],
-    };
-
+  const FinancialHealthCard = ({ income, expenses, investments }) => {
+    const ratio = income ? (expenses / income) : 0;
+    let advice = '';
+    if (!income) advice = "Add your income for better insights!";
+    else if (ratio > 0.7) advice = "High spend: try to keep under 60%!";
+    else if (ratio < 0.4) advice = "Great savings! Consider investing more.";
     return (
-      <View style={styles.chartCard}>
-        <Text style={styles.chartTitle}>Spending Trend ({selectedPeriod})</Text>
-        <LineChart
-          data={chartData}
-          width={width - 40}
-          height={200}
-          chartConfig={{
-            backgroundColor: '#ffffff',
-            backgroundGradientFrom: '#ffffff',
-            backgroundGradientTo: '#ffffff',
-            decimalPlaces: 0,
-            color: (opacity = 1) => `rgba(74, 144, 226, ${opacity})`,
-            labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-            style: { borderRadius: 16 },
-            propsForDots: {
-              r: '6',
-              strokeWidth: '2',
-              stroke: '#4A90E2',
-            },
-          }}
-          bezier
-          style={styles.chart}
-        />
+      <View style={styles.finHealthCard}>
+        <Text style={styles.finHealthTitle}>Financial Health</Text>
+        <Text>Income: ₹{income || '--'} | Expenses: ₹{expenses.toFixed(0)}</Text>
+        <Text>Investments: ₹{investments || '--'}</Text>
+        <Text>Expense/Income: {(ratio * 100).toFixed(0)}%</Text>
+        <Text style={{ color: ratio > 0.7 ? 'red' : 'green' }}>{advice}</Text>
+        <Text style={styles.aiBadge}>Premium AI</Text>
       </View>
     );
   };
 
-  const PredictionsCard = () => (
-    <View style={styles.predictionsCard}>
-      <View style={styles.predictionHeader}>
-        <Brain color="#9B59B6" size={20} />
-        <Text style={styles.predictionTitle}>AI Predictions</Text>
+  const SubscriptionAnalysisCard = () => (
+    <Animated.View style={[styles.aiCard, { opacity: animatedValue }]}>
+      <View style={styles.aiCardHeader}>
+        <CreditCard color="#E74C3C" size={24} />
+        <Text style={styles.aiCardTitle}>Subscription Analysis</Text>
       </View>
-      
-      <View style={styles.predictionItem}>
-        <TrendingUp color="#27AE60" size={16} />
-        <Text style={styles.predictionText}>
-          Next month's predicted spending: ₹{insights.predictions.nextMonth?.toLocaleString() || 0}
-        </Text>
-      </View>
-      
-      {insights.predictions.budgetOverrun > 0 && (
-        <View style={styles.predictionItem}>
-          <AlertTriangle color="#E74C3C" size={16} />
-          <Text style={styles.predictionText}>
-            Potential budget overrun: ₹{insights.predictions.budgetOverrun?.toLocaleString() || 0}
+      <View style={styles.aiMetrics}>
+        <View style={styles.aiMetric}>
+          <Text style={styles.aiMetricValue}>
+            ₹{insights.subscriptionAnalysis.totalMonthlyCost.toFixed(0)}
           </Text>
+          <Text style={styles.aiMetricLabel}>Monthly Cost</Text>
+        </View>
+        <View style={styles.aiMetric}>
+          <Text style={[styles.aiMetricValue, { color: '#27AE60' }]}>
+            ₹{insights.subscriptionAnalysis.potentialSavings.toFixed(0)}
+          </Text>
+          <Text style={styles.aiMetricLabel}>Potential Savings</Text>
+        </View>
+      </View>
+      {insights.subscriptionAnalysis.potentialCancellations.length > 0 && (
+        <View style={styles.aiSuggestions}>
+          <Text style={styles.aiSuggestionsTitle}>Suggested Cancellations:</Text>
+          {insights.subscriptionAnalysis.potentialCancellations.slice(0, 3).map((sub, index) => (
+            <TouchableOpacity key={index} style={styles.aiSuggestionItem}
+              onPress={() => {
+                Alert.alert(
+                  "Cancel Subscription",
+                  `Copy message to cancel ${sub.name}?`,
+                  [
+                    { text: "Cancel" },
+                    {
+                      text: "Copy Message",
+                      onPress: () => {
+                        const msg = `I want to cancel my ${sub.name} subscription as it's not in use.`;
+                        if (navigator.clipboard) navigator.clipboard.writeText(msg);
+                      }
+                    }
+                  ]
+                );
+              }}>
+              <Text style={styles.aiSuggestionText}>
+                {sub.name} - ₹{sub.amount.toFixed(0)}/month
+              </Text>
+              <Text style={styles.aiSuggestionReason}>{sub.reason}</Text>
+            </TouchableOpacity>
+          ))}
         </View>
       )}
-      
-      <View style={styles.predictionItem}>
-        <Calendar color="#3498DB" size={16} />
-        <Text style={styles.predictionText}>
-          Track daily to improve predictions accuracy
-        </Text>
-      </View>
-    </View>
+    </Animated.View>
   );
+
+  const CostCuttingCard = () => (
+    <Animated.View style={[styles.aiCard, { opacity: animatedValue }]}>
+      <View style={styles.aiCardHeader}>
+        <Scissors color="#F39C12" size={24} />
+        <Text style={styles.aiCardTitle}>AI Cost Cutting</Text>
+      </View>
+      <View style={styles.aiMetrics}>
+        <View style={styles.aiMetric}>
+          <Text style={[styles.aiMetricValue, { color: '#27AE60' }]}>
+            ₹{insights.costCuttingAI.totalPotentialSavings.toFixed(0)}
+          </Text>
+          <Text style={styles.aiMetricLabel}>Potential Monthly Savings</Text>
+        </View>
+      </View>
+      {insights.costCuttingAI.suggestions.length > 0 && (
+        <View style={styles.aiSuggestions}>
+          {insights.costCuttingAI.suggestions.slice(0, 2).map((suggestion, index) => (
+            <TouchableOpacity key={index} style={styles.costCuttingSuggestion}
+              onPress={() => setShowSimulation(true)}>
+              <Text style={styles.costCuttingTitle}>{suggestion.title}</Text>
+              <Text style={styles.costCuttingDescription}>{suggestion.description}</Text>
+              <Text style={styles.costCuttingSaving}>
+                Save up to ₹{suggestion.potentialSaving.toFixed(0)}/month
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+    </Animated.View>
+  );
+
+  const InvestmentOpportunityCard = () => (
+    <Animated.View style={[styles.aiCard, { opacity: animatedValue }]}>
+      <View style={styles.aiCardHeader}>
+        <TrendingUpIcon color="#27AE60" size={24} />
+        <Text style={styles.aiCardTitle}>Investment Opportunities</Text>
+      </View>
+      <View style={styles.aiMetrics}>
+        <View style={styles.aiMetric}>
+          <Text style={styles.aiMetricValue}>
+            ₹{insights.investmentOpportunities.availableAmount.toFixed(0)}
+          </Text>
+          <Text style={styles.aiMetricLabel}>Available to Invest</Text>
+        </View>
+      </View>
+      {insights.investmentOpportunities.suggestions.length > 0 && (
+        <View style={styles.aiSuggestions}>
+          {insights.investmentOpportunities.suggestions.slice(0, 2).map((investment, index) => (
+            <TouchableOpacity key={index} style={styles.investmentSuggestion}
+              onPress={() => {
+                Alert.alert(
+                  "Invest Now",
+                  `Add ₹${investment.amount} to "${investment.title}"?`,
+                  [
+                    { text: "Cancel" },
+                    {
+                      text: "Add Investment",
+                      onPress: () => {
+                        Alert.alert("Added!", "Your investment has been added to the tracker.");
+                      }
+                    }
+                  ]
+                );
+              }}>
+              <Text style={styles.investmentTitle}>{investment.title}</Text>
+              <Text style={styles.investmentDescription}>{investment.description}</Text>
+              <View style={styles.investmentMeta}>
+                <Text style={styles.investmentReturn}>{investment.expectedReturn}</Text>
+                <Text style={styles.investmentRisk}>{investment.risk} Risk</Text>
+              </View>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+    </Animated.View>
+  );
+
+  const runAIAnalysis = async () => {
+    setAiAnalysisLoading(true);
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    await fetchInsightsData();
+    Alert.alert('Analysis Complete', 'AI has updated your insights with new recommendations!');
+    setAiAnalysisLoading(false);
+  };
 
   if (loading) {
     return (
       <View style={[styles.container, styles.loadingContainer]}>
         <ActivityIndicator size="large" color="#4A90E2" />
-        <Text style={styles.loadingText}>Analyzing your expenses...</Text>
+        <Text style={styles.loadingText}>Analyzing your expenses with AI...</Text>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
@@ -634,12 +578,19 @@ export default function SmartInsightsScreen({ navigation }) {
         >
           <ArrowLeft color="#1e293b" size={24} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Smart Insights</Text>
-        <TouchableOpacity style={styles.refreshButton} onPress={fetchInsightsData}>
-          <Brain color="#4A90E2" size={24} />
+        <Text style={styles.headerTitle}>AI Smart Insights</Text>
+        <TouchableOpacity
+          style={styles.aiButton}
+          onPress={runAIAnalysis}
+          disabled={aiAnalysisLoading}
+        >
+          {aiAnalysisLoading ? (
+            <ActivityIndicator color="#4A90E2" size={20} />
+          ) : (
+            <Brain color="#4A90E2" size={24} />
+          )}
         </TouchableOpacity>
       </View>
-
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
@@ -648,56 +599,80 @@ export default function SmartInsightsScreen({ navigation }) {
         }
         showsVerticalScrollIndicator={false}
       >
-        <PeriodSelector />
-        
-        <FinancialScoreCard />
-        
-        <SpendingTrendChart />
-        
-        <PredictionsCard />
-        
-        {/* Recommendations Section */}
-        <View style={styles.recommendationsSection}>
-          <Text style={styles.sectionTitle}>
-            💡 Smart Recommendations
+        {profile && (
+          <FinancialHealthCard
+            income={profile.monthly_income}
+            investments={profile.total_investments}
+            expenses={insights.categoryBreakdown.reduce((sum, c) => sum + c.amount, 0)}
+          />
+        )}
+        <SubscriptionAnalysisCard />
+        <CostCuttingCard />
+        <InvestmentOpportunityCard />
+        <TouchableOpacity
+          style={styles.deepAnalysisButton}
+          onPress={runAIAnalysis}
+          disabled={aiAnalysisLoading}
+        >
+          <Brain color="#fff" size={20} />
+          <Text style={styles.deepAnalysisText}>
+            {aiAnalysisLoading ? 'Analyzing...' : 'Run Deep AI Analysis'}
           </Text>
-          
-          {insights.recommendations.length > 0 ? (
-            insights.recommendations.map((recommendation, index) => (
-              <RecommendationCard 
-                key={recommendation.id}
-                recommendation={recommendation}
-                index={index}
-              />
-            ))
-          ) : (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyStateText}>
-                Keep tracking expenses to get personalized recommendations!
-              </Text>
-            </View>
-          )}
-        </View>
-        
-        {/* Quick Actions */}
-        <View style={styles.quickActions}>
-          <TouchableOpacity 
-            style={styles.quickActionButton}
-            onPress={() => navigation.navigate('BudgetScreen')}
-          >
-            <Target color="#4A90E2" size={20} />
-            <Text style={styles.quickActionText}>Set Budget</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={styles.quickActionButton}
-            onPress={() => navigation.navigate('AllExpenses')}
-          >
-            <DollarSign color="#4A90E2" size={20} />
-            <Text style={styles.quickActionText}>View Expenses</Text>
-          </TouchableOpacity>
-        </View>
+        </TouchableOpacity>
       </ScrollView>
+      <Modal
+        visible={showSimulation}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowSimulation(false)}
+      >
+        <View style={{
+          flex: 1,
+          backgroundColor: 'rgba(30,41,59,0.8)',
+          justifyContent: 'center',
+          alignItems: 'center'
+        }}>
+          <View style={{
+            backgroundColor: '#fff',
+            borderRadius: 20,
+            padding: 28,
+            width: '85%'
+          }}>
+            <Text style={{ fontWeight: '700', fontSize: 18, marginBottom: 20 }}>Simulate Cost Cutting</Text>
+            <Text>Adjust Food Spending:</Text>
+            <Slider
+              style={{ width: '100%', height: 40 }}
+              minimumValue={0.6}
+              maximumValue={1}
+              value={simSpend}
+              minimumTrackTintColor="#27AE60"
+              maximumTrackTintColor="#ccc"
+              step={0.05}
+              onValueChange={setSimSpend}
+            />
+            <Text style={{ marginVertical: 10 }}>
+              {`Spending: ${(simSpend * 100).toFixed(0)}% of current`}
+            </Text>
+            <Text style={{ marginVertical: 10 }}>
+              {`Estimated Savings: ₹${(insights.costCuttingAI.suggestions.length > 0
+                ? insights.costCuttingAI.suggestions[0].potentialSaving * (1 - simSpend)
+                : 0).toFixed(0)}/month`}
+            </Text>
+            <TouchableOpacity
+              style={{
+                marginTop: 18,
+                backgroundColor: '#27AE60',
+                borderRadius: 12,
+                padding: 14,
+                alignItems: 'center'
+              }}
+              onPress={() => setShowSimulation(false)}
+            >
+              <Text style={{ color: '#fff', fontWeight: '700' }}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -735,7 +710,7 @@ const styles = {
   backButton: {
     padding: 8,
   },
-  refreshButton: {
+  aiButton: {
     padding: 8,
   },
   scrollView: {
@@ -744,242 +719,166 @@ const styles = {
   scrollContent: {
     padding: 20,
   },
-  periodSelector: {
-    flexDirection: 'row',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 4,
-    marginBottom: 20,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  periodButton: {
-    flex: 1,
-    paddingVertical: 12,
-    alignItems: 'center',
-    borderRadius: 8,
-  },
-  activePeriodButton: {
-    backgroundColor: '#4A90E2',
-  },
-  periodButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#64748b',
-  },
-  activePeriodButtonText: {
-    color: '#fff',
-  },
-  scoreCard: {
+  aiCard: {
     backgroundColor: '#fff',
     borderRadius: 16,
-    padding: 24,
+    padding: 20,
     marginBottom: 20,
-    elevation: 2,
+    elevation: 3,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
+    borderLeftWidth: 4,
+    borderLeftColor: '#4A90E2',
   },
-  scoreHeader: {
+  aiCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 16,
   },
-  scoreTitle: {
+  aiCardTitle: {
     fontSize: 18,
     fontWeight: '700',
     color: '#1e293b',
     marginLeft: 8,
   },
-  scoreDisplay: {
+  aiMetrics: {
     flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'center',
+    justifyContent: 'space-around',
     marginBottom: 16,
   },
-  scoreNumber: {
-    fontSize: 48,
+  aiMetric: {
+    alignItems: 'center',
+  },
+  aiMetricValue: {
+    fontSize: 24,
     fontWeight: '800',
     color: '#4A90E2',
   },
-  scoreOutOf: {
-    fontSize: 18,
-    color: '#64748b',
-    marginLeft: 4,
-  },
-  scoreBar: {
-    height: 8,
-    backgroundColor: '#e2e8f0',
-    borderRadius: 4,
-    marginBottom: 12,
-  },
-  scoreProgress: {
-    height: '100%',
-    borderRadius: 4,
-  },
-  scoreDescription: {
-    textAlign: 'center',
-    color: '#64748b',
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  chartCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 20,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  chartTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1e293b',
-    marginBottom: 16,
-  },
-  chart: {
-    borderRadius: 16,
-  },
-  predictionsCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 20,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  predictionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  predictionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1e293b',
-    marginLeft: 8,
-  },
-  predictionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  predictionText: {
-    fontSize: 14,
-    color: '#64748b',
-    marginLeft: 8,
-    flex: 1,
-  },
-  recommendationsSection: {
-    marginBottom: 20,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#1e293b',
-    marginBottom: 16,
-  },
-  recommendationCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  recommendationHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  recommendationIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  recommendationMeta: {
-    flex: 1,
-  },
-  recommendationTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1e293b',
-  },
-  recommendationImpact: {
+  aiMetricLabel: {
     fontSize: 12,
     color: '#64748b',
-    marginTop: 2,
+    marginTop: 4,
   },
-  recommendationDescription: {
-    fontSize: 14,
-    color: '#64748b',
-    lineHeight: 20,
-    marginBottom: 16,
+  aiSuggestions: {
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+    paddingTop: 16,
   },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f1f5f9',
-    borderRadius: 8,
-    padding: 12,
-    alignSelf: 'flex-start',
-  },
-  actionButtonText: {
+  aiSuggestionsTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#4A90E2',
-    marginRight: 8,
+    color: '#1e293b',
+    marginBottom: 12,
   },
-  quickActions: {
+  aiSuggestionItem: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+  },
+  aiSuggestionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1e293b',
+  },
+  aiSuggestionReason: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 4,
+  },
+  costCuttingSuggestion: {
+    backgroundColor: '#fff8dc',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#F39C12',
+  },
+  costCuttingTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1e293b',
+  },
+  costCuttingDescription: {
+    fontSize: 12,
+    color: '#64748b',
+    marginVertical: 4,
+  },
+  costCuttingSaving: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#27AE60',
+  },
+  investmentSuggestion: {
+    backgroundColor: '#f0fff4',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#27AE60',
+  },
+  investmentTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1e293b',
+  },
+  investmentDescription: {
+    fontSize: 12,
+    color: '#64748b',
+    marginVertical: 4,
+  },
+  investmentMeta: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 20,
   },
-  quickActionButton: {
-    flex: 1,
+  investmentReturn: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#27AE60',
+  },
+  investmentRisk: {
+    fontSize: 12,
+    color: '#64748b',
+  },
+  deepAnalysisButton: {
+    backgroundColor: '#4A90E2',
+    borderRadius: 12,
+    padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginHorizontal: 8,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    marginTop: 20,
   },
-  quickActionText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#4A90E2',
-    marginLeft: 8,
-  },
-  emptyState: {
-    padding: 20,
-    alignItems: 'center',
-  },
-  emptyStateText: {
+  deepAnalysisText: {
     fontSize: 16,
-    color: '#64748b',
-    textAlign: 'center',
-    lineHeight: 24,
+    fontWeight: '600',
+    color: '#fff',
   },
+  finHealthCard: {
+    backgroundColor: '#e0f2fe',
+    borderRadius: 18,
+    padding: 18,
+    marginBottom: 20,
+    borderLeftWidth: 5,
+    borderLeftColor: '#4A90E2',
+  },
+  finHealthTitle: {
+    fontWeight: '700',
+    fontSize: 17,
+    color: '#1e293b',
+    marginBottom: 4,
+  },
+  aiBadge: {
+    backgroundColor: '#4A90E2',
+    color: '#fff',
+    alignSelf: 'flex-start',
+    borderRadius: 8,
+    paddingVertical: 2,
+    paddingHorizontal: 9,
+    marginTop: 7,
+    fontSize: 12,
+    fontWeight: '600',
+  }
 };

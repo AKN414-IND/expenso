@@ -112,6 +112,8 @@ export default function ProfileScreen({ navigation }) {
   const [editForm, setEditForm] = useState({
     full_name: "",
     username: "",
+    monthly_income: "",
+    total_investments: "",
   });
 
   useEffect(() => {
@@ -128,7 +130,7 @@ export default function ProfileScreen({ navigation }) {
         .select("*")
         .eq("id", session.user.id)
         .single();
-
+  
       if (error && error.code !== "PGRST116") {
         console.error("Error fetching profile:", error);
       } else if (data) {
@@ -136,6 +138,8 @@ export default function ProfileScreen({ navigation }) {
         setEditForm({
           full_name: data.full_name || "",
           username: data.username || "",
+          monthly_income: data.monthly_income?.toString() || "",
+          total_investments: data.total_investments?.toString() || "",
         });
       } else {
         // Create initial profile if it doesn't exist
@@ -147,53 +151,31 @@ export default function ProfileScreen({ navigation }) {
       setLoading(false);
     }
   };
-
-  const createInitialProfile = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("profiles")
-        .insert([
-          {
-            id: session.user.id,
-            full_name: session.user.user_metadata?.full_name || "",
-            username: session.user.email?.split("@")[0] || "",
-            email: session.user.email,
-            created_at: new Date().toISOString(),
-          },
-        ])
-        .select()
-        .single();
-
-      if (!error && data) {
-        setProfile(data);
-        setEditForm({
-          full_name: data.full_name || "",
-          username: data.username || "",
-        });
-      }
-    } catch (err) {
-      console.error("Error creating profile:", err);
-    }
-  };
-
+  
   const updateProfile = async () => {
     if (!editForm.full_name.trim()) {
       Alert.alert("Error", "Please enter your full name");
       return;
     }
-
+  
     try {
       const { data, error } = await supabase
         .from("profiles")
         .update({
           full_name: editForm.full_name,
           username: editForm.username,
+          monthly_income: editForm.monthly_income
+            ? parseFloat(editForm.monthly_income)
+            : null,
+          total_investments: editForm.total_investments
+            ? parseFloat(editForm.total_investments)
+            : null,
           updated_at: new Date().toISOString(),
         })
         .eq("id", session.user.id)
         .select()
         .single();
-
+  
       if (!error && data) {
         setProfile(data);
         setEditModalVisible(false);
@@ -205,6 +187,27 @@ export default function ProfileScreen({ navigation }) {
     } catch (err) {
       console.error("Exception updating profile:", err);
       Alert.alert("Error", "Failed to update profile");
+    }
+  };
+  
+
+  const createInitialProfile = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", session.user.id)
+        .single();
+
+      if (!error && data) {
+        setProfile(data);
+        setEditForm({
+          full_name: data.full_name || "",
+          username: data.username || "",
+        });
+      }
+    } catch (err) {
+      console.error("Error creating profile:", err);
     }
   };
 
@@ -230,8 +233,17 @@ export default function ProfileScreen({ navigation }) {
 
   if (loading) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: theme.colors.background }]}>
-        <Text style={[styles.loadingText, { color: theme.colors.textSecondary }]}>Loading profile...</Text>
+      <View
+        style={[
+          styles.loadingContainer,
+          { backgroundColor: theme.colors.background },
+        ]}
+      >
+        <Text
+          style={[styles.loadingText, { color: theme.colors.textSecondary }]}
+        >
+          Loading profile...
+        </Text>
       </View>
     );
   }
@@ -248,18 +260,30 @@ export default function ProfileScreen({ navigation }) {
 
   return (
     <>
-      <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <ScrollView
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
+      >
         {/* Header */}
-        <View style={[styles.header, { backgroundColor: theme.colors.surface }]}>
+        <View
+          style={[styles.header, { backgroundColor: theme.colors.surface }]}
+        >
           <TouchableOpacity
-            style={[styles.backButton, { backgroundColor: theme.colors.buttonSecondary }]}
+            style={[
+              styles.backButton,
+              { backgroundColor: theme.colors.buttonSecondary },
+            ]}
             onPress={() => navigation.goBack()}
           >
             <ArrowLeft color={theme.colors.text} size={24} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: theme.colors.text }]}>Profile</Text>
+          <Text style={[styles.headerTitle, { color: theme.colors.text }]}>
+            Profile
+          </Text>
           <TouchableOpacity
-            style={[styles.editButton, { backgroundColor: theme.colors.buttonSecondary }]}
+            style={[
+              styles.editButton,
+              { backgroundColor: theme.colors.buttonSecondary },
+            ]}
             onPress={() => setEditModalVisible(true)}
           >
             <Edit3 color={theme.colors.primary} size={24} />
@@ -267,54 +291,181 @@ export default function ProfileScreen({ navigation }) {
         </View>
 
         {/* Profile Section */}
-        <View style={[styles.profileSection, { backgroundColor: theme.colors.surface }]}>
+        <View
+          style={[
+            styles.profileSection,
+            { backgroundColor: theme.colors.surface },
+          ]}
+        >
           <View style={styles.avatarContainer}>
             <Avatar name={userName} email={userEmail} size={120} />
-            <TouchableOpacity style={[styles.cameraButton, { backgroundColor: theme.colors.primary }]}>
+            <TouchableOpacity
+              style={[
+                styles.cameraButton,
+                { backgroundColor: theme.colors.primary },
+              ]}
+            >
               <Camera color="white" size={20} />
             </TouchableOpacity>
           </View>
 
-          <Text style={[styles.userName, { color: theme.colors.text }]}>{userName || "User"}</Text>
-          <Text style={[styles.userEmail, { color: theme.colors.textSecondary }]}>{userEmail}</Text>
-          <Text style={[styles.joinDate, { color: theme.colors.textTertiary }]}>Member since {joinDate}</Text>
+          <Text style={[styles.userName, { color: theme.colors.text }]}>
+            {userName || "User"}
+          </Text>
+          <Text
+            style={[styles.userEmail, { color: theme.colors.textSecondary }]}
+          >
+            {userEmail}
+          </Text>
+          <Text style={[styles.joinDate, { color: theme.colors.textTertiary }]}>
+            Member since {joinDate}
+          </Text>
         </View>
 
         {/* Profile Info Cards */}
         <View style={styles.infoSection}>
-          <View style={[styles.infoCard, { backgroundColor: theme.colors.surface }]}>
+          <View
+            style={[styles.infoCard, { backgroundColor: theme.colors.surface }]}
+          >
             <View style={styles.infoRow}>
               <View style={styles.iconContainer}>
                 <User color={theme.colors.primary} size={20} />
               </View>
               <View style={styles.infoContent}>
-                <Text style={[styles.infoLabel, { color: theme.colors.textTertiary }]}>Full Name</Text>
-                <Text style={[styles.infoValue, { color: theme.colors.textSecondary }]}>{userName || "Not set"}</Text>
+                <Text
+                  style={[
+                    styles.infoLabel,
+                    { color: theme.colors.textTertiary },
+                  ]}
+                >
+                  Full Name
+                </Text>
+                <Text
+                  style={[
+                    styles.infoValue,
+                    { color: theme.colors.textSecondary },
+                  ]}
+                >
+                  {userName || "Not set"}
+                </Text>
               </View>
             </View>
           </View>
 
-          <View style={[styles.infoCard, { backgroundColor: theme.colors.surface }]}>
+          <View
+            style={[styles.infoCard, { backgroundColor: theme.colors.surface }]}
+          >
             <View style={styles.infoRow}>
               <View style={styles.iconContainer}>
                 <Mail color={theme.colors.primary} size={20} />
               </View>
               <View style={styles.infoContent}>
-                <Text style={[styles.infoLabel, { color: theme.colors.textTertiary }]}>Email</Text>
-                <Text style={[styles.infoValue, { color: theme.colors.textSecondary }]}>{userEmail}</Text>
+                <Text
+                  style={[
+                    styles.infoLabel,
+                    { color: theme.colors.textTertiary },
+                  ]}
+                >
+                  Email
+                </Text>
+                <Text
+                  style={[
+                    styles.infoValue,
+                    { color: theme.colors.textSecondary },
+                  ]}
+                >
+                  {userEmail}
+                </Text>
               </View>
             </View>
           </View>
 
-          <View style={[styles.infoCard, { backgroundColor: theme.colors.surface }]}>
+          <View
+            style={[styles.infoCard, { backgroundColor: theme.colors.surface }]}
+          >
             <View style={styles.infoRow}>
               <View style={styles.iconContainer}>
                 <Calendar color={theme.colors.primary} size={20} />
               </View>
               <View style={styles.infoContent}>
-                <Text style={[styles.infoLabel, { color: theme.colors.textTertiary }]}>Username</Text>
-                <Text style={[styles.infoValue, { color: theme.colors.textSecondary }]}>
+                <Text
+                  style={[
+                    styles.infoLabel,
+                    { color: theme.colors.textTertiary },
+                  ]}
+                >
+                  Username
+                </Text>
+                <Text
+                  style={[
+                    styles.infoValue,
+                    { color: theme.colors.textSecondary },
+                  ]}
+                >
                   {profile?.username || "Not set"}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          <View
+            style={[styles.infoCard, { backgroundColor: theme.colors.surface }]}
+          >
+            <View style={styles.infoRow}>
+              <View style={styles.iconContainer}>
+                <Text style={{ fontSize: 18, color: theme.colors.primary }}>
+                  💰
+                </Text>
+              </View>
+              <View style={styles.infoContent}>
+                <Text
+                  style={[
+                    styles.infoLabel,
+                    { color: theme.colors.textTertiary },
+                  ]}
+                >
+                  Monthly Income
+                </Text>
+                <Text
+                  style={[
+                    styles.infoValue,
+                    { color: theme.colors.textSecondary },
+                  ]}
+                >
+                  {profile?.monthly_income
+                    ? `₹${profile.monthly_income}`
+                    : "Not set"}
+                </Text>
+              </View>
+            </View>
+          </View>
+          <View
+            style={[styles.infoCard, { backgroundColor: theme.colors.surface }]}
+          >
+            <View style={styles.infoRow}>
+              <View style={styles.iconContainer}>
+                <Text style={{ fontSize: 18, color: theme.colors.primary }}>
+                  📈
+                </Text>
+              </View>
+              <View style={styles.infoContent}>
+                <Text
+                  style={[
+                    styles.infoLabel,
+                    { color: theme.colors.textTertiary },
+                  ]}
+                >
+                  Total Investments
+                </Text>
+                <Text
+                  style={[
+                    styles.infoValue,
+                    { color: theme.colors.textSecondary },
+                  ]}
+                >
+                  {profile?.total_investments
+                    ? `₹${profile.total_investments}`
+                    : "Not set"}
                 </Text>
               </View>
             </View>
@@ -322,35 +473,60 @@ export default function ProfileScreen({ navigation }) {
         </View>
 
         <View style={styles.settingsSection}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Settings</Text>
+          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+            Settings
+          </Text>
 
           {/* App Settings */}
           <TouchableOpacity
-            style={[styles.settingItem, { backgroundColor: theme.colors.surface }]}
+            style={[
+              styles.settingItem,
+              { backgroundColor: theme.colors.surface },
+            ]}
             onPress={() => navigation.navigate("AppSettings")}
           >
             <View style={styles.settingRow}>
               <View style={styles.settingIconContainer}>
                 <Settings color={theme.colors.textTertiary} size={20} />
               </View>
-              <Text style={[styles.settingText, { color: theme.colors.textSecondary }]}>App Settings</Text>
+              <Text
+                style={[
+                  styles.settingText,
+                  { color: theme.colors.textSecondary },
+                ]}
+              >
+                App Settings
+              </Text>
             </View>
           </TouchableOpacity>
 
           {/* Privacy & Security */}
           <TouchableOpacity
-            style={[styles.settingItem, { backgroundColor: theme.colors.surface }]}
+            style={[
+              styles.settingItem,
+              { backgroundColor: theme.colors.surface },
+            ]}
             onPress={() => navigation.navigate("PrivacySecurity")}
           >
             <View style={styles.settingRow}>
               <View style={styles.settingIconContainer}>
                 <Shield color={theme.colors.textTertiary} size={20} />
               </View>
-              <Text style={[styles.settingText, { color: theme.colors.textSecondary }]}>Privacy & Security</Text>
+              <Text
+                style={[
+                  styles.settingText,
+                  { color: theme.colors.textSecondary },
+                ]}
+              >
+                Privacy & Security
+              </Text>
             </View>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.settingItem, { backgroundColor: theme.colors.surface }]}
+            style={[
+              styles.settingItem,
+              { backgroundColor: theme.colors.surface },
+            ]}
             onPress={() =>
               navigation.navigate("Dashboard", { showOnboarding: true })
             }
@@ -359,13 +535,23 @@ export default function ProfileScreen({ navigation }) {
               <View style={styles.settingIconContainer}>
                 <Text style={{ fontSize: 20 }}>🎓</Text>
               </View>
-              <Text style={[styles.settingText, { color: theme.colors.textSecondary }]}>Start App Tutorial</Text>
+              <Text
+                style={[
+                  styles.settingText,
+                  { color: theme.colors.textSecondary },
+                ]}
+              >
+                Start App Tutorial
+              </Text>
             </View>
           </TouchableOpacity>
 
           {/* Help & Support */}
           <TouchableOpacity
-            style={[styles.settingItem, { backgroundColor: theme.colors.surface }]}
+            style={[
+              styles.settingItem,
+              { backgroundColor: theme.colors.surface },
+            ]}
             onPress={() =>
               Linking.openURL(
                 "https://wa.me/918075648949?text=Hi%2C%20I%20need%20help%20with%20Expense%20Tracker"
@@ -376,7 +562,12 @@ export default function ProfileScreen({ navigation }) {
               <View style={styles.settingIconContainer}>
                 <HelpCircle color={theme.colors.textTertiary} size={20} />
               </View>
-              <Text style={[styles.settingText, { color: theme.colors.textSecondary }]}>
+              <Text
+                style={[
+                  styles.settingText,
+                  { color: theme.colors.textSecondary },
+                ]}
+              >
                 Help & Support (will be by what's app)
               </Text>
             </View>
@@ -384,14 +575,24 @@ export default function ProfileScreen({ navigation }) {
 
           {/* Logout */}
           <TouchableOpacity
-            style={[styles.settingItem, styles.logoutItem, { backgroundColor: theme.colors.surface }]}
+            style={[
+              styles.settingItem,
+              styles.logoutItem,
+              { backgroundColor: theme.colors.surface },
+            ]}
             onPress={handleLogout}
           >
             <View style={styles.settingRow}>
               <View style={styles.settingIconContainer}>
                 <LogOut color={theme.colors.error} size={20} />
               </View>
-              <Text style={[styles.settingText, styles.logoutText, { color: theme.colors.error }]}>
+              <Text
+                style={[
+                  styles.settingText,
+                  styles.logoutText,
+                  { color: theme.colors.error },
+                ]}
+              >
                 Logout
               </Text>
             </View>
@@ -407,12 +608,27 @@ export default function ProfileScreen({ navigation }) {
         onRequestClose={() => setEditModalVisible(false)}
       >
         <KeyboardAvoidingView
-          style={[styles.modalOverlay, { backgroundColor: theme.colors.overlay }]}
+          style={[
+            styles.modalOverlay,
+            { backgroundColor: theme.colors.overlay },
+          ]}
           behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
-          <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
-            <View style={[styles.modalHeader, { borderBottomColor: theme.colors.border }]}>
-              <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Edit Profile</Text>
+          <View
+            style={[
+              styles.modalContent,
+              { backgroundColor: theme.colors.surface },
+            ]}
+          >
+            <View
+              style={[
+                styles.modalHeader,
+                { borderBottomColor: theme.colors.border },
+              ]}
+            >
+              <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
+                Edit Profile
+              </Text>
               <TouchableOpacity
                 onPress={() => setEditModalVisible(false)}
                 style={styles.closeButton}
@@ -423,9 +639,23 @@ export default function ProfileScreen({ navigation }) {
 
             <View style={styles.modalBody}>
               <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>Full Name</Text>
+                <Text
+                  style={[
+                    styles.inputLabel,
+                    { color: theme.colors.textSecondary },
+                  ]}
+                >
+                  Full Name
+                </Text>
                 <TextInput
-                  style={[styles.input, { backgroundColor: theme.colors.buttonSecondary, color: theme.colors.text, borderColor: theme.colors.border }]}
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: theme.colors.buttonSecondary,
+                      color: theme.colors.text,
+                      borderColor: theme.colors.border,
+                    },
+                  ]}
                   placeholder="Enter your full name"
                   placeholderTextColor={theme.colors.textTertiary}
                   value={editForm.full_name}
@@ -436,9 +666,23 @@ export default function ProfileScreen({ navigation }) {
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>Username</Text>
+                <Text
+                  style={[
+                    styles.inputLabel,
+                    { color: theme.colors.textSecondary },
+                  ]}
+                >
+                  Username
+                </Text>
                 <TextInput
-                  style={[styles.input, { backgroundColor: theme.colors.buttonSecondary, color: theme.colors.text, borderColor: theme.colors.border }]}
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: theme.colors.buttonSecondary,
+                      color: theme.colors.text,
+                      borderColor: theme.colors.border,
+                    },
+                  ]}
                   placeholder="Enter your username"
                   placeholderTextColor={theme.colors.textTertiary}
                   value={editForm.username}
@@ -447,17 +691,87 @@ export default function ProfileScreen({ navigation }) {
                   }
                 />
               </View>
+
+              <View style={styles.inputGroup}>
+                <Text
+                  style={[
+                    styles.inputLabel,
+                    { color: theme.colors.textSecondary },
+                  ]}
+                >
+                  Monthly Income (₹)
+                </Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: theme.colors.buttonSecondary,
+                      color: theme.colors.text,
+                      borderColor: theme.colors.border,
+                    },
+                  ]}
+                  placeholder="Enter your monthly income"
+                  placeholderTextColor={theme.colors.textTertiary}
+                  value={editForm.monthly_income}
+                  keyboardType="numeric"
+                  onChangeText={(text) =>
+                    setEditForm({ ...editForm, monthly_income: text })
+                  }
+                />
+              </View>
+              <View style={styles.inputGroup}>
+                <Text
+                  style={[
+                    styles.inputLabel,
+                    { color: theme.colors.textSecondary },
+                  ]}
+                >
+                  Total Investments (₹)
+                </Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: theme.colors.buttonSecondary,
+                      color: theme.colors.text,
+                      borderColor: theme.colors.border,
+                    },
+                  ]}
+                  placeholder="Enter your total investments"
+                  placeholderTextColor={theme.colors.textTertiary}
+                  value={editForm.total_investments}
+                  keyboardType="numeric"
+                  onChangeText={(text) =>
+                    setEditForm({ ...editForm, total_investments: text })
+                  }
+                />
+              </View>
             </View>
 
             <View style={styles.modalButtons}>
               <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton, { backgroundColor: theme.colors.buttonSecondary }]}
+                style={[
+                  styles.modalButton,
+                  styles.cancelButton,
+                  { backgroundColor: theme.colors.buttonSecondary },
+                ]}
                 onPress={() => setEditModalVisible(false)}
               >
-                <Text style={[styles.cancelButtonText, { color: theme.colors.textSecondary }]}>Cancel</Text>
+                <Text
+                  style={[
+                    styles.cancelButtonText,
+                    { color: theme.colors.textSecondary },
+                  ]}
+                >
+                  Cancel
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.modalButton, styles.saveButton, { backgroundColor: theme.colors.primary }]}
+                style={[
+                  styles.modalButton,
+                  styles.saveButton,
+                  { backgroundColor: theme.colors.primary },
+                ]}
                 onPress={updateProfile}
               >
                 <Save color="white" size={16} style={{ marginRight: 8 }} />
@@ -496,7 +810,6 @@ const styles = StyleSheet.create({
   backButton: {
     padding: 8,
     borderRadius: 12,
-    
   },
   headerTitle: {
     fontSize: 20,
@@ -549,7 +862,6 @@ const styles = StyleSheet.create({
     marginBottom: 30,
   },
   infoCard: {
-    
     borderRadius: 16,
     padding: 20,
     marginBottom: 12,
