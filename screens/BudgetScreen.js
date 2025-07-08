@@ -100,17 +100,15 @@ export default function BudgetScreen({ navigation }) {
     fetchData();
   };
 
+  // Fix 1: Robust, timezone-safe category spending calculation.
   const getCategorySpending = (category, period = "monthly") => {
     const now = new Date();
     let startDate;
 
     switch (period) {
       case "weekly":
-        startDate = new Date(
-          now.getFullYear(),
-          now.getMonth(),
-          now.getDate() - 7
-        );
+        startDate = new Date(now);
+        startDate.setDate(now.getDate() - 7);
         break;
       case "yearly":
         startDate = new Date(now.getFullYear(), 0, 1);
@@ -120,31 +118,51 @@ export default function BudgetScreen({ navigation }) {
         startDate = new Date(now.getFullYear(), now.getMonth(), 1);
         break;
     }
+    // Zero the time part for safe comparison
+    startDate.setHours(0, 0, 0, 0);
 
     return expenses
       .filter((expense) => {
+        if (!expense.category || !expense.date) return false;
         const expenseDate = new Date(expense.date);
-        return expense.category === category && expenseDate >= startDate;
+        // Always compare as dates (ignoring time zone effects)
+        return (
+          expense.category === category &&
+          expenseDate >= startDate &&
+          expenseDate <= now
+        );
       })
-      .reduce((sum, expense) => sum + parseFloat(expense.amount || 0), 0);
+      .reduce((sum, expense) => {
+        const amt = parseFloat(expense.amount);
+        return sum + (isNaN(amt) ? 0 : amt);
+      }, 0);
   };
 
+  // Fix 2: Parse budget.amount as number, guard against zero, NaN, negative, and division by zero.
   const getBudgetProgress = () => {
     return budgets.map((budget) => {
+      const amount = parseFloat(budget.amount);
+      const safeAmount = isNaN(amount) || amount < 0 ? 0 : amount;
       const spent = getCategorySpending(budget.category, budget.period);
-      const remaining = budget.amount - spent;
-      const percentage = Math.min((spent / budget.amount) * 100, 100);
+      const remaining = safeAmount - spent;
+      let percentage = 0;
+      if (safeAmount > 0) {
+        percentage = Math.min((spent / safeAmount) * 100, 100);
+      } else if (spent > 0) {
+        percentage = 100;
+      }
       const categoryData = EXPENSE_CATEGORIES.find(
         (cat) => cat.name === budget.category
       );
       return {
         ...budget,
+        amount: safeAmount,
         spent,
         remaining,
         percentage,
         icon: categoryData?.icon || "📝",
         color: categoryData?.color || theme.colors.primary,
-        isOverBudget: spent > budget.amount,
+        isOverBudget: spent > safeAmount,
       };
     });
   };
@@ -176,6 +194,18 @@ export default function BudgetScreen({ navigation }) {
 
     try {
       if (editingBudget) {
+        // Optional: Prevent duplicate category on edit
+        if (
+          budgets.some(
+            (b) =>
+              b.category === budgetForm.category &&
+              b.id !== editingBudget.id
+          )
+        ) {
+          alert("A budget for this category already exists.");
+          return;
+        }
+
         const { error } = await supabase
           .from("budgets")
           .update({
@@ -240,7 +270,6 @@ export default function BudgetScreen({ navigation }) {
       alert("Failed to delete budget");
     }
   };
-
   const renderBudgetItem = ({ item }) => (
     <View
       style={[
@@ -402,8 +431,8 @@ export default function BudgetScreen({ navigation }) {
   );
 
   const budgetProgress = getBudgetProgress();
-  const totalBudget = budgets.reduce((sum, budget) => sum + budget.amount, 0);
-  const totalSpent = budgetProgress.reduce((sum, item) => sum + item.spent, 0);
+  const totalBudget = budgetProgress.reduce((sum, item) => sum + (item.amount || 0), 0);
+  const totalSpent = budgetProgress.reduce((sum, item) => sum + (item.spent || 0), 0);
   const overBudgetCount = budgetProgress.filter(
     (item) => item.isOverBudget
   ).length;
