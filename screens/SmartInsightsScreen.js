@@ -5,14 +5,12 @@ import {
   ScrollView,
   TouchableOpacity,
   Animated,
-  Dimensions,
   RefreshControl,
   ActivityIndicator,
   Alert,
   Modal,
 } from 'react-native';
 import Slider from '@react-native-community/slider';
-
 import {
   Brain,
   ArrowLeft,
@@ -22,11 +20,12 @@ import {
 } from 'lucide-react-native';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
-
-const { width } = Dimensions.get('window');
+import { useTheme } from '../context/ThemeContext';
 
 export default function SmartInsightsScreen({ navigation }) {
   const { session } = useAuth();
+  const { theme } = useTheme();
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState('month');
@@ -412,42 +411,86 @@ export default function SmartInsightsScreen({ navigation }) {
     else if (ratio > 0.7) advice = "High spend: try to keep under 60%!";
     else if (ratio < 0.4) advice = "Great savings! Consider investing more.";
     return (
-      <View style={styles.finHealthCard}>
-        <Text style={styles.finHealthTitle}>Financial Health</Text>
-        <Text>Income: ₹{income || '--'} | Expenses: ₹{expenses.toFixed(0)}</Text>
-        <Text>Investments: ₹{investments || '--'}</Text>
-        <Text>Expense/Income: {(ratio * 100).toFixed(0)}%</Text>
-        <Text style={{ color: ratio > 0.7 ? 'red' : 'green' }}>{advice}</Text>
-        <Text style={styles.aiBadge}>Premium AI</Text>
+      <View style={{
+        backgroundColor: theme.colors.surfaceHighlight,
+        borderRadius: 18,
+        padding: 18,
+        marginBottom: 20,
+        borderLeftWidth: 5,
+        borderLeftColor: theme.colors.primary,
+      }}>
+        <Text style={{
+          fontWeight: '700',
+          fontSize: 17,
+          color: theme.colors.text,
+          marginBottom: 4,
+        }}>Financial Health</Text>
+        <Text style={{ color: theme.colors.textSecondary }}>Income: ₹{income || '--'} | Expenses: ₹{expenses.toFixed(0)}</Text>
+        <Text style={{ color: theme.colors.textSecondary }}>Investments: ₹{investments || '--'}</Text>
+        <Text style={{ color: theme.colors.textSecondary }}>Expense/Income: {(ratio * 100).toFixed(0)}%</Text>
+        <Text style={{ color: ratio > 0.7 ? theme.colors.error : theme.colors.success }}>{advice}</Text>
+        <Text style={{
+          backgroundColor: theme.colors.primary,
+          color: theme.colors.buttonText,
+          alignSelf: 'flex-start',
+          borderRadius: 8,
+          paddingVertical: 2,
+          paddingHorizontal: 9,
+          marginTop: 7,
+          fontSize: 12,
+          fontWeight: '600',
+        }}>Premium AI</Text>
       </View>
     );
   };
 
   const SubscriptionAnalysisCard = () => (
-    <Animated.View style={[styles.aiCard, { opacity: animatedValue }]}>
-      <View style={styles.aiCardHeader}>
-        <CreditCard color="#E74C3C" size={24} />
-        <Text style={styles.aiCardTitle}>Subscription Analysis</Text>
+    <Animated.View style={{
+      backgroundColor: theme.colors.surface,
+      borderRadius: 16,
+      padding: 20,
+      marginBottom: 20,
+      elevation: 3,
+      shadowColor: theme.colors.shadow,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      borderLeftWidth: 4,
+      borderLeftColor: theme.colors.primary,
+      opacity: animatedValue,
+    }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+        <CreditCard color={theme.colors.error} size={24} />
+        <Text style={{ fontSize: 18, fontWeight: '700', color: theme.colors.text, marginLeft: 8 }}>Subscription Analysis</Text>
       </View>
-      <View style={styles.aiMetrics}>
-        <View style={styles.aiMetric}>
-          <Text style={styles.aiMetricValue}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginBottom: 16 }}>
+        <View style={{ alignItems: 'center' }}>
+          <Text style={{ fontSize: 24, fontWeight: '800', color: theme.colors.primary }}>
             ₹{insights.subscriptionAnalysis.totalMonthlyCost.toFixed(0)}
           </Text>
-          <Text style={styles.aiMetricLabel}>Monthly Cost</Text>
+          <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginTop: 4 }}>Monthly Cost</Text>
         </View>
-        <View style={styles.aiMetric}>
-          <Text style={[styles.aiMetricValue, { color: '#27AE60' }]}>
+        <View style={{ alignItems: 'center' }}>
+          <Text style={{ fontSize: 24, fontWeight: '800', color: theme.colors.success }}>
             ₹{insights.subscriptionAnalysis.potentialSavings.toFixed(0)}
           </Text>
-          <Text style={styles.aiMetricLabel}>Potential Savings</Text>
+          <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginTop: 4 }}>Potential Savings</Text>
         </View>
       </View>
       {insights.subscriptionAnalysis.potentialCancellations.length > 0 && (
-        <View style={styles.aiSuggestions}>
-          <Text style={styles.aiSuggestionsTitle}>Suggested Cancellations:</Text>
+        <View style={{
+          borderTopWidth: 1,
+          borderTopColor: theme.colors.border,
+          paddingTop: 16,
+        }}>
+          <Text style={{ fontSize: 14, fontWeight: '600', color: theme.colors.text, marginBottom: 12 }}>Suggested Cancellations:</Text>
           {insights.subscriptionAnalysis.potentialCancellations.slice(0, 3).map((sub, index) => (
-            <TouchableOpacity key={index} style={styles.aiSuggestionItem}
+            <TouchableOpacity key={index} style={{
+              backgroundColor: theme.colors.surfaceHighlight,
+              borderRadius: 8,
+              padding: 12,
+              marginBottom: 8,
+            }}
               onPress={() => {
                 Alert.alert(
                   "Cancel Subscription",
@@ -464,10 +507,8 @@ export default function SmartInsightsScreen({ navigation }) {
                   ]
                 );
               }}>
-              <Text style={styles.aiSuggestionText}>
-                {sub.name} - ₹{sub.amount.toFixed(0)}/month
-              </Text>
-              <Text style={styles.aiSuggestionReason}>{sub.reason}</Text>
+              <Text style={{ fontSize: 14, fontWeight: '600', color: theme.colors.text }}>{sub.name} - ₹{sub.amount.toFixed(0)}/month</Text>
+              <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginTop: 4 }}>{sub.reason}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -475,28 +516,53 @@ export default function SmartInsightsScreen({ navigation }) {
     </Animated.View>
   );
 
+
   const CostCuttingCard = () => (
-    <Animated.View style={[styles.aiCard, { opacity: animatedValue }]}>
-      <View style={styles.aiCardHeader}>
-        <Scissors color="#F39C12" size={24} />
-        <Text style={styles.aiCardTitle}>AI Cost Cutting</Text>
+    <Animated.View style={{
+      backgroundColor: theme.colors.surface,
+      borderRadius: 16,
+      padding: 20,
+      marginBottom: 20,
+      elevation: 3,
+      shadowColor: theme.colors.shadow,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      borderLeftWidth: 4,
+      borderLeftColor: theme.colors.warning,
+      opacity: animatedValue,
+    }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+        <Scissors color={theme.colors.warning} size={24} />
+        <Text style={{ fontSize: 18, fontWeight: '700', color: theme.colors.text, marginLeft: 8 }}>AI Cost Cutting</Text>
       </View>
-      <View style={styles.aiMetrics}>
-        <View style={styles.aiMetric}>
-          <Text style={[styles.aiMetricValue, { color: '#27AE60' }]}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginBottom: 16 }}>
+        <View style={{ alignItems: 'center' }}>
+          <Text style={{ fontSize: 24, fontWeight: '800', color: theme.colors.success }}>
             ₹{insights.costCuttingAI.totalPotentialSavings.toFixed(0)}
           </Text>
-          <Text style={styles.aiMetricLabel}>Potential Monthly Savings</Text>
+          <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginTop: 4 }}>Potential Monthly Savings</Text>
         </View>
       </View>
       {insights.costCuttingAI.suggestions.length > 0 && (
-        <View style={styles.aiSuggestions}>
+        <View style={{
+          borderTopWidth: 1,
+          borderTopColor: theme.colors.border,
+          paddingTop: 16,
+        }}>
           {insights.costCuttingAI.suggestions.slice(0, 2).map((suggestion, index) => (
-            <TouchableOpacity key={index} style={styles.costCuttingSuggestion}
+            <TouchableOpacity key={index} style={{
+              backgroundColor: theme.colors.surfaceHighlight,
+              borderRadius: 8,
+              padding: 12,
+              marginBottom: 8,
+              borderLeftWidth: 3,
+              borderLeftColor: theme.colors.warning,
+            }}
               onPress={() => setShowSimulation(true)}>
-              <Text style={styles.costCuttingTitle}>{suggestion.title}</Text>
-              <Text style={styles.costCuttingDescription}>{suggestion.description}</Text>
-              <Text style={styles.costCuttingSaving}>
+              <Text style={{ fontSize: 14, fontWeight: '600', color: theme.colors.text }}>{suggestion.title}</Text>
+              <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginVertical: 4 }}>{suggestion.description}</Text>
+              <Text style={{ fontSize: 12, fontWeight: '600', color: theme.colors.success }}>
                 Save up to ₹{suggestion.potentialSaving.toFixed(0)}/month
               </Text>
             </TouchableOpacity>
@@ -506,24 +572,49 @@ export default function SmartInsightsScreen({ navigation }) {
     </Animated.View>
   );
 
+
   const InvestmentOpportunityCard = () => (
-    <Animated.View style={[styles.aiCard, { opacity: animatedValue }]}>
-      <View style={styles.aiCardHeader}>
-        <TrendingUpIcon color="#27AE60" size={24} />
-        <Text style={styles.aiCardTitle}>Investment Opportunities</Text>
+    <Animated.View style={{
+      backgroundColor: theme.colors.surface,
+      borderRadius: 16,
+      padding: 20,
+      marginBottom: 20,
+      elevation: 3,
+      shadowColor: theme.colors.shadow,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      borderLeftWidth: 4,
+      borderLeftColor: theme.colors.success,
+      opacity: animatedValue,
+    }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+        <TrendingUpIcon color={theme.colors.success} size={24} />
+        <Text style={{ fontSize: 18, fontWeight: '700', color: theme.colors.text, marginLeft: 8 }}>Investment Opportunities</Text>
       </View>
-      <View style={styles.aiMetrics}>
-        <View style={styles.aiMetric}>
-          <Text style={styles.aiMetricValue}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginBottom: 16 }}>
+        <View style={{ alignItems: 'center' }}>
+          <Text style={{ fontSize: 24, fontWeight: '800', color: theme.colors.primary }}>
             ₹{insights.investmentOpportunities.availableAmount.toFixed(0)}
           </Text>
-          <Text style={styles.aiMetricLabel}>Available to Invest</Text>
+          <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginTop: 4 }}>Available to Invest</Text>
         </View>
       </View>
       {insights.investmentOpportunities.suggestions.length > 0 && (
-        <View style={styles.aiSuggestions}>
+        <View style={{
+          borderTopWidth: 1,
+          borderTopColor: theme.colors.border,
+          paddingTop: 16,
+        }}>
           {insights.investmentOpportunities.suggestions.slice(0, 2).map((investment, index) => (
-            <TouchableOpacity key={index} style={styles.investmentSuggestion}
+            <TouchableOpacity key={index} style={{
+              backgroundColor: theme.colors.surfaceHighlight,
+              borderRadius: 8,
+              padding: 12,
+              marginBottom: 8,
+              borderLeftWidth: 3,
+              borderLeftColor: theme.colors.success,
+            }}
               onPress={() => {
                 Alert.alert(
                   "Invest Now",
@@ -539,11 +630,11 @@ export default function SmartInsightsScreen({ navigation }) {
                   ]
                 );
               }}>
-              <Text style={styles.investmentTitle}>{investment.title}</Text>
-              <Text style={styles.investmentDescription}>{investment.description}</Text>
-              <View style={styles.investmentMeta}>
-                <Text style={styles.investmentReturn}>{investment.expectedReturn}</Text>
-                <Text style={styles.investmentRisk}>{investment.risk} Risk</Text>
+              <Text style={{ fontSize: 14, fontWeight: '600', color: theme.colors.text }}>{investment.title}</Text>
+              <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginVertical: 4 }}>{investment.description}</Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: theme.colors.success }}>{investment.expectedReturn}</Text>
+                <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>{investment.risk} Risk</Text>
               </View>
             </TouchableOpacity>
           ))}
@@ -551,6 +642,7 @@ export default function SmartInsightsScreen({ navigation }) {
       )}
     </Animated.View>
   );
+
 
   const runAIAnalysis = async () => {
     setAiAnalysisLoading(true);
@@ -562,40 +654,55 @@ export default function SmartInsightsScreen({ navigation }) {
 
   if (loading) {
     return (
-      <View style={[styles.container, styles.loadingContainer]}>
-        <ActivityIndicator size="large" color="#4A90E2" />
-        <Text style={styles.loadingText}>Analyzing your expenses with AI...</Text>
+      <View style={{
+        flex: 1,
+        backgroundColor: theme.colors.background,
+        justifyContent: 'center',
+        alignItems: 'center',
+      }}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
+        <Text style={{ marginTop: 16, fontSize: 16, color: theme.colors.textSecondary }}>Analyzing your expenses with AI...</Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
+    <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
+      <View style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 20,
+        paddingTop: 50,
+        paddingBottom: 20,
+        backgroundColor: theme.colors.surface,
+        borderBottomWidth: 1,
+        borderBottomColor: theme.colors.border,
+      }}>
         <TouchableOpacity
-          style={styles.backButton}
+          style={{ padding: 8 }}
           onPress={() => navigation.goBack()}
         >
-          <ArrowLeft color="#1e293b" size={24} />
+          <ArrowLeft color={theme.colors.text} size={24} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>AI Smart Insights</Text>
+        <Text style={{ fontSize: 20, fontWeight: '700', color: theme.colors.text }}>AI Smart Insights</Text>
         <TouchableOpacity
-          style={styles.aiButton}
+          style={{ padding: 8 }}
           onPress={runAIAnalysis}
           disabled={aiAnalysisLoading}
         >
           {aiAnalysisLoading ? (
-            <ActivityIndicator color="#4A90E2" size={20} />
+            <ActivityIndicator color={theme.colors.primary} size={20} />
           ) : (
-            <Brain color="#4A90E2" size={24} />
+            <Brain color={theme.colors.primary} size={24} />
           )}
         </TouchableOpacity>
       </View>
       <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        style={{ flex: 1 }}
+        contentContainerStyle={{ padding: 20 }}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />
         }
         showsVerticalScrollIndicator={false}
       >
@@ -610,12 +717,25 @@ export default function SmartInsightsScreen({ navigation }) {
         <CostCuttingCard />
         <InvestmentOpportunityCard />
         <TouchableOpacity
-          style={styles.deepAnalysisButton}
+          style={{
+            backgroundColor: theme.colors.primary,
+            borderRadius: 12,
+            padding: 16,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginTop: 20,
+          }}
           onPress={runAIAnalysis}
           disabled={aiAnalysisLoading}
         >
-          <Brain color="#fff" size={20} />
-          <Text style={styles.deepAnalysisText}>
+          <Brain color={theme.colors.buttonText} size={20} />
+          <Text style={{
+            fontSize: 16,
+            fontWeight: '600',
+            color: theme.colors.buttonText,
+            marginLeft: 8,
+          }}>
             {aiAnalysisLoading ? 'Analyzing...' : 'Run Deep AI Analysis'}
           </Text>
         </TouchableOpacity>
@@ -628,32 +748,32 @@ export default function SmartInsightsScreen({ navigation }) {
       >
         <View style={{
           flex: 1,
-          backgroundColor: 'rgba(30,41,59,0.8)',
+          backgroundColor: theme.colors.overlay,
           justifyContent: 'center',
           alignItems: 'center'
         }}>
           <View style={{
-            backgroundColor: '#fff',
+            backgroundColor: theme.colors.surface,
             borderRadius: 20,
             padding: 28,
             width: '85%'
           }}>
-            <Text style={{ fontWeight: '700', fontSize: 18, marginBottom: 20 }}>Simulate Cost Cutting</Text>
-            <Text>Adjust Food Spending:</Text>
+            <Text style={{ fontWeight: '700', fontSize: 18, marginBottom: 20, color: theme.colors.text }}>Simulate Cost Cutting</Text>
+            <Text style={{ color: theme.colors.textSecondary }}>Adjust Food Spending:</Text>
             <Slider
               style={{ width: '100%', height: 40 }}
               minimumValue={0.6}
               maximumValue={1}
               value={simSpend}
-              minimumTrackTintColor="#27AE60"
-              maximumTrackTintColor="#ccc"
+              minimumTrackTintColor={theme.colors.success}
+              maximumTrackTintColor={theme.colors.border}
               step={0.05}
               onValueChange={setSimSpend}
             />
-            <Text style={{ marginVertical: 10 }}>
+            <Text style={{ marginVertical: 10, color: theme.colors.text }}>
               {`Spending: ${(simSpend * 100).toFixed(0)}% of current`}
             </Text>
-            <Text style={{ marginVertical: 10 }}>
+            <Text style={{ marginVertical: 10, color: theme.colors.text }}>
               {`Estimated Savings: ₹${(insights.costCuttingAI.suggestions.length > 0
                 ? insights.costCuttingAI.suggestions[0].potentialSaving * (1 - simSpend)
                 : 0).toFixed(0)}/month`}
@@ -661,14 +781,14 @@ export default function SmartInsightsScreen({ navigation }) {
             <TouchableOpacity
               style={{
                 marginTop: 18,
-                backgroundColor: '#27AE60',
+                backgroundColor: theme.colors.success,
                 borderRadius: 12,
                 padding: 14,
                 alignItems: 'center'
               }}
               onPress={() => setShowSimulation(false)}
             >
-              <Text style={{ color: '#fff', fontWeight: '700' }}>Done</Text>
+              <Text style={{ color: theme.colors.buttonText, fontWeight: '700' }}>Done</Text>
             </TouchableOpacity>
           </View>
         </View>
