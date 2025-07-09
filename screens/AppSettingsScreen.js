@@ -431,7 +431,7 @@ export default function AppSettingsScreen({ navigation }) {
         <Text style={[styles.headerTitle, { color: theme.colors.text }]}>
           App Settings
         </Text>
-        <View style={{ width: 38 }} /> {/* Spacer for center title */}
+        <View style={{ width: 38 }} /> 
       </View>
 
       <ScrollView

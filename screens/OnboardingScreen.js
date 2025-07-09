@@ -10,15 +10,15 @@ import {
   BackHandler,
   ScrollView,
   Image,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
-import  Alert from '../components/Alert';
+import Alert from '../components/Alert';
 import { LogOut, FastForward } from 'lucide-react-native'; 
+import { useTheme } from '../context/ThemeContext';
 
 const { width, height } = Dimensions.get('window');
-
-
 
 const onboardingData = [
   {
@@ -47,14 +47,13 @@ const onboardingData = [
   },
 ];
 
-  
 export default function OnboardingScreen({ onFinish }) {
+  const { theme } = useTheme();
   const [activeSlide, setActiveSlide] = useState(0);
   const scrollViewRef = useRef(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const [showExitModal, setShowExitModal] = useState(false);
   const [showSkipModal, setShowSkipModal] = useState(false);
-
 
   useFocusEffect(
     React.useCallback(() => {
@@ -66,12 +65,11 @@ export default function OnboardingScreen({ onFinish }) {
       return () => subscription?.remove();
     }, [])
   );
-  
-  
+
   React.useEffect(() => {
     Animated.timing(fadeAnim, {
       toValue: 1,
-      duration: 1000,
+      duration: 900,
       useNativeDriver: true,
     }).start();
   }, []);
@@ -103,10 +101,7 @@ export default function OnboardingScreen({ onFinish }) {
     }
   };
 
-  const handleSkip = () => {
-  setShowSkipModal(true);
-};
-
+  const handleSkip = () => setShowSkipModal(true);
 
   const handleFinish = () => {
     Animated.timing(fadeAnim, {
@@ -118,27 +113,55 @@ export default function OnboardingScreen({ onFinish }) {
     });
   };
 
+  // Dynamic color tokens for better accessibility across themes
+  const main = theme.colors.primary;
+  const mainDark = theme.colors.primaryDark;
+  const textMain = theme.colors.text;
+  const textSecondary = theme.colors.textSecondary;
+  const textTertiary = theme.colors.textTertiary;
+  const card = theme.colors.card;
+  const bg = theme.colors.background;
+
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
-      
+    <View style={[styles.container, { backgroundColor: bg }]}>
+      <StatusBar
+        barStyle={
+          theme.name === "dark" || theme.name === "neon"
+            ? "light-content"
+            : "dark-content"
+        }
+        backgroundColor={bg}
+      />
+
       <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
         {/* Header */}
         <View style={styles.header}>
-          {activeSlide > 0 && (
-            <TouchableOpacity onPress={handlePrevious} style={styles.backButton}>
-              <Ionicons name="chevron-back" size={24} color="#ffffff" />
+          {activeSlide > 0 ? (
+            <TouchableOpacity
+              onPress={handlePrevious}
+              style={[
+                styles.backButton,
+                { backgroundColor: main, shadowColor: main },
+              ]}
+            >
+              <Ionicons name="chevron-back" size={24} color="#fff" />
             </TouchableOpacity>
+          ) : (
+            <View style={{ width: 40 }} />
           )}
-          
           <View style={styles.spacer} />
-          
-          <TouchableOpacity onPress={handleSkip} style={styles.skipButton}>
-            <Text style={styles.skipText}>Skip</Text>
+          <TouchableOpacity
+            onPress={handleSkip}
+            style={[
+              styles.skipButton,
+              { backgroundColor: main, shadowColor: main },
+            ]}
+          >
+            <Text style={[styles.skipText, { color: "#fff" }]}>Skip</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Slides Container */}
+        {/* Slides */}
         <View style={styles.slidesContainer}>
           <ScrollView
             ref={scrollViewRef}
@@ -147,12 +170,23 @@ export default function OnboardingScreen({ onFinish }) {
             showsHorizontalScrollIndicator={false}
             onMomentumScrollEnd={handleScroll}
             scrollEventThrottle={16}
-            style={styles.scrollView}
+            style={{ flex: 1 }}
             contentContainerStyle={styles.scrollContent}
           >
             {onboardingData.map((item, index) => (
-              <View key={item.id} style={styles.slideContainer}>
-                <View style={styles.slide}>
+              <View key={item.id} style={[styles.slideContainer, { width: width }]}>
+                <View
+                  style={[
+                    styles.slide,
+                    {
+                      backgroundColor: card,
+                      borderRadius: 22,
+                      paddingVertical: height < 700 ? 12 : 24,
+                      minHeight: height * 0.6,
+                      shadowColor: main,
+                    },
+                  ]}
+                >
                   {/* Image Container */}
                   <View style={styles.imageContainer}>
                     <Image
@@ -161,11 +195,14 @@ export default function OnboardingScreen({ onFinish }) {
                       resizeMode="contain"
                     />
                   </View>
-                  
                   {/* Text Content */}
                   <View style={styles.textContent}>
-                    <Text style={styles.slideTitle}>{item.title}</Text>
-                    <Text style={styles.slideDescription}>{item.description}</Text>
+                    <Text style={[styles.slideTitle, { color: textMain }]}>
+                      {item.title}
+                    </Text>
+                    <Text style={[styles.slideDescription, { color: textTertiary }]}>
+                      {item.description}
+                    </Text>
                   </View>
                 </View>
               </View>
@@ -181,10 +218,10 @@ export default function OnboardingScreen({ onFinish }) {
               style={[
                 styles.paginationDot,
                 {
-                  backgroundColor: index === activeSlide 
-                    ? '#6366f1' 
-                    : '#e5e7eb',
-                  width: index === activeSlide ? 24 : 8,
+                  backgroundColor: index === activeSlide
+                    ? main
+                    : theme.colors.borderLight,
+                  width: index === activeSlide ? 22 : 8,
                 },
               ]}
             />
@@ -193,57 +230,61 @@ export default function OnboardingScreen({ onFinish }) {
 
         {/* Footer */}
         <View style={styles.footer}>
-          <TouchableOpacity 
-            style={styles.nextButton} 
+          <TouchableOpacity
+            style={[
+              styles.nextButton,
+              { backgroundColor: main, shadowColor: mainDark },
+            ]}
             onPress={handleNext}
           >
             <View style={styles.buttonContent}>
               <Text style={styles.nextButtonText}>
-                {activeSlide === onboardingData.length - 1 ? 'Get Started' : 'Next'}
+                {activeSlide === onboardingData.length - 1
+                  ? 'Get Started'
+                  : 'Next'}
               </Text>
-              <Ionicons 
-                name="chevron-forward" 
-                size={20} 
-                color="#fff" 
-              />
+              <Ionicons name="chevron-forward" size={20} color="#fff" />
             </View>
           </TouchableOpacity>
         </View>
 
+        {/* Exit & Skip Alerts */}
         <Alert
-  open={showExitModal}
-  onConfirm={() => {
-    setShowExitModal(false);
-    BackHandler.exitApp();
-  }}
-  onCancel={() => setShowExitModal(false)}
-  title="Exit App"
-  message="Are you sure you want to exit the onboarding?"
-  confirmText="Exit"
-  cancelText="Stay"
-  icon={<LogOut color="#fff" size={40} />}
-  iconBg="#ef4444"
-/>
-<Alert
-  open={showSkipModal}
-  onConfirm={() => {
-    setShowSkipModal(false);
-    handleFinish();
-  }}
-  onCancel={() => setShowSkipModal(false)}
-  title="Skip Onboarding"
-  message="Are you sure you want to skip the introduction?"
-  confirmText="Skip"
-  cancelText="Continue Tour"
-  icon={<FastForward color="#fff" size={40} />}
-  iconBg="#f59e42"
-  confirmColor="#f59e42"
-  confirmTextColor="#fff"
-  cancelColor="#f1f5f9"
-  cancelTextColor="#334155"
-/>
-
-
+          open={showExitModal}
+          onConfirm={() => {
+            setShowExitModal(false);
+            BackHandler.exitApp();
+          }}
+          onCancel={() => setShowExitModal(false)}
+          title="Exit App"
+          message="Are you sure you want to exit the onboarding?"
+          confirmText="Exit"
+          cancelText="Stay"
+          icon={<LogOut color="#fff" size={40} />}
+          iconBg={theme.colors.error}
+          confirmColor={theme.colors.error}
+          confirmTextColor="#fff"
+          cancelColor={theme.colors.buttonSecondary}
+          cancelTextColor={theme.colors.text}
+        />
+        <Alert
+          open={showSkipModal}
+          onConfirm={() => {
+            setShowSkipModal(false);
+            handleFinish();
+          }}
+          onCancel={() => setShowSkipModal(false)}
+          title="Skip Onboarding"
+          message="Are you sure you want to skip the introduction?"
+          confirmText="Skip"
+          cancelText="Continue Tour"
+          icon={<FastForward color="#fff" size={40} />}
+          iconBg={theme.colors.warning}
+          confirmColor={theme.colors.warning}
+          confirmTextColor="#fff"
+          cancelColor={theme.colors.buttonSecondary}
+          cancelTextColor={theme.colors.text}
+        />
       </Animated.View>
     </View>
   );
@@ -252,7 +293,6 @@ export default function OnboardingScreen({ onFinish }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffff',
   },
   content: {
     flex: 1,
@@ -260,70 +300,69 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: 100,
-    paddingBottom: 20,
-    paddingHorizontal: 24,
-    height: 80,
+    paddingTop: Platform.OS === 'ios' ? 80 : 60,
+    paddingBottom: 16,
+    paddingHorizontal: 18,
+    minHeight: 70,
   },
   backButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#6366f1',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#6366f1',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
     elevation: 4,
+    marginRight: 4,
   },
   spacer: {
     flex: 1,
   },
   skipButton: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 18,
     paddingVertical: 8,
-    backgroundColor: '#6366f1',
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    width:100,
-    height:40,
+    minWidth: 90,
+    height: 40,
+    elevation: 2,
   },
   skipText: {
     fontSize: 16,
-    color: '#ffffff',
     fontWeight: '600',
   },
   slidesContainer: {
-    flex: 1,
-  },
-  scrollView: {
     flex: 1,
   },
   scrollContent: {
     alignItems: 'center',
   },
   slideContainer: {
-    width: width,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 24,
-  },
-  slide: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: 0,
     flex: 1,
   },
-  imageContainer: {
-    width: width * 0.8,
-    height: height * 0.45,
+  slide: {
+    width: '92%',
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 24,
-    
+    marginTop: 0,
+    paddingHorizontal: 0,
+    minHeight: 400,
+    elevation: 3,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.10,
+    shadowRadius: 10,
+    marginBottom: 10,
+  },
+  imageContainer: {
+    width: '95%',
+    height: height * 0.32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 22,
+    marginBottom: 8,
   },
   slideImage: {
     width: '100%',
@@ -331,61 +370,56 @@ const styles = StyleSheet.create({
   },
   textContent: {
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: 12,
+    marginTop: 14,
+    width: '100%',
   },
   slideTitle: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '700',
-    color: '#1f2937',
-    
     marginBottom: 10,
-    lineHeight: 30,
+    lineHeight: 32,
+    textAlign: 'center',
   },
   slideDescription: {
     fontSize: 16,
-    color: '#6b7280',
-    
-    lineHeight: 24,
-    paddingHorizontal: 5,
+    lineHeight: 23,
+    paddingHorizontal: 2,
+    textAlign: 'center',
+    marginBottom: 2,
   },
   paginationContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 30,
-    paddingHorizontal: 24,
+    paddingVertical: 18,
+    paddingHorizontal: 8,
   },
   paginationDot: {
     height: 8,
     borderRadius: 4,
     marginHorizontal: 4,
-    transition: 'all 0.3s ease',
   },
   footer: {
-    paddingBottom: 40,
-    paddingTop: 20,
-    paddingHorizontal: 24,
+    paddingBottom: Platform.OS === 'ios' ? 36 : 24,
+    paddingTop: 8,
+    paddingHorizontal: 16,
   },
   nextButton: {
-    backgroundColor: '#6366f1',
     borderRadius: 25,
-    shadowColor: '#6366f1',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    elevation: 7,
   },
   buttonContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 32,
+    paddingVertical: 15,
+    paddingHorizontal: 36,
   },
   nextButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#ffffff',
+    color: '#fff',
     marginRight: 8,
   },
 });
