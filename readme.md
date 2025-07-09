@@ -16,6 +16,9 @@ This will launch the Expo development server. You can then run the app on your d
 
 ---
 
+Build command is  : eas build -p android --profile preview
+
+
 **Note:**  
 - Make sure you have [Node.js](https://nodejs.org/) and [Expo CLI](https://docs.expo.dev/get-started/installation/) installed.
 - For any issues, try deleting `node_modules` and running `npm install` again.
