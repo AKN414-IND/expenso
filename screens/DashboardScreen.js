@@ -31,6 +31,8 @@ import Carousel from "react-native-reanimated-carousel";
 import ReminderCard from "../components/ReminderCard";
 import { useFocusEffect } from "@react-navigation/native";
 
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
 const screenWidth = Dimensions.get("window").width;
 const screenHeight = Dimensions.get("window").height;
 
@@ -172,6 +174,22 @@ const ONBOARDING_STEPS = [
     position: "center",
   },
 ];
+const ONBOARDING_FLAG_KEY = "onboarding_completed";
+
+const checkOnboardingCompleted = async () => {
+  try {
+    const flag = await AsyncStorage.getItem(ONBOARDING_FLAG_KEY);
+    return flag === "true";
+  } catch {
+    return false;
+  }
+};
+
+const setOnboardingCompleted = async () => {
+  try {
+    await AsyncStorage.setItem(ONBOARDING_FLAG_KEY, "true");
+  } catch {}
+};
 
 const OnboardingOverlay = ({ isVisible, onComplete, onStepChange }) => {
   const { theme } = useTheme();
@@ -623,14 +641,17 @@ export default function DashboardScreen({ navigation }) {
   const [expenseToDelete, setExpenseToDelete] = useState(null);
 
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [isFirstVisit, setIsFirstVisit] = useState(true);
 
   useEffect(() => {
     if (session?.user) {
       initializeData();
-      checkFirstVisit();
+      (async () => {
+        const completed = await checkOnboardingCompleted();
+        setShowOnboarding(!completed);
+      })();
     }
   }, [session]);
+  
 
   useEffect(() => {
     global.targetRefs = {};
@@ -683,20 +704,10 @@ export default function DashboardScreen({ navigation }) {
   };
 
   const completeOnboarding = async () => {
-    try {
-      await supabase.from("user_preferences").upsert({
-        user_id: session.user.id,
-        onboarding_completed: true,
-        updated_at: new Date().toISOString(),
-      });
-
-      setShowOnboarding(false);
-      setIsFirstVisit(false);
-    } catch (error) {
-      console.error("Error completing onboarding:", error);
-      setShowOnboarding(false);
-    }
+    await setOnboardingCompleted();
+    setShowOnboarding(false);
   };
+  
 
   const initializeData = async () => {
     setLoading(true);
@@ -1249,7 +1260,6 @@ export default function DashboardScreen({ navigation }) {
           {/* Category Specific Budgets */}
           {budgets.length > 0 && (
             <>
-              
               {budgetProgress.map((item) => (
                 <BudgetBar
                   key={item.id}

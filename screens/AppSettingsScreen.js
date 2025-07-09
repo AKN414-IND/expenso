@@ -563,6 +563,7 @@ export default function AppSettingsScreen({ navigation }) {
               onPress={() =>
                 navigation.navigate("Dashboard", { showOnboarding: true })
               }
+              
             >
               <Text style={styles.tourButtonText}>Show Tour</Text>
             </TouchableOpacity>
