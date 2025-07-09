@@ -31,6 +31,7 @@ import Carousel from "react-native-reanimated-carousel";
 import ReminderCard from "../components/ReminderCard";
 import { useFocusEffect } from "@react-navigation/native";
 import { useRoute, useNavigation } from "@react-navigation/native";
+import CalendarHeatmap from "../components/Heatmap";
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
@@ -87,10 +88,10 @@ const ONBOARDING_STEPS = [
     position: "bottom",
   },
   {
-    id: "chart",
-    title: "Spending Breakdown",
+    id: "heatmap",
+    title: "Monthly Spending Heatmap",
     description:
-      "This pie chart visualizes your expenses by category, helping you understand where your money goes.",
+      "This heatmap gives you a bird’s-eye view of your daily spending for the current month. Each square represents a day—tap on any date to see the total spent and a category breakdown. The color and emoji show how much you spent: darker colors and 🔥 mean higher spending, while lighter colors and 🧊 or 😴 mean low or no expenses.",
     targetId: "chart-container",
     position: "bottom",
   },
@@ -625,7 +626,7 @@ const BudgetBar = ({ label, spent, budget, color, icon, theme }) => {
 };
 
 export default function DashboardScreen({ navigation }) {
-  const route = useRoute(); 
+  const route = useRoute();
   const { session } = useAuth();
   const { theme } = useTheme();
   const targetRefs = useRef({});
@@ -655,9 +656,10 @@ export default function DashboardScreen({ navigation }) {
         return;
       }
     }
-    return () => { isMounted = false; };
+    return () => {
+      isMounted = false;
+    };
   }, [session, route.params?.showOnboarding]);
-  
 
   useEffect(() => {
     global.targetRefs = {};
@@ -713,7 +715,6 @@ export default function DashboardScreen({ navigation }) {
     await setOnboardingCompleted();
     setShowOnboarding(false);
   };
-  
 
   const initializeData = async () => {
     setLoading(true);
@@ -1113,61 +1114,12 @@ export default function DashboardScreen({ navigation }) {
             </View>
           </View>
 
-          {expenses.length > 0 && getPieChartData.length > 0 && (
+          {expenses.length > 0 && (
             <View
               style={styles.chartsContainer}
               ref={(ref) => setTargetRef("chart-container", ref)}
             >
-              <View
-                style={[
-                  styles.chartCard,
-                  { backgroundColor: theme.colors.surface },
-                ]}
-              >
-                <View style={styles.chartRow}>
-                  <View style={styles.chartSide}>
-                    <PieChart
-                      data={getPieChartData}
-                      width={screenWidth}
-                      height={200}
-                      chartConfig={{
-                        backgroundColor: theme.colors.surface,
-                        backgroundGradientFrom: theme.colors.surface,
-                        backgroundGradientTo: theme.colors.surface,
-                        color: (opacity = 1) => `rgba(6,182,212,${opacity})`,
-                      }}
-                      accessor={"amount"}
-                      backgroundColor={"transparent"}
-                      paddingLeft={100}
-                      center={[0, 0]}
-                      absolute
-                      hasLegend={false}
-                    />
-                  </View>
-                  <View style={styles.legendSide}>
-                    <View style={styles.chartLegendGrid}>
-                      {getPieChartData.map((item) => (
-                        <View key={item.name} style={styles.legendGridItem}>
-                          <View
-                            style={[
-                              styles.legendColor,
-                              { backgroundColor: item.color },
-                            ]}
-                          />
-                          <Text
-                            style={[
-                              styles.legendText,
-                              { color: theme.colors.textSecondary },
-                            ]}
-                          >
-                            {item.icon} {item.name}: ₹{item.amount.toFixed(0)}
-                          </Text>
-                        </View>
-                      ))}
-                    </View>
-                  </View>
-                </View>
-              </View>
+              <CalendarHeatmap expenses={expenses} theme={theme} />
             </View>
           )}
         </View>
@@ -1286,7 +1238,6 @@ export default function DashboardScreen({ navigation }) {
           ref={(ref) => setTargetRef("recent-section", ref)}
         >
           <View style={styles.sectionHeader}>
-            
             <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
               Recent Expenses
             </Text>
