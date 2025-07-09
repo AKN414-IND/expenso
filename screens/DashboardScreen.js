@@ -30,6 +30,7 @@ import { LogOut, Trash2, X, ArrowLeft, ArrowRight } from "lucide-react-native";
 import Carousel from "react-native-reanimated-carousel";
 import ReminderCard from "../components/ReminderCard";
 import { useFocusEffect } from "@react-navigation/native";
+import { useRoute, useNavigation } from "@react-navigation/native";
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
@@ -624,10 +625,12 @@ const BudgetBar = ({ label, spent, budget, color, icon, theme }) => {
 };
 
 export default function DashboardScreen({ navigation }) {
+  const route = useRoute(); 
   const { session } = useAuth();
   const { theme } = useTheme();
   const targetRefs = useRef({});
   const scrollViewRef = useRef(null);
+  const nav = useNavigation();
 
   const [expenses, setExpenses] = useState([]);
   const [budgets, setBudgets] = useState([]);
@@ -643,14 +646,17 @@ export default function DashboardScreen({ navigation }) {
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
+    let isMounted = true;
     if (session?.user) {
       initializeData();
-      (async () => {
-        const completed = await checkOnboardingCompleted();
-        setShowOnboarding(!completed);
-      })();
+      if (route.params?.showOnboarding) {
+        setShowOnboarding(true);
+        navigation.setParams({ showOnboarding: undefined });
+        return;
+      }
     }
-  }, [session]);
+    return () => { isMounted = false; };
+  }, [session, route.params?.showOnboarding]);
   
 
   useEffect(() => {
@@ -1280,6 +1286,7 @@ export default function DashboardScreen({ navigation }) {
           ref={(ref) => setTargetRef("recent-section", ref)}
         >
           <View style={styles.sectionHeader}>
+            
             <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
               Recent Expenses
             </Text>

@@ -26,7 +26,6 @@ export default function AppNavigator() {
   const { session, loading } = useAuth();
   const [onboardingComplete, setOnboardingComplete] = useState(null);
 
-  // Check onboarding status once on mount
   useEffect(() => {
     const checkStatus = async () => {
       try {
