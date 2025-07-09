@@ -1,4 +1,3 @@
-// screens/OnboardingScreen.js
 import React, { useRef, useState } from 'react';
 import {
   View,
@@ -60,7 +59,7 @@ export default function OnboardingScreen({ onFinish }) {
   useFocusEffect(
     React.useCallback(() => {
       const onBackPress = () => {
-        setShowExitModal(true);   // <-- Show custom modal!
+        setShowExitModal(true);   
         return true;
       };
       const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
@@ -68,7 +67,6 @@ export default function OnboardingScreen({ onFinish }) {
     }, [])
   );
   
-  // Handle Android back button
   
   React.useEffect(() => {
     Animated.timing(fadeAnim, {

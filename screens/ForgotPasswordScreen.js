@@ -83,7 +83,7 @@ export default function ForgotPasswordScreen({ navigation }) {
           position: "top",
           visibilityTime: 5000,
         });
-        setTimeout(() => navigation.goBack(), 1200); // Give a moment for Toast
+        setTimeout(() => navigation.goBack(), 1200); 
       }
     } catch (err) {
       Toast.show({

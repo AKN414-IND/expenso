@@ -44,10 +44,9 @@ export default function AppSettingsScreen({ navigation }) {
   const { theme, currentTheme, setTheme } = useTheme();
   const [notificationStatus, setNotificationStatus] = useState("unknown");
   const [isLoading, setIsLoading] = useState(false);
-  const [showDatePicker, setShowDatePicker] = useState(null); // 'from' or 'to'
+  const [showDatePicker, setShowDatePicker] = useState(null);  
   const [dateRange, setDateRange] = useState({ from: null, to: null });
 
-  // Custom Alert State
   const [alertProps, setAlertProps] = useState({
     open: false,
     title: "",
@@ -78,7 +77,6 @@ export default function AppSettingsScreen({ navigation }) {
     }
   };
 
-  // Show Confirm Custom Alert for Delete
   const confirmDeleteAllData = () => {
     setAlertProps({
       open: true,
@@ -144,7 +142,6 @@ export default function AppSettingsScreen({ navigation }) {
   };
 
   const createExcelWorkbook = (expenses, dateRange) => {
-    // Calculate summary statistics
     const totalExpenses = expenses.reduce(
       (sum, exp) => sum + parseFloat(exp.amount),
       0
@@ -154,16 +151,13 @@ export default function AppSettingsScreen({ navigation }) {
       return acc;
     }, {});
 
-    // Create CSV content (Excel-compatible)
     let csvContent = "";
 
-    // Header information
     csvContent += `Expense Report\n`;
     csvContent += `Period: ${dateRange.from} to ${dateRange.to}\n`;
     csvContent += `Generated: ${new Date().toLocaleDateString()}\n`;
     csvContent += `Total Expenses: ₹${totalExpenses.toFixed(2)}\n\n`;
 
-    // Summary by Category
     csvContent += `CATEGORY SUMMARY\n`;
     csvContent += `Category,Amount\n`;
     Object.entries(categoryTotals).forEach(([category, amount]) => {
@@ -171,7 +165,6 @@ export default function AppSettingsScreen({ navigation }) {
     });
     csvContent += `\n`;
 
-    // Detailed Expenses
     csvContent += `DETAILED EXPENSES\n`;
     csvContent += `Date,Description,Category,Amount,Notes\n`;
     expenses.forEach((exp) => {
@@ -199,7 +192,6 @@ export default function AppSettingsScreen({ navigation }) {
     setIsLoading(true);
 
     try {
-      // Fetch expenses with additional details
       const { data: expenses, error } = await supabase
         .from("expenses")
         .select("*")
@@ -229,21 +221,18 @@ export default function AppSettingsScreen({ navigation }) {
         return;
       }
 
-      // Create Excel-compatible CSV content
       const csvContent = createExcelWorkbook(expenses, dateRange);
       const fileName = formatFileName(dateRange);
       const fileUri = FileSystem.cacheDirectory + fileName;
 
       await FileSystem.writeAsStringAsync(fileUri, csvContent);
 
-      // Share the file
       await Sharing.shareAsync(fileUri, {
         mimeType: "text/csv",
         dialogTitle: "Export Expense Report",
         UTI: "public.comma-separated-values-text",
       });
 
-      // Show success message
       setAlertProps({
         open: true,
         title: "Export Successful",
@@ -283,7 +272,6 @@ export default function AppSettingsScreen({ navigation }) {
     setIsLoading(false);
   };
 
-  // Custom Alert for "Select Dates"
   const showDateMissingAlert = () => {
     setAlertProps({
       open: true,
@@ -301,7 +289,6 @@ export default function AppSettingsScreen({ navigation }) {
     });
   };
 
-  // Export Data Logic
   const exportDataAsPDF = async () => {
     if (!dateRange.from || !dateRange.to) {
       showDateMissingAlert();
@@ -369,7 +356,7 @@ export default function AppSettingsScreen({ navigation }) {
     setIsLoading(false);
   };
 
-  // Card UI Helper
+
   const Card = ({ icon, title, children, style }) => (
     <View
       style={[
@@ -757,8 +744,8 @@ const styles = StyleSheet.create({
   themeOptions: {
     flexDirection: "row",
     gap: 8,
-    flexWrap: "wrap",      // <-- add this!
-    rowGap: 10,            // <-- add for extra spacing between rows (if supported)
+    flexWrap: "wrap",   
+    rowGap: 10,           
   },  
   themeOption: {
     flexDirection: "row",

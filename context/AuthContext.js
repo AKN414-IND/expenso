@@ -1,4 +1,3 @@
-// context/AuthContext.js
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import * as SecureStore from 'expo-secure-store';
@@ -18,22 +17,19 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setLoading(false);
     });
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         setSession(session);
-        
+
         if (event === 'SIGNED_OUT') {
-          // Clear stored credentials on logout
           await clearStoredCredentials();
         }
-        
+
         setLoading(false);
       }
     );
@@ -57,6 +53,7 @@ export const AuthProvider = ({ children }) => {
 
   const value = {
     session,
+    user: session?.user ?? null,
     loading,
     signOut,
   };

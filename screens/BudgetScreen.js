@@ -30,7 +30,6 @@ const EXPENSE_CATEGORIES = [
   { name: "Other", icon: "📝", color: "#06b6d4" },
 ];
 
-// A functional component for rendering a single budget item.
 const BudgetItem = ({ item, theme, onEdit, onDelete }) => (
   <View
     style={[
@@ -181,8 +180,6 @@ const BudgetItem = ({ item, theme, onEdit, onDelete }) => (
 export default function BudgetScreen({ navigation }) {
   const { session } = useAuth();
   const { theme } = useTheme();
-
-  // State Management
   const [profile, setProfile] = useState(null);
   const [expenses, setExpenses] = useState([]);
   const [budgets, setBudgets] = useState([]);
@@ -196,7 +193,6 @@ export default function BudgetScreen({ navigation }) {
     period: "monthly",
   });
 
-  // Data Fetching
   const fetchData = useCallback(async () => {
     if (!session?.user) return;
     try {
@@ -240,9 +236,7 @@ export default function BudgetScreen({ navigation }) {
     fetchData();
   };
 
-  // --- Memoized Calculations ---
 
-  // Calculate total spending for the current month (resets on the 1st)
   const totalSpentThisMonth = useMemo(() => {
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -260,7 +254,6 @@ export default function BudgetScreen({ navigation }) {
       }, 0);
   }, [expenses]);
 
-  // Calculate progress for the overall monthly budget from the user's profile
   const overallBudgetProgress = useMemo(() => {
     const monthlyBudget = parseFloat(profile?.monthly_budget) || 0;
     const remaining = monthlyBudget - totalSpentThisMonth;
@@ -268,18 +261,17 @@ export default function BudgetScreen({ navigation }) {
     if (monthlyBudget > 0) {
       percentage = (totalSpentThisMonth / monthlyBudget) * 100;
     } else if (totalSpentThisMonth > 0) {
-      percentage = 100; // Spent money with no budget
+      percentage = 100;
     }
     return {
       total: monthlyBudget,
       spent: totalSpentThisMonth,
       remaining,
-      percentage: Math.min(percentage, 100), // Cap at 100% for the progress bar
+      percentage: Math.min(percentage, 100),
       isOverBudget: totalSpentThisMonth > monthlyBudget,
     };
   }, [profile, totalSpentThisMonth]);
 
-  // Calculate progress for each individual category budget
   const categoryBudgetsProgress = useMemo(() => {
     const getCategorySpending = (category, period = "monthly") => {
       const now = new Date();
@@ -331,7 +323,6 @@ export default function BudgetScreen({ navigation }) {
     });
   }, [budgets, expenses, theme.colors.primary]);
 
-  // --- Modal and CRUD Operations ---
 
   const openBudgetModal = (budget = null) => {
     if (budget) {
@@ -384,7 +375,7 @@ export default function BudgetScreen({ navigation }) {
       if (error) throw error;
 
       setBudgetModalVisible(false);
-      fetchData(); // Refresh all data
+      fetchData(); 
       alert(`Budget ${isEditing ? "updated" : "created"} successfully!`);
     } catch (err) {
       alert(`Failed to ${isEditing ? "update" : "create"} budget.`);
@@ -407,7 +398,7 @@ export default function BudgetScreen({ navigation }) {
     }
   };
 
-  // --- Render Logic ---
+  
 
   if (loading) {
     return (
@@ -919,7 +910,6 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   headerSubtitle: { fontSize: 16, fontWeight: "500" },
-  // New styles for Overall Progress section
   overallProgressContainer: {
     paddingHorizontal: 20,
     paddingTop: 24,

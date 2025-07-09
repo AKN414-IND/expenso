@@ -58,7 +58,6 @@ const CHART_COLORS = [
   "#DDA0DD",
 ];
 
-// Onboarding steps configuration
 const ONBOARDING_STEPS = [
   {
     id: "welcome",
@@ -174,7 +173,6 @@ const ONBOARDING_STEPS = [
   },
 ];
 
-// Onboarding Overlay Component
 const OnboardingOverlay = ({ isVisible, onComplete, onStepChange }) => {
   const { theme } = useTheme();
 
@@ -473,7 +471,6 @@ const OnboardingOverlay = ({ isVisible, onComplete, onStepChange }) => {
   );
 };
 
-// --- Avatar Component ---
 const Avatar = ({ name, email, size = 50, style, onPress, nativeID }) => {
   const getInitials = useCallback((name, email) => {
     if (name && name.trim()) {
@@ -551,7 +548,6 @@ const Avatar = ({ name, email, size = 50, style, onPress, nativeID }) => {
   );
 };
 
-// --- BudgetBar Component ---
 const BudgetBar = ({ label, spent, budget, color, icon, theme }) => {
   const percent = budget > 0 ? Math.min((spent / budget) * 100, 100) : 0;
   const isOverBudget = spent > budget && budget > 0;
@@ -626,7 +622,6 @@ export default function DashboardScreen({ navigation }) {
   const [showDeleteAlert, setShowDeleteAlert] = useState(false);
   const [expenseToDelete, setExpenseToDelete] = useState(null);
 
-  // Onboarding state
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [isFirstVisit, setIsFirstVisit] = useState(true);
 
@@ -649,7 +644,6 @@ export default function DashboardScreen({ navigation }) {
     }, [session])
   );
 
-  // Check for manual onboarding trigger from navigation params
   useFocusEffect(
     useCallback(() => {
       if (
@@ -657,7 +651,6 @@ export default function DashboardScreen({ navigation }) {
           ?.showOnboarding
       ) {
         setShowOnboarding(true);
-        // Clear the parameter to prevent repeated triggers
         navigation.setParams({ showOnboarding: undefined });
       }
     }, [navigation])
@@ -665,7 +658,6 @@ export default function DashboardScreen({ navigation }) {
 
   const checkFirstVisit = async () => {
     try {
-      // Check if user has completed onboarding
       const { data, error } = await supabase
         .from("user_preferences")
         .select("onboarding_completed")
@@ -679,7 +671,6 @@ export default function DashboardScreen({ navigation }) {
         setIsFirstVisit(false);
       }
     } catch (error) {
-      // If preferences don't exist, show onboarding
       setShowOnboarding(true);
       setIsFirstVisit(true);
     }
@@ -693,7 +684,6 @@ export default function DashboardScreen({ navigation }) {
 
   const completeOnboarding = async () => {
     try {
-      // Mark onboarding as completed
       await supabase.from("user_preferences").upsert({
         user_id: session.user.id,
         onboarding_completed: true,
@@ -738,7 +728,6 @@ export default function DashboardScreen({ navigation }) {
       if (data) {
         setProfile(data);
       } else {
-        // Create profile if it doesn't exist
         const { data: newProfile } = await supabase
           .from("profiles")
           .insert([
@@ -1202,7 +1191,6 @@ export default function DashboardScreen({ navigation }) {
           </View>
         )}
         {/* --- Budgets Section --- */}
-        // REPLACE the entire "Budgets Section" with this
         <View
           style={styles.budgetSection}
           ref={(ref) => setTargetRef("budget-section", ref)}
@@ -1868,7 +1856,6 @@ const styles = StyleSheet.create({
     fontWeight: "300",
     lineHeight: 32,
   },
-  // --- Onboarding Overlay Styles (Cleaned & Structured) ---
   onboardingOverlay: {
     flex: 1,
     backgroundColor: "transparent",

@@ -31,7 +31,6 @@ import {
 } from "lucide-react-native";
 import { Linking } from "react-native";
 
-// Avatar component with initials fallback
 const Avatar = ({ name, email, size = 80, style }) => {
   const getInitials = (name, email) => {
     if (name && name.trim()) {
@@ -142,7 +141,6 @@ export default function ProfileScreen({ navigation }) {
           total_investments: data.total_investments?.toString() || "",
         });
       } else {
-        // Create initial profile if it doesn't exist
         await createInitialProfile();
       }
     } catch (err) {

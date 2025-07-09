@@ -3,14 +3,12 @@ import * as TaskManager from "expo-task-manager";
 import * as BackgroundFetch from "expo-background-fetch";
 import { supabase } from "../lib/supabase";
 
-// Notification categories
 const NOTIFICATION_CATEGORIES = {
   PAYMENT_DUE: "payment_due",
   PAYMENT_OVERDUE: "payment_overdue",
   REMINDER: "reminder"
 };
 
-// Configure notification handler with enhanced settings
 Notifications.setNotificationHandler({
   handleNotification: async (notification) => {
     const { type } = notification.request.content.data || {};
@@ -24,7 +22,6 @@ Notifications.setNotificationHandler({
   },
 });
 
-// Set up notification categories with actions
 const setupNotificationCategories = async () => {
   await Notifications.setNotificationCategoryAsync(NOTIFICATION_CATEGORIES.PAYMENT_DUE, [
     {
@@ -53,7 +50,6 @@ const setupNotificationCategories = async () => {
   ]);
 };
 
-// Enhanced notification scheduling
 const scheduleNotification = async (reminder, customTime = null) => {
   try {
     const { status } = await Notifications.getPermissionsAsync();
@@ -61,7 +57,6 @@ const scheduleNotification = async (reminder, customTime = null) => {
       return null;
     }
 
-    // Cancel existing notification if updating
     if (reminder.notification_id) {
       await Notifications.cancelScheduledNotificationAsync(reminder.notification_id);
     }
@@ -71,7 +66,6 @@ const scheduleNotification = async (reminder, customTime = null) => {
     const [hours, minutes] = reminderTime.split(":").map(Number);
     triggerDate.setHours(hours, minutes, 0, 0);
 
-    // Don't schedule if date is in the past
     if (triggerDate <= new Date()) {
       return null;
     }
@@ -105,7 +99,6 @@ const scheduleNotification = async (reminder, customTime = null) => {
   }
 };
 
-// Batch notification operations
 const scheduleMultipleNotifications = async (reminders) => {
   const results = [];
   
@@ -121,7 +114,6 @@ const scheduleMultipleNotifications = async (reminders) => {
   return results;
 };
 
-// Clean up old notifications
 const cleanupNotifications = async (userReminders = []) => {
   try {
     const scheduledNotifications = await Notifications.getAllScheduledNotificationsAsync();
@@ -138,20 +130,17 @@ const cleanupNotifications = async (userReminders = []) => {
   }
 };
 
-// Background task for checking overdue reminders
 const BACKGROUND_FETCH_TASK = "background-fetch-reminders";
 
 TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
   try {
     console.log("Background task: Checking for overdue reminders");
     
-    // Get current user session from storage
     const session = await getStoredSession();
     if (!session?.user?.id) {
       return BackgroundFetch.BackgroundFetchResult.NoData;
     }
 
-    // Fetch overdue reminders
     const today = new Date().toISOString().split("T")[0];
     const { data: overdueReminders, error } = await supabase
       .from("payment_reminders")
@@ -165,7 +154,6 @@ TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
       return BackgroundFetch.BackgroundFetchResult.NoData;
     }
 
-    // Send overdue notifications
     for (const reminder of overdueReminders) {
       await sendOverdueNotification(reminder);
     }
@@ -177,7 +165,6 @@ TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
   }
 });
 
-// Helper function to get stored session
 const getStoredSession = async () => {
   try {
     const { data: { session } } = await supabase.auth.getSession();
@@ -188,7 +175,6 @@ const getStoredSession = async () => {
   }
 };
 
-// Send overdue notification
 const sendOverdueNotification = async (reminder) => {
   try {
     const daysPast = Math.floor(
@@ -211,14 +197,13 @@ const sendOverdueNotification = async (reminder) => {
         sound: 'default',
         badge: 1
       },
-      trigger: null, // Send immediately
+      trigger: null, 
     });
   } catch (error) {
     console.error("Error sending overdue notification:", error);
   }
 };
 
-// Permission management
 const requestNotificationPermissions = async () => {
   try {
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
