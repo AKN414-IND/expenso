@@ -273,26 +273,36 @@ const OnboardingOverlay = ({ isVisible, onComplete, onStepChange }) => {
     switch (step.position) {
       case "top":
         top = targetLayout.y - tooltipLayout.height - margin;
-        left = targetLayout.x + targetLayout.width / 2 - tooltipLayout.width / 2;
+        left =
+          targetLayout.x + targetLayout.width / 2 - tooltipLayout.width / 2;
         break;
       case "bottom":
         top = targetLayout.y + targetLayout.height + margin;
-        left = targetLayout.x + targetLayout.width / 2 - tooltipLayout.width / 2;
+        left =
+          targetLayout.x + targetLayout.width / 2 - tooltipLayout.width / 2;
         break;
       case "left":
-        top = targetLayout.y + targetLayout.height / 2 - tooltipLayout.height / 2;
+        top =
+          targetLayout.y + targetLayout.height / 2 - tooltipLayout.height / 2;
         left = targetLayout.x - tooltipLayout.width - margin;
         break;
       case "right":
-        top = targetLayout.y + targetLayout.height / 2 - tooltipLayout.height / 2;
+        top =
+          targetLayout.y + targetLayout.height / 2 - tooltipLayout.height / 2;
         left = targetLayout.x + targetLayout.width + margin;
         break;
       default:
         top = screenHeight / 2 - tooltipLayout.height / 2;
         left = screenWidth / 2 - tooltipLayout.width / 2;
     }
-    top = Math.max(margin, Math.min(top, screenHeight - tooltipLayout.height - margin));
-    left = Math.max(margin, Math.min(left, screenWidth - tooltipLayout.width - margin));
+    top = Math.max(
+      margin,
+      Math.min(top, screenHeight - tooltipLayout.height - margin)
+    );
+    left = Math.max(
+      margin,
+      Math.min(left, screenWidth - tooltipLayout.width - margin)
+    );
     return { top, left };
   };
 
@@ -321,8 +331,15 @@ const OnboardingOverlay = ({ isVisible, onComplete, onStepChange }) => {
       animationType="none"
       statusBarTranslucent={true}
     >
-      <Animated.View style={[styles.onboardingOverlay, { opacity: overlayOpacity }]}>
-        <View style={[styles.overlayBackground, { backgroundColor: theme.colors.overlay }]} />
+      <Animated.View
+        style={[styles.onboardingOverlay, { opacity: overlayOpacity }]}
+      >
+        <View
+          style={[
+            styles.overlayBackground,
+            { backgroundColor: theme.colors.overlay },
+          ]}
+        />
 
         {step.targetId && highlightPosition && (
           <Animated.View
@@ -359,23 +376,50 @@ const OnboardingOverlay = ({ isVisible, onComplete, onStepChange }) => {
           }}
         >
           <TouchableOpacity
-            style={[styles.skipButton, { backgroundColor: theme.colors.background }]}
+            style={[
+              styles.skipButton,
+              { backgroundColor: theme.colors.background },
+            ]}
             onPress={handleSkip}
           >
             <X size={20} color={theme.colors.textTertiary} />
           </TouchableOpacity>
 
-          <Text style={[styles.tooltipTitle, { color: theme.colors.text }]}>{step.title}</Text>
-          <Text style={[styles.tooltipDescription, { color: theme.colors.textSecondary }]}>{step.description}</Text>
+          <Text style={[styles.tooltipTitle, { color: theme.colors.text }]}>
+            {step.title}
+          </Text>
+          <Text
+            style={[
+              styles.tooltipDescription,
+              { color: theme.colors.textSecondary },
+            ]}
+          >
+            {step.description}
+          </Text>
 
           <View style={styles.progressContainer}>
-            <View style={[styles.progressBar, { backgroundColor: theme.colors.border }]}>
-              <View style={[
-                styles.progressFill,
-                { backgroundColor: theme.colors.primary, width: `${progress}%` }
-              ]} />
+            <View
+              style={[
+                styles.progressBar,
+                { backgroundColor: theme.colors.border },
+              ]}
+            >
+              <View
+                style={[
+                  styles.progressFill,
+                  {
+                    backgroundColor: theme.colors.primary,
+                    width: `${progress}%`,
+                  },
+                ]}
+              />
             </View>
-            <Text style={[styles.progressText, { color: theme.colors.textTertiary }]}>
+            <Text
+              style={[
+                styles.progressText,
+                { color: theme.colors.textTertiary },
+              ]}
+            >
               {currentStep + 1} of {ONBOARDING_STEPS.length}
             </Text>
           </View>
@@ -393,17 +437,27 @@ const OnboardingOverlay = ({ isVisible, onComplete, onStepChange }) => {
                 onPress={handlePrevious}
               >
                 <ArrowLeft size={16} color={theme.colors.textTertiary} />
-                <Text style={[styles.previousButtonText, { color: theme.colors.textTertiary }]}>
+                <Text
+                  style={[
+                    styles.previousButtonText,
+                    { color: theme.colors.textTertiary },
+                  ]}
+                >
                   Previous
                 </Text>
               </TouchableOpacity>
             )}
 
             <TouchableOpacity
-              style={[styles.nextButton, { backgroundColor: theme.colors.primary }]}
+              style={[
+                styles.nextButton,
+                { backgroundColor: theme.colors.primary },
+              ]}
               onPress={handleNext}
             >
-              <Text style={[styles.nextButtonText, { color: theme.colors.surface }]}>
+              <Text
+                style={[styles.nextButtonText, { color: theme.colors.surface }]}
+              >
                 {currentStep === ONBOARDING_STEPS.length - 1
                   ? "Get Started"
                   : "Next"}
@@ -866,6 +920,16 @@ export default function DashboardScreen({ navigation }) {
     }
   };
 
+  const overallMonthlyBudgetProgress = useMemo(() => {
+    const totalBudget = parseFloat(profile?.monthly_budget) || 0;
+    const spent = monthlyExpenses;
+    return {
+      total: totalBudget,
+      spent: spent,
+      isSet: totalBudget > 0,
+    };
+  }, [profile, monthlyExpenses]);
+
   const renderExpenseItem = useCallback(
     ({ item }) => (
       <TouchableOpacity
@@ -924,14 +988,7 @@ export default function DashboardScreen({ navigation }) {
   }
 
   const recentExpenses = expenses.slice(0, 5);
-  const totalBudgetAmount = budgets.reduce(
-    (sum, b) => sum + (parseFloat(b.amount) || 0),
-    0
-  );
-  const totalSpentForBudgets = budgets.reduce(
-    (sum, b) => sum + getMonthlyCategorySpending(b.category),
-    0
-  );
+
   const today = new Date();
   const todayString = today.toISOString().split("T")[0];
   const todaysTotal = expenses
@@ -1005,7 +1062,6 @@ export default function DashboardScreen({ navigation }) {
             />
           </View>
         </View>
-
         {/* --- Statistics Section --- */}
         <View style={styles.statisticsContainer}>
           <View
@@ -1109,7 +1165,6 @@ export default function DashboardScreen({ navigation }) {
             </View>
           )}
         </View>
-
         {/* --- Reminders Section --- */}
         {uniqueReminders.length > 0 && (
           <View
@@ -1146,8 +1201,8 @@ export default function DashboardScreen({ navigation }) {
             />
           </View>
         )}
-
         {/* --- Budgets Section --- */}
+        // REPLACE the entire "Budgets Section" with this
         <View
           style={styles.budgetSection}
           ref={(ref) => setTargetRef("budget-section", ref)}
@@ -1162,22 +1217,51 @@ export default function DashboardScreen({ navigation }) {
               <Text
                 style={[styles.seeAllText, { color: theme.colors.primary }]}
               >
-                {budgets.length > 0 ? "Manage" : "Create Budget"}
+                Manage Budgets
               </Text>
             </TouchableOpacity>
           </View>
-          {budgets.length > 0 ? (
+
+          {/* Overall Monthly Budget */}
+          {overallMonthlyBudgetProgress.isSet ? (
+            <BudgetBar
+              label="Monthly Budget"
+              spent={overallMonthlyBudgetProgress.spent}
+              budget={overallMonthlyBudgetProgress.total}
+              color={theme.colors.primary}
+              icon="💰"
+              theme={theme}
+            />
+          ) : (
+            <View
+              style={[
+                styles.emptyBudgetState,
+                { backgroundColor: theme.colors.surface, marginBottom: 12 },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.emptyStateText,
+                  { color: theme.colors.textSecondary },
+                ]}
+              >
+                No Overall Budget Set
+              </Text>
+              <Text
+                style={[
+                  styles.emptyStateSubtext,
+                  { color: theme.colors.textTertiary },
+                ]}
+              >
+                Go to your Profile to set a monthly budget.
+              </Text>
+            </View>
+          )}
+
+          {/* Category Specific Budgets */}
+          {budgets.length > 0 && (
             <>
-              {totalBudgetAmount > 0 && (
-                <BudgetBar
-                  label="Total Budget"
-                  spent={totalSpentForBudgets}
-                  budget={totalBudgetAmount}
-                  color={theme.colors.primary}
-                  icon="💰"
-                  theme={theme}
-                />
-              )}
+              
               {budgetProgress.map((item) => (
                 <BudgetBar
                   key={item.id}
@@ -1190,33 +1274,8 @@ export default function DashboardScreen({ navigation }) {
                 />
               ))}
             </>
-          ) : (
-            <View
-              style={[
-                styles.emptyBudgetState,
-                { backgroundColor: theme.colors.surface },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.emptyStateText,
-                  { color: theme.colors.textSecondary },
-                ]}
-              >
-                No budgets set
-              </Text>
-              <Text
-                style={[
-                  styles.emptyStateSubtext,
-                  { color: theme.colors.textTertiary },
-                ]}
-              >
-                Create your first budget to track spending!
-              </Text>
-            </View>
           )}
         </View>
-
         {/* --- Recent Expenses Section --- */}
         <View
           style={styles.recentSection}
@@ -1586,6 +1645,14 @@ const styles = StyleSheet.create({
     color: "#334155",
     fontWeight: "500",
   },
+  subSectionTitle: {
+    fontSize: Math.max(Math.min(screenWidth * 0.04, 16), 12),
+    fontWeight: "600",
+    color: "#334155",
+    marginTop: 16,
+    marginBottom: 8,
+    paddingHorizontal: 4,
+  },
   remindersSection2: {
     paddingHorizontal: Math.max(screenWidth * 0.04, 12),
     marginTop: Math.max(screenWidth * 0.06, 16),
@@ -1800,7 +1867,7 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "300",
     lineHeight: 32,
-  }, 
+  },
   // --- Onboarding Overlay Styles (Cleaned & Structured) ---
   onboardingOverlay: {
     flex: 1,
@@ -1906,5 +1973,4 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginRight: 8,
   },
-  
 });
