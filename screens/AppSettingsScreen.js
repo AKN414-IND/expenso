@@ -23,6 +23,8 @@ import {
 import * as Notifications from "expo-notifications";
 import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
+import * as Print from "expo-print";
+
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
@@ -38,13 +40,12 @@ const themeLabels = {
   neon: "Neon",
 };
 
-
 export default function AppSettingsScreen({ navigation }) {
   const { session } = useAuth();
   const { theme, currentTheme, setTheme } = useTheme();
   const [notificationStatus, setNotificationStatus] = useState("unknown");
   const [isLoading, setIsLoading] = useState(false);
-  const [showDatePicker, setShowDatePicker] = useState(null);  
+  const [showDatePicker, setShowDatePicker] = useState(null);
   const [dateRange, setDateRange] = useState({ from: null, to: null });
 
   const [alertProps, setAlertProps] = useState({
@@ -183,94 +184,109 @@ export default function AppSettingsScreen({ navigation }) {
     return `ExpenseReport_${fromDate}_to_${toDate}.csv`;
   };
 
-  const exportDataAsExcel = async () => {
-    if (!dateRange.from || !dateRange.to) {
-      showDateMissingAlert();
-      return;
-    }
+  function generateExpenseReportHTML(
+    expenses,
+    dateRange,
+    chartImageBase64 = null
+  ) {
+    const total = expenses.reduce(
+      (sum, e) => sum + (parseFloat(e.amount) || 0),
+      0
+    );
+    const categories = {};
+    expenses.forEach((e) => {
+      categories[e.category] =
+        (categories[e.category] || 0) + (parseFloat(e.amount) || 0);
+    });
 
-    setIsLoading(true);
+    const categoryRows = Object.entries(categories)
+      .map(
+        ([cat, amt]) => `<tr><td>${cat}</td><td>₹${amt.toFixed(2)}</td></tr>`
+      )
+      .join("");
 
-    try {
-      const { data: expenses, error } = await supabase
-        .from("expenses")
-        .select("*")
-        .eq("user_id", session.user.id)
-        .gte("date", dateRange.from)
-        .lte("date", dateRange.to)
-        .order("date", { ascending: true });
+    const expenseRows = expenses
+      .map(
+        (e) => `
+      <tr>
+        <td>${e.date || ""}</td>
+        <td>${e.title || ""}</td>
+        <td>${e.category || ""}</td>
+        <td>${e.payment_method || ""}</td>
+        <td>₹${parseFloat(e.amount).toFixed(2)}</td>
+        <td>${e.notes || ""}</td>
+      </tr>`
+      )
+      .join("");
 
-      if (error) throw error;
-
-      if (!expenses || expenses.length === 0) {
-        setAlertProps({
-          open: true,
-          title: "No Data Found",
-          message:
-            "No expenses found for the selected date range. Please try a different period.",
-          confirmText: "OK",
-          icon: <FileText color="#fff" size={40} />,
-          iconBg: "#f59e0b",
-          confirmColor: "#f59e0b",
-          confirmTextColor: "#fff",
-          cancelText: null,
-          onConfirm: () => setAlertProps((a) => ({ ...a, open: false })),
-          onCancel: null,
-        });
-        setIsLoading(false);
-        return;
-      }
-
-      const csvContent = createExcelWorkbook(expenses, dateRange);
-      const fileName = formatFileName(dateRange);
-      const fileUri = FileSystem.cacheDirectory + fileName;
-
-      await FileSystem.writeAsStringAsync(fileUri, csvContent);
-
-      await Sharing.shareAsync(fileUri, {
-        mimeType: "text/csv",
-        dialogTitle: "Export Expense Report",
-        UTI: "public.comma-separated-values-text",
-      });
-
-      setAlertProps({
-        open: true,
-        title: "Export Successful",
-        message: `Expense report exported successfully! ${expenses.length} expenses included.`,
-        confirmText: "OK",
-        icon: <Download color="#fff" size={40} />,
-        iconBg: "#10b981",
-        confirmColor: "#10b981",
-        confirmTextColor: "#fff",
-        cancelText: null,
-        onConfirm: () => setAlertProps((a) => ({ ...a, open: false })),
-        onCancel: null,
-      });
-    } catch (error) {
-      console.error("Export error:", error);
-      setAlertProps({
-        open: true,
-        title: "Export Failed",
-        message:
-          "Could not export data. Please check your connection and try again.",
-        confirmText: "Retry",
-        cancelText: "Cancel",
-        icon: <FileText color="#fff" size={40} />,
-        iconBg: "#ef4444",
-        confirmColor: "#ef4444",
-        confirmTextColor: "#fff",
-        cancelColor: "#f1f5f9",
-        cancelTextColor: "#334155",
-        onConfirm: () => {
-          setAlertProps((a) => ({ ...a, open: false }));
-          exportDataAsExcel();
-        },
-        onCancel: () => setAlertProps((a) => ({ ...a, open: false })),
-      });
-    }
-
-    setIsLoading(false);
-  };
+    return `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="UTF-8" />
+        <style>
+          body { font-family: 'Segoe UI', 'Roboto', Arial, sans-serif; margin: 32px; color: #1e293b; }
+          .header { display: flex; align-items: center; margin-bottom: 32px; }
+          .app-icon { width: 56px; height: 56px; background: #06b6d4; border-radius: 16px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 38px; margin-right: 20px; }
+          .app-title { font-size: 2.1rem; font-weight: 700; letter-spacing: -1px; color: #06b6d4; }
+          h2 { color: #127f73; }
+          .summary { margin-bottom: 24px; }
+          .table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+          .table th, .table td { border: 1px solid #d1d5db; padding: 8px 10px; text-align: left; }
+          .table th { background: #f5f7fa; color: #127f73; }
+          .section-title { font-size: 1.2rem; margin-top: 2rem; color: #06b6d4; }
+          .category-table { width: 60%; margin-bottom: 10px; }
+          .category-table th, .category-table td { border: none; }
+          .total { font-weight: 700; color: #127f73; }
+          .chart { margin: 20px 0; display: flex; justify-content: center; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div class="app-icon">💸</div>
+          <div>
+            <div class="app-title">Expenso</div>
+            <div style="color:#64748b;font-size:1rem;font-weight:500;">Expense Report</div>
+            <div style="font-size:0.96rem;color:#64748b;">${
+              dateRange.from
+            } to ${dateRange.to}</div>
+          </div>
+        </div>
+        <div class="summary">
+          <h2>Overview</h2>
+          <div class="section-title">Total Expenses: <span class="total">₹${total.toFixed(
+            2
+          )}</span></div>
+          <div class="section-title">Category Breakdown:</div>
+          <table class="table category-table">
+            <tr><th>Category</th><th>Amount</th></tr>
+            ${categoryRows}
+          </table>
+        </div>
+        ${
+          chartImageBase64
+            ? `<div class="chart"><img src="data:image/png;base64,${chartImageBase64}" width="320" /></div>`
+            : ""
+        }
+        <h2>Expense Details</h2>
+        <table class="table">
+          <tr>
+            <th>Date</th>
+            <th>Title</th>
+            <th>Category</th>
+            <th>Method</th>
+            <th>Amount</th>
+            <th>Notes</th>
+          </tr>
+          ${expenseRows}
+        </table>
+        <div style="margin-top:2rem;font-size:0.9rem;color:#94a3b8;text-align:right;">
+          Generated by Expenso • ${new Date().toLocaleString()}
+        </div>
+      </body>
+    </html>
+    `;
+  }
 
   const showDateMissingAlert = () => {
     setAlertProps({
@@ -322,21 +338,33 @@ export default function AppSettingsScreen({ navigation }) {
         return;
       }
 
-      let content = `Expense Report\n${dateRange.from} to ${dateRange.to}\n\n`;
-      content += expenses
-        .map(
-          (exp) =>
-            `• ${exp.date}: ₹${exp.amount} | ${exp.title} | ${exp.category}`
-        )
-        .join("\n");
+      let chartImageBase64 = null;
 
-      const fileUri =
-        FileSystem.cacheDirectory + `expense-report-${Date.now()}.txt`;
-      await FileSystem.writeAsStringAsync(fileUri, content);
+      const html = generateExpenseReportHTML(
+        expenses,
+        dateRange,
+        chartImageBase64
+      );
+      const { uri } = await Print.printToFileAsync({ html });
 
-      await Sharing.shareAsync(fileUri, {
-        mimeType: "text/plain",
-        dialogTitle: "Export Expense Report",
+      await Sharing.shareAsync(uri, {
+        mimeType: "application/pdf",
+        dialogTitle: "Export Expense Report (PDF)",
+        UTI: "com.adobe.pdf",
+      });
+
+      setAlertProps({
+        open: true,
+        title: "Export Successful",
+        message: `Expense report exported as PDF! ${expenses.length} expenses included.`,
+        confirmText: "OK",
+        icon: <Download color="#fff" size={40} />,
+        iconBg: "#10b981",
+        confirmColor: "#10b981",
+        confirmTextColor: "#fff",
+        cancelText: null,
+        onConfirm: () => setAlertProps((a) => ({ ...a, open: false })),
+        onCancel: null,
       });
     } catch (e) {
       setAlertProps({
@@ -355,7 +383,6 @@ export default function AppSettingsScreen({ navigation }) {
     }
     setIsLoading(false);
   };
-
 
   const Card = ({ icon, title, children, style }) => (
     <View
@@ -602,12 +629,12 @@ export default function AppSettingsScreen({ navigation }) {
           <TouchableOpacity
             style={[
               styles.exportButton,
-              { backgroundColor: theme.colors.success },
+              { backgroundColor: theme.colors.primary, marginTop: 10 },
             ]}
-            onPress={exportDataAsExcel}
+            onPress={exportDataAsPDF}
           >
             <Download color="#fff" size={18} style={{ marginRight: 8 }} />
-            <Text style={styles.exportButtonText}> Export Excel</Text>
+            <Text style={styles.exportButtonText}>Export PDF</Text>
           </TouchableOpacity>
         </Card>
 
@@ -744,9 +771,9 @@ const styles = StyleSheet.create({
   themeOptions: {
     flexDirection: "row",
     gap: 8,
-    flexWrap: "wrap",   
-    rowGap: 10,           
-  },  
+    flexWrap: "wrap",
+    rowGap: 10,
+  },
   themeOption: {
     flexDirection: "row",
     alignItems: "center",
