@@ -195,7 +195,6 @@ const setOnboardingCompleted = async () => {
 
 const OnboardingOverlay = ({ isVisible, onComplete, onStepChange }) => {
   const { theme } = useTheme();
-
   const [currentStep, setCurrentStep] = useState(0);
   const [overlayOpacity] = useState(new Animated.Value(0));
   const [highlightOpacity] = useState(new Animated.Value(0));
@@ -213,16 +212,15 @@ const OnboardingOverlay = ({ isVisible, onComplete, onStepChange }) => {
 
       Animated.timing(highlightOpacity, {
         toValue: 1,
-        duration: 500,
+        duration: 400,
         useNativeDriver: true,
       }).start();
     }
   }, [isVisible]);
 
   useEffect(() => {
-    if (isVisible && tooltipMeasured) {
-      measureTargetElement();
-    }
+    if (isVisible && tooltipMeasured) measureTargetElement();
+    // eslint-disable-next-line
   }, [currentStep, isVisible, tooltipMeasured]);
 
   const measureTargetElement = () => {
@@ -269,7 +267,7 @@ const OnboardingOverlay = ({ isVisible, onComplete, onStepChange }) => {
   const handleComplete = () => {
     Animated.timing(overlayOpacity, {
       toValue: 0,
-      duration: 300,
+      duration: 250,
       useNativeDriver: true,
     }).start(() => {
       onComplete();
@@ -286,7 +284,7 @@ const OnboardingOverlay = ({ isVisible, onComplete, onStepChange }) => {
         left: screenWidth / 2 - tooltipLayout.width / 2,
       };
     }
-    const margin = 20;
+    const margin = 18;
     let top, left;
     switch (step.position) {
       case "top":
@@ -346,45 +344,59 @@ const OnboardingOverlay = ({ isVisible, onComplete, onStepChange }) => {
     <Modal
       visible={isVisible}
       transparent={true}
-      animationType="none"
+      animationType="fade"
       statusBarTranslucent={true}
     >
       <Animated.View
-        style={[styles.onboardingOverlay, { opacity: overlayOpacity }]}
+        style={[
+          {
+            flex: 1,
+            opacity: overlayOpacity,
+            backgroundColor: "rgba(15, 23, 42, 0.72)", // Nice dark glassmorphism
+          },
+        ]}
       >
-        <View
-          style={[
-            styles.overlayBackground,
-            { backgroundColor: theme.colors.overlay },
-          ]}
-        />
-
         {step.targetId && highlightPosition && (
           <Animated.View
-            style={[
-              styles.highlightCircle,
-              {
-                opacity: highlightOpacity,
-                left: highlightPosition.left,
-                top: highlightPosition.top,
-                width: highlightPosition.width,
-                height: highlightPosition.height,
-                borderColor: theme.colors.primary,
-                shadowColor: theme.colors.primary,
-              },
-            ]}
+            style={{
+              position: "absolute",
+              borderRadius: 18,
+              borderWidth: 3,
+              borderColor: theme.colors.primary,
+              left: highlightPosition.left,
+              top: highlightPosition.top,
+              width: highlightPosition.width,
+              height: highlightPosition.height,
+              backgroundColor: "rgba(255,255,255,0.15)",
+              shadowColor: theme.colors.primary,
+              shadowOffset: { width: 0, height: 0 },
+              shadowOpacity: 0.5,
+              shadowRadius: 18,
+              elevation: 10,
+              opacity: highlightOpacity,
+            }}
           />
         )}
 
         <View
           style={[
-            styles.tooltip,
             {
-              backgroundColor: theme.colors.surface,
-              shadowColor: theme.colors.shadow,
               position: "absolute",
               top: tooltipPosition.top,
               left: tooltipPosition.left,
+              minWidth: Math.max(screenWidth * 0.68, 240),
+              maxWidth: Math.max(screenWidth * 0.92, 340),
+              borderRadius: 20,
+              backgroundColor: theme.colors.surface + "F2",
+              padding: 26,
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 16 },
+              shadowOpacity: 0.17,
+              shadowRadius: 26,
+              elevation: 14,
+              borderWidth: 1.5,
+              borderColor: theme.colors.primary + "29",
+              alignItems: "center",
             },
           ]}
           onLayout={(event) => {
@@ -393,88 +405,142 @@ const OnboardingOverlay = ({ isVisible, onComplete, onStepChange }) => {
             setTooltipMeasured(true);
           }}
         >
+          {/* Skip button */}
           <TouchableOpacity
-            style={[
-              styles.skipButton,
-              { backgroundColor: theme.colors.background },
-            ]}
+            style={{
+              position: "absolute",
+              top: 10,
+              right: 10,
+              zIndex: 3,
+              backgroundColor: theme.colors.background,
+              borderRadius: 22,
+              width: 32,
+              height: 32,
+              alignItems: "center",
+              justifyContent: "center",
+              elevation: 2,
+            }}
             onPress={handleSkip}
           >
             <X size={20} color={theme.colors.textTertiary} />
           </TouchableOpacity>
 
-          <Text style={[styles.tooltipTitle, { color: theme.colors.text }]}>
+          {/* Icon/Illustration */}
+          <Text style={{ fontSize: 38, marginBottom: 6 }}>
+            {step.icon || "🎓"}
+          </Text>
+
+          {/* Step title */}
+          <Text
+            style={{
+              fontSize: 20,
+              fontWeight: "bold",
+              color: theme.colors.primary,
+              marginBottom: 10,
+              textAlign: "center",
+            }}
+          >
             {step.title}
           </Text>
+
+          {/* Description */}
           <Text
-            style={[
-              styles.tooltipDescription,
-              { color: theme.colors.textSecondary },
-            ]}
+            style={{
+              fontSize: 15,
+              color: theme.colors.textSecondary,
+              marginBottom: 16,
+              textAlign: "center",
+              lineHeight: 22,
+            }}
           >
             {step.description}
           </Text>
 
-          <View style={styles.progressContainer}>
-            <View
-              style={[
-                styles.progressBar,
-                { backgroundColor: theme.colors.border },
-              ]}
-            >
+          {/* Progress Stepper Dots */}
+          <View
+            style={{
+              flexDirection: "row",
+              gap: 7,
+              marginBottom: 18,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            {ONBOARDING_STEPS.map((_, i) => (
               <View
-                style={[
-                  styles.progressFill,
-                  {
-                    backgroundColor: theme.colors.primary,
-                    width: `${progress}%`,
-                  },
-                ]}
+                key={i}
+                style={{
+                  width: currentStep === i ? 20 : 10,
+                  height: 10,
+                  borderRadius: 6,
+                  backgroundColor:
+                    currentStep === i
+                      ? theme.colors.primary
+                      : theme.colors.border,
+                  marginHorizontal: 2,
+                  transition: "all 0.22s",
+                }}
               />
-            </View>
-            <Text
-              style={[
-                styles.progressText,
-                { color: theme.colors.textTertiary },
-              ]}
-            >
-              {currentStep + 1} of {ONBOARDING_STEPS.length}
-            </Text>
+            ))}
           </View>
 
-          <View style={styles.tooltipButtons}>
+          {/* Navigation Buttons */}
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              width: "100%",
+              marginTop: 6,
+              gap: 12,
+            }}
+          >
             {currentStep > 0 && (
               <TouchableOpacity
-                style={[
-                  styles.previousButton,
-                  {
-                    backgroundColor: theme.colors.background,
-                    borderColor: theme.colors.border,
-                  },
-                ]}
                 onPress={handlePrevious}
+                style={{
+                  flex: 1,
+                  backgroundColor: theme.colors.background,
+                  borderColor: theme.colors.primary,
+                  borderWidth: 1,
+                  paddingVertical: 12,
+                  borderRadius: 10,
+                  alignItems: "center",
+                  flexDirection: "row",
+                  justifyContent: "center",
+                  gap: 7,
+                }}
               >
-                <ArrowLeft size={16} color={theme.colors.textTertiary} />
+                <ArrowLeft size={16} color={theme.colors.primary} />
                 <Text
-                  style={[
-                    styles.previousButtonText,
-                    { color: theme.colors.textTertiary },
-                  ]}
+                  style={{
+                    color: theme.colors.primary,
+                    fontWeight: "600",
+                    fontSize: 15,
+                  }}
                 >
                   Previous
                 </Text>
               </TouchableOpacity>
             )}
-
             <TouchableOpacity
-              style={[
-                styles.nextButton,
-                { backgroundColor: theme.colors.primary },
-              ]}
               onPress={handleNext}
+              style={{
+                flex: 1,
+                backgroundColor: theme.colors.primary,
+                borderRadius: 10,
+                paddingVertical: 12,
+                alignItems: "center",
+                flexDirection: "row",
+                justifyContent: "center",
+                gap: 7,
+              }}
             >
               <Text
-                style={[styles.nextButtonText, { color: theme.colors.surface }]}
+                style={{
+                  color: theme.colors.surface,
+                  fontWeight: "600",
+                  fontSize: 15,
+                }}
               >
                 {currentStep === ONBOARDING_STEPS.length - 1
                   ? "Get Started"
@@ -490,6 +556,7 @@ const OnboardingOverlay = ({ isVisible, onComplete, onStepChange }) => {
     </Modal>
   );
 };
+
 
 const Avatar = ({ name, email, size = 50, style, onPress, nativeID }) => {
   const getInitials = useCallback((name, email) => {
@@ -643,6 +710,7 @@ export default function DashboardScreen({ navigation }) {
   const [showLogoutAlert, setShowLogoutAlert] = useState(false);
   const [showDeleteAlert, setShowDeleteAlert] = useState(false);
   const [expenseToDelete, setExpenseToDelete] = useState(null);
+  const [incomes, setIncomes] = useState([]);
 
   const [showOnboarding, setShowOnboarding] = useState(false);
 
@@ -685,6 +753,17 @@ export default function DashboardScreen({ navigation }) {
     }, [navigation])
   );
 
+  const fetchIncomes = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("side_incomes")
+        .select("*")
+        .eq("user_id", session.user.id)
+        .order("date", { ascending: false });
+      if (!error) setIncomes(data || []);
+    } catch {}
+  };
+
   const checkFirstVisit = async () => {
     try {
       const { data, error } = await supabase
@@ -720,11 +799,12 @@ export default function DashboardScreen({ navigation }) {
     setLoading(true);
     try {
       await Promise.all([
+        fetchProfile(),
         fetchExpenses(),
         fetchBudgets(),
-        fetchProfile(),
         fetchReminders(),
-      ]);
+        fetchIncomes(),
+      ]).finally(() => setRefreshing(false));
     } catch (error) {
       RNAlert.alert(
         "Error",
@@ -735,6 +815,49 @@ export default function DashboardScreen({ navigation }) {
     }
   };
 
+  const renderIncomeItem = useCallback(
+    ({ item }) => (
+      <View
+        style={[
+          styles.expenseItem,
+          {
+            backgroundColor: theme.colors.surface,
+            borderLeftWidth: 4,
+            borderLeftColor: theme.colors.success,
+          },
+        ]}
+      >
+        <View style={styles.expenseInfo}>
+          <Text
+            style={[styles.expenseTitle, { color: theme.colors.textSecondary }]}
+          >
+            {item.source || "Other Income"}
+          </Text>
+          <Text
+            style={[styles.expenseDate, { color: theme.colors.textSecondary }]}
+          >
+            {item.date ? new Date(item.date).toLocaleDateString() : "No date"}
+          </Text>
+          <Text
+            style={[
+              styles.expenseCategory,
+              { color: theme.colors.textSecondary },
+            ]}
+          >
+            {item.frequency === "one-time"
+              ? "One-time"
+              : item.frequency || "Recurring"}
+            {item.is_recurring ? " • 🔄" : ""}
+          </Text>
+        </View>
+        <Text style={[styles.expenseAmount, { color: theme.colors.success }]}>
+          +₹{(parseFloat(item.amount) || 0).toFixed(2)}
+        </Text>
+      </View>
+    ),
+    [theme]
+  );
+
   const fetchProfile = async () => {
     try {
       const { data, error } = await supabase
@@ -742,6 +865,7 @@ export default function DashboardScreen({ navigation }) {
         .select("*")
         .eq("id", session.user.id)
         .single();
+      if (data) setProfile(data);
       if (error && error.code !== "PGRST116") return;
       if (data) {
         setProfile(data);
@@ -936,6 +1060,7 @@ export default function DashboardScreen({ navigation }) {
       isSet: totalBudget > 0,
     };
   }, [profile, monthlyExpenses]);
+  
 
   const renderExpenseItem = useCallback(
     ({ item }) => (
@@ -1232,6 +1357,59 @@ export default function DashboardScreen({ navigation }) {
             </>
           )}
         </View>
+        {/* --- Recent Income Section --- */}
+        <View style={styles.recentSection}>
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+              Recent Income
+            </Text>
+            <TouchableOpacity
+              onPress={() => navigation.navigate("IncomeManagement")}
+            >
+              <Text
+                style={[styles.seeAllText, { color: theme.colors.primary }]}
+              >
+                See All
+              </Text>
+            </TouchableOpacity>
+          </View>
+          {incomes.length > 0 ? (
+            <FlatList
+              data={incomes.slice(0, 5)}
+              renderItem={renderIncomeItem}
+              keyExtractor={(item) =>
+                item.id?.toString() || Math.random().toString()
+              }
+              scrollEnabled={false}
+              showsVerticalScrollIndicator={false}
+            />
+          ) : (
+            <View
+              style={[
+                styles.emptyState,
+                { backgroundColor: theme.colors.surface },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.emptyStateText,
+                  { color: theme.colors.textSecondary },
+                ]}
+              >
+                No income yet
+              </Text>
+              <Text
+                style={[
+                  styles.emptyStateSubtext,
+                  { color: theme.colors.textTertiary },
+                ]}
+              >
+                Add your first income to get started!
+              </Text>
+            </View>
+          )}
+        </View>
+
         {/* --- Recent Expenses Section --- */}
         <View
           style={styles.recentSection}

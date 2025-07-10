@@ -113,6 +113,7 @@ export default function AppSettingsScreen({ navigation }) {
             title: "Success",
             message: "All your data has been deleted.",
             confirmText: "OK",
+            showCancel: false,
             icon: <Trash2 color="#fff" size={40} />,
             iconBg: "#06b6d4",
             confirmColor: "#06b6d4",
@@ -127,6 +128,7 @@ export default function AppSettingsScreen({ navigation }) {
             title: "Error",
             message: "Failed to delete data. Try again.",
             confirmText: "OK",
+            showCancel: false,
             icon: <Trash2 color="#fff" size={40} />,
             iconBg: "#ef4444",
             confirmColor: "#ef4444",
@@ -295,6 +297,7 @@ export default function AppSettingsScreen({ navigation }) {
       message:
         "Please select both start and end dates to generate your expense report.",
       confirmText: "OK",
+      showCancel: false,
       icon: <FileText color="#fff" size={40} />,
       iconBg: "#f59e0b",
       confirmColor: "#f59e0b",
@@ -326,6 +329,7 @@ export default function AppSettingsScreen({ navigation }) {
           title: "No Data",
           message: "No expenses found for the selected period.",
           confirmText: "OK",
+          showCancel: false,
           icon: <FileText color="#fff" size={40} />,
           iconBg: "#06b6d4",
           confirmColor: "#06b6d4",
@@ -358,6 +362,7 @@ export default function AppSettingsScreen({ navigation }) {
         title: "Export Successful",
         message: `Expense report exported as PDF! ${expenses.length} expenses included.`,
         confirmText: "OK",
+        showCancel: false,
         icon: <Download color="#fff" size={40} />,
         iconBg: "#10b981",
         confirmColor: "#10b981",
@@ -372,6 +377,7 @@ export default function AppSettingsScreen({ navigation }) {
         title: "Export Failed",
         message: "Could not export data.",
         confirmText: "OK",
+        showCancel: false,
         icon: <FileText color="#fff" size={40} />,
         iconBg: "#ef4444",
         confirmColor: "#ef4444",
@@ -431,7 +437,7 @@ export default function AppSettingsScreen({ navigation }) {
         <Text style={[styles.headerTitle, { color: theme.colors.text }]}>
           App Settings
         </Text>
-        <View style={{ width: 38 }} /> 
+        <View style={{ width: 38 }} />
       </View>
 
       <ScrollView
@@ -563,7 +569,6 @@ export default function AppSettingsScreen({ navigation }) {
               onPress={() =>
                 navigation.navigate("Dashboard", { showOnboarding: true })
               }
-              
             >
               <Text style={styles.tourButtonText}>Show Tour</Text>
             </TouchableOpacity>

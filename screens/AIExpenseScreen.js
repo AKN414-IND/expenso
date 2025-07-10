@@ -123,6 +123,12 @@ export default function CombinedExpenseScreen({ navigation }) {
   const [isSaving, setIsSaving] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [incomeSource, setIncomeSource] = useState("");
+  const [incomeAmount, setIncomeAmount] = useState("");
+  const [incomeDescription, setIncomeDescription] = useState("");
+  const [incomeDate, setIncomeDate] = useState(new Date());
+  const [incomeFrequency, setIncomeFrequency] = useState("monthly");
+  const [incomeIsRecurring, setIncomeIsRecurring] = useState(true);
   const progressAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const tabAnim = useRef(new Animated.Value(0)).current;
@@ -130,10 +136,9 @@ export default function CombinedExpenseScreen({ navigation }) {
   useEffect(() => {
     fetchRecentExpenses();
   }, []);
-
   useEffect(() => {
     Animated.timing(tabAnim, {
-      toValue: activeTab === "ai" ? 0 : 1,
+      toValue: activeTab === "ai" ? 0 : activeTab === "manual" ? 1 : 2,
       duration: 300,
       useNativeDriver: false,
     }).start();
@@ -405,7 +410,11 @@ Ensure the response is valid JSON only, no additional text or formatting.
   const handleDateChange = (event, selectedDate) => {
     setShowDatePicker(false);
     if (selectedDate) {
-      setDate(selectedDate);
+      if (activeTab === "income") {
+        setIncomeDate(selectedDate);
+      } else {
+        setDate(selectedDate);
+      }
     }
   };
 
@@ -498,6 +507,52 @@ Ensure the response is valid JSON only, no additional text or formatting.
     }
   };
 
+  const handleSaveIncome = async () => {
+    if (!incomeSource.trim()) {
+      Alert.alert("Missing Source", "Please enter a source for your income");
+      return;
+    }
+    if (!incomeAmount || parseFloat(incomeAmount) <= 0) {
+      Alert.alert("Invalid Amount", "Please enter a valid income amount");
+      return;
+    }
+    try {
+      const incomeData = {
+        user_id: session.user.id,
+        source: incomeSource.trim(),
+        amount: parseFloat(incomeAmount),
+        description: incomeDescription.trim(),
+        frequency: incomeFrequency,
+        is_recurring: incomeIsRecurring,
+        date: formatDate(incomeDate),
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      const { error } = await supabase
+        .from("side_incomes")
+        .insert([incomeData]);
+      if (error) throw error;
+      Toast.show({
+        type: "success",
+        text1: "✅ Success",
+        text2: "Income saved successfully!",
+        position: "top",
+        visibilityTime: 3000,
+      });
+      setIncomeSource("");
+      setIncomeAmount("");
+      setIncomeDescription("");
+      setIncomeDate(new Date());
+      setIncomeFrequency("monthly");
+      setIncomeIsRecurring(true);
+    } catch (error) {
+      Alert.alert(
+        "Save Failed",
+        error.message || "Could not save income. Please try again."
+      );
+    }
+  };
+
   const resetForm = () => {
     setImage(null);
     setExtractedData(null);
@@ -507,6 +562,12 @@ Ensure the response is valid JSON only, no additional text or formatting.
     setAmount("");
     setCategory("");
     setDate(new Date());
+    setIncomeSource("");
+    setIncomeAmount("");
+    setIncomeDescription("");
+    setIncomeDate(new Date());
+    setIncomeFrequency("monthly");
+    setIncomeIsRecurring(true);
   };
 
   const getCategoryIcon = (categoryId) => {
@@ -578,7 +639,6 @@ Ensure the response is valid JSON only, no additional text or formatting.
           AI Scanner
         </Text>
       </TouchableOpacity>
-
       <TouchableOpacity
         style={[
           styles.tab,
@@ -606,17 +666,46 @@ Ensure the response is valid JSON only, no additional text or formatting.
             },
           ]}
         >
-          Manual Entry
+          Manual
         </Text>
       </TouchableOpacity>
-
+      <TouchableOpacity
+        style={[
+          styles.tab,
+          activeTab === "income" && { backgroundColor: theme.colors.card },
+        ]}
+        onPress={() => setActiveTab("income")}
+      >
+        <Ionicons
+          name="cash"
+          size={20}
+          color={
+            activeTab === "income"
+              ? theme.colors.primary
+              : theme.colors.textTertiary
+          }
+        />
+        <Text
+          style={[
+            styles.tabText,
+            {
+              color:
+                activeTab === "income"
+                  ? theme.colors.primary
+                  : theme.colors.textTertiary,
+            },
+          ]}
+        >
+          Income
+        </Text>
+      </TouchableOpacity>
       <Animated.View
         style={[
           styles.tabIndicator,
           {
             left: tabAnim.interpolate({
-              inputRange: [0, 1],
-              outputRange: ["2%", "52%"],
+              inputRange: [0, 1, 2],
+              outputRange: ["2%", "35%", "68%"],
             }),
             backgroundColor: theme.colors.primary + "33",
           },
@@ -624,7 +713,6 @@ Ensure the response is valid JSON only, no additional text or formatting.
       />
     </View>
   );
-
   const renderAIScanner = () => (
     <View style={styles.tabContent}>
       <View style={styles.imageSection}>
@@ -1226,6 +1314,174 @@ Ensure the response is valid JSON only, no additional text or formatting.
     </View>
   );
 
+  const renderIncomeEntry = () => (
+    <View style={styles.tabContent}>
+      <View style={styles.form}>
+        <View style={styles.inputContainer}>
+          <Text style={[styles.label, { color: theme.colors.text }]}>
+            Income Source
+          </Text>
+          <TextInput
+            style={[
+              styles.input,
+              {
+                backgroundColor: theme.colors.surface,
+                borderColor: theme.colors.border,
+                color: theme.colors.text,
+              },
+            ]}
+            placeholder="e.g., Freelance, Salary"
+            value={incomeSource}
+            onChangeText={setIncomeSource}
+            placeholderTextColor={theme.colors.textTertiary}
+          />
+        </View>
+        <View style={styles.inputContainer}>
+          <Text style={[styles.label, { color: theme.colors.text }]}>
+            Amount
+          </Text>
+          <TextInput
+            style={[
+              styles.input,
+              {
+                backgroundColor: theme.colors.surface,
+                borderColor: theme.colors.border,
+                color: theme.colors.text,
+              },
+            ]}
+            placeholder="0.00"
+            value={incomeAmount}
+            onChangeText={setIncomeAmount}
+            keyboardType="decimal-pad"
+            placeholderTextColor={theme.colors.textTertiary}
+          />
+        </View>
+        <View style={styles.inputContainer}>
+          <Text style={[styles.label, { color: theme.colors.text }]}>
+            Description (Optional)
+          </Text>
+          <TextInput
+            style={[
+              styles.input,
+              {
+                backgroundColor: theme.colors.surface,
+                borderColor: theme.colors.border,
+                color: theme.colors.text,
+              },
+            ]}
+            placeholder="Description"
+            value={incomeDescription}
+            onChangeText={setIncomeDescription}
+            placeholderTextColor={theme.colors.textTertiary}
+          />
+        </View>
+        <View style={styles.inputContainer}>
+          <Text style={[styles.label, { color: theme.colors.text }]}>Date</Text>
+          <TouchableOpacity
+            style={[
+              styles.dateButton,
+              {
+                backgroundColor: theme.colors.surface,
+                borderColor: theme.colors.border,
+              },
+            ]}
+            onPress={() => setShowDatePicker(true)}
+          >
+            <Ionicons
+              name="calendar"
+              size={20}
+              color={theme.colors.textTertiary}
+            />
+            <Text style={[styles.dateText, { color: theme.colors.text }]}>
+              {formatDate(incomeDate)}
+            </Text>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.inputContainer}>
+          <Text style={[styles.label, { color: theme.colors.text }]}>
+            Frequency
+          </Text>
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            {["monthly", "weekly", "one-time"].map((freq) => (
+              <TouchableOpacity
+                key={freq}
+                style={[
+                  styles.quickAmountButton,
+                  {
+                    backgroundColor:
+                      incomeFrequency === freq
+                        ? theme.colors.primary
+                        : theme.colors.primary + "33",
+                    borderColor: theme.colors.primary,
+                  },
+                ]}
+                onPress={() => setIncomeFrequency(freq)}
+              >
+                <Text
+                  style={[
+                    styles.quickAmountText,
+                    {
+                      color:
+                        incomeFrequency === freq
+                          ? "#fff"
+                          : theme.colors.primary,
+                    },
+                  ]}
+                >
+                  {freq.charAt(0).toUpperCase() + freq.slice(1)}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+        <View style={styles.inputContainer}>
+          <TouchableOpacity
+            style={{ flexDirection: "row", alignItems: "center" }}
+            onPress={() => setIncomeIsRecurring(!incomeIsRecurring)}
+          >
+            <View
+              style={{
+                width: 18,
+                height: 18,
+                borderWidth: 1,
+                borderColor: theme.colors.border,
+                borderRadius: 4,
+                backgroundColor: incomeIsRecurring
+                  ? theme.colors.primary
+                  : theme.colors.surface,
+                justifyContent: "center",
+                alignItems: "center",
+                marginRight: 8,
+              }}
+            >
+              {incomeIsRecurring && (
+                <Text style={{ color: "#fff", fontSize: 12 }}>✓</Text>
+              )}
+            </View>
+            <Text style={{ color: theme.colors.text }}>
+              This is a recurring income
+            </Text>
+          </TouchableOpacity>
+        </View>
+        <TouchableOpacity
+          style={[
+            styles.saveButton,
+            {
+              backgroundColor: theme.colors.success,
+              shadowColor: theme.colors.success,
+            },
+          ]}
+          onPress={handleSaveIncome}
+        >
+          <Ionicons name="checkmark" size={18} color={theme.colors.surface} />
+          <Text style={[styles.buttonText, { color: theme.colors.surface }]}>
+            Save Income
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
   const renderEditModal = () => (
     <Modal
       visible={showEditModal}
@@ -1502,7 +1758,7 @@ Ensure the response is valid JSON only, no additional text or formatting.
             <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: theme.colors.text }]}>
-            Add Expense
+            Add Entry
           </Text>
           <TouchableOpacity onPress={resetForm}>
             <Ionicons name="refresh" size={24} color={theme.colors.primary} />
@@ -1514,7 +1770,11 @@ Ensure the response is valid JSON only, no additional text or formatting.
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {activeTab === "ai" ? renderAIScanner() : renderManualEntry()}
+          {activeTab === "ai"
+            ? renderAIScanner()
+            : activeTab === "manual"
+            ? renderManualEntry()
+            : renderIncomeEntry()}
         </ScrollView>
         {renderEditModal()}
         {renderCategoryModal()}
@@ -1567,7 +1827,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 4,
     bottom: 4,
-    width: "46%",
+    width: "30%",
     borderRadius: 8,
     zIndex: 1,
   },
@@ -1713,13 +1973,13 @@ const styles = StyleSheet.create({
   },
   editButtonText: { fontSize: 14, fontWeight: "600", marginLeft: 6 },
   saveButton: {
-    flex: 2,
     borderRadius: 12,
-    padding: 14,
+    padding: 16,
+    marginTop: 8,
     elevation: 2,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
   },
   loadingContainer: {
     flexDirection: "row",
@@ -1728,8 +1988,13 @@ const styles = StyleSheet.create({
   },
   form: { gap: 20 },
   inputContainer: { gap: 8 },
-  label: { fontSize: 16, fontWeight: "600" },
-  input: { borderRadius: 12, padding: 16, fontSize: 16, borderWidth: 1 },
+  label: { fontSize: 14, fontWeight: "600", marginBottom: 6 },
+  input: {
+    borderRadius: 8,
+    borderWidth: 1,
+    fontSize: 16,
+    padding: 12,
+  },
   quickAmounts: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -1739,10 +2004,14 @@ const styles = StyleSheet.create({
   quickAmountButton: {
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: 20,
+    borderRadius: 8,
     borderWidth: 1,
+    marginRight: 8,
+    marginTop: 6,
   },
-  quickAmountText: { fontSize: 14, fontWeight: "500" },
+
+  quickAmountText: { fontSize: 14, fontWeight: "600" },
+
   categoryButton: {
     borderRadius: 12,
     padding: 16,
@@ -1756,11 +2025,11 @@ const styles = StyleSheet.create({
   categoryText: { fontSize: 16, fontWeight: "500" },
   categoryPlaceholder: { fontSize: 16 },
   dateButton: {
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
     flexDirection: "row",
     alignItems: "center",
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 10,
   },
   dateText: { fontSize: 16, marginLeft: 12, fontWeight: "500" },
   recentSection: { marginTop: 8 },

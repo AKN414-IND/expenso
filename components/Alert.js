@@ -20,6 +20,7 @@ const Alert = ({
   confirmTextColor,
   cancelTextColor,
   showIcon = true,
+  showCancel = true, 
 }) => {
   const { theme } = useTheme();
 
@@ -44,7 +45,7 @@ const Alert = ({
               styles.iconWrapper,
               {
                 backgroundColor: iconBg || theme.colors.primary,
-                shadowColor: (iconBg || theme.colors.primary),
+                shadowColor: iconBg || theme.colors.primary,
               }
             ]}>
               {icon}
@@ -66,19 +67,21 @@ const Alert = ({
               { color: confirmTextColor || theme.colors.surface }
             ]}>{confirmText}</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.cancelBtn,
-              { backgroundColor: cancelColor || theme.colors.background }
-            ]}
-            onPress={onCancel}
-            activeOpacity={0.8}
-          >
-            <Text style={[
-              styles.cancelText,
-              { color: cancelTextColor || theme.colors.text }
-            ]}>{cancelText}</Text>
-          </TouchableOpacity>
+          {showCancel && (
+            <TouchableOpacity
+              style={[
+                styles.cancelBtn,
+                { backgroundColor: cancelColor || theme.colors.background }
+              ]}
+              onPress={onCancel}
+              activeOpacity={0.8}
+            >
+              <Text style={[
+                styles.cancelText,
+                { color: cancelTextColor || theme.colors.text }
+              ]}>{cancelText}</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     </Modal>

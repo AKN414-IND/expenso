@@ -179,11 +179,11 @@ export default function OnboardingScreen({ onFinish }) {
                   style={[
                     styles.slide,
                     {
-                      backgroundColor: card,
-                      borderRadius: 22,
+            
+                      
                       paddingVertical: height < 700 ? 12 : 24,
                       minHeight: height * 0.6,
-                      shadowColor: main,
+                      
                     },
                   ]}
                 >
@@ -350,11 +350,6 @@ const styles = StyleSheet.create({
     marginTop: 0,
     paddingHorizontal: 0,
     minHeight: 400,
-    elevation: 3,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.10,
-    shadowRadius: 10,
-    marginBottom: 10,
   },
   imageContainer: {
     width: '95%',
