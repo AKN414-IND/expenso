@@ -186,12 +186,14 @@ export default function BudgetScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [budgetModalVisible, setBudgetModalVisible] = useState(false);
+  const [monthlyBudgetModalVisible, setMonthlyBudgetModalVisible] = useState(false);
   const [editingBudget, setEditingBudget] = useState(null);
   const [budgetForm, setBudgetForm] = useState({
     category: "",
     amount: "",
     period: "monthly",
   });
+  const [monthlyBudgetAmount, setMonthlyBudgetAmount] = useState("");
 
   const fetchData = useCallback(async () => {
     if (!session?.user) return;
@@ -235,7 +237,6 @@ export default function BudgetScreen({ navigation }) {
     setRefreshing(true);
     fetchData();
   };
-
 
   const totalSpentThisMonth = useMemo(() => {
     const now = new Date();
@@ -323,7 +324,6 @@ export default function BudgetScreen({ navigation }) {
     });
   }, [budgets, expenses, theme.colors.primary]);
 
-
   const openBudgetModal = (budget = null) => {
     if (budget) {
       setEditingBudget(budget);
@@ -337,6 +337,11 @@ export default function BudgetScreen({ navigation }) {
       setBudgetForm({ category: "", amount: "", period: "monthly" });
     }
     setBudgetModalVisible(true);
+  };
+
+  const openMonthlyBudgetModal = () => {
+    setMonthlyBudgetAmount((profile?.monthly_budget || 0).toString());
+    setMonthlyBudgetModalVisible(true);
   };
 
   const saveBudget = async () => {
@@ -383,6 +388,29 @@ export default function BudgetScreen({ navigation }) {
     }
   };
 
+  const saveMonthlyBudget = async () => {
+    if (!monthlyBudgetAmount) {
+      alert("Please enter a valid amount.");
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ monthly_budget: parseFloat(monthlyBudgetAmount) })
+        .eq("id", session.user.id);
+
+      if (error) throw error;
+
+      setMonthlyBudgetModalVisible(false);
+      fetchData();
+      alert("Monthly budget updated successfully!");
+    } catch (err) {
+      alert("Failed to update monthly budget.");
+      console.error("Save monthly budget error:", err);
+    }
+  };
+
   const deleteBudget = async (budgetId) => {
     try {
       const { error } = await supabase
@@ -397,8 +425,6 @@ export default function BudgetScreen({ navigation }) {
       console.error("Delete budget error:", err);
     }
   };
-
-  
 
   if (loading) {
     return (
@@ -486,9 +512,20 @@ export default function BudgetScreen({ navigation }) {
               { backgroundColor: theme.colors.surface },
             ]}
           >
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-              Overall Monthly Progress
-            </Text>
+            <View style={styles.overallProgressHeader}>
+              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+                Overall Monthly Progress
+              </Text>
+              <TouchableOpacity
+                style={[
+                  styles.editBudgetButton,
+                  { backgroundColor: theme.colors.primary + "18" },
+                ]}
+                onPress={openMonthlyBudgetModal}
+              >
+                <Text style={{ fontSize: 16 }}>✏️</Text>
+              </TouchableOpacity>
+            </View>
             <View style={styles.progressSection}>
               <View
                 style={[
@@ -660,7 +697,7 @@ export default function BudgetScreen({ navigation }) {
         </View>
       </ScrollView>
 
-      {/* Budget Modal */}
+      {/* Category Budget Modal */}
       <Modal
         animationType="slide"
         transparent={true}
@@ -865,25 +902,138 @@ export default function BudgetScreen({ navigation }) {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* Monthly Budget Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={monthlyBudgetModalVisible}
+        onRequestClose={() => setMonthlyBudgetModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
+          <View
+            style={[
+              styles.monthlyBudgetModalContainer,
+              { backgroundColor: theme.colors.surface },
+            ]}
+          >
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
+                Edit Monthly Budget
+              </Text>
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={() => setMonthlyBudgetModalVisible(false)}
+              >
+                <Text
+                  style={[styles.closeButtonText, { color: theme.colors.text }]}
+                >
+                  ×
+                </Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.monthlyBudgetContent}>
+              <View style={styles.formSection}>
+                <Text
+                  style={[
+                    styles.formLabel,
+                    { color: theme.colors.textSecondary },
+                  ]}
+                >
+                  Monthly Budget Amount
+                </Text>
+                <View
+                  style={[
+                    styles.inputContainer,
+                    { borderColor: theme.colors.border },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.currencySymbol,
+                      { color: theme.colors.textTertiary },
+                    ]}
+                  >
+                    ₹
+                  </Text>
+                  <TextInput
+                    style={[styles.amountInput, { color: theme.colors.text }]}
+                    placeholder="0"
+                    value={monthlyBudgetAmount}
+                    onChangeText={setMonthlyBudgetAmount}
+                    keyboardType="numeric"
+                    placeholderTextColor={theme.colors.textTertiary}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={[
+                    styles.modalButton,
+                    styles.cancelButton,
+                    {
+                      backgroundColor: theme.colors.buttonSecondary,
+                      borderColor: theme.colors.border,
+                    },
+                  ]}
+                  onPress={() => setMonthlyBudgetModalVisible(false)}
+                >
+                  <Text
+                    style={[
+                      styles.cancelButtonText,
+                      { color: theme.colors.textSecondary },
+                    ]}
+                  >
+                    Cancel
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.modalButton,
+                    styles.saveButton,
+                    { backgroundColor: theme.colors.primary },
+                  ]}
+                  onPress={saveMonthlyBudget}
+                >
+                  <Text style={[styles.saveButtonText, { color: "#fff" }]}>
+                    Update Budget
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  scrollView: { flex: 1 },
-  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
-  loadingText: { marginTop: 16, fontSize: 16, fontWeight: "500" },
+  container: {
+    flex: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    fontWeight: "500",
+  },
+  scrollView: {
+    flex: 1,
+  },
   header: {
     paddingHorizontal: 20,
-    paddingTop: 50,
+    paddingTop: 20,
     paddingBottom: 24,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-    elevation: 2,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
+    borderBottomWidth: 1,
   },
   headerTop: {
     flexDirection: "row",
@@ -891,53 +1041,129 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 16,
   },
-  backButton: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
-  backButtonText: { fontSize: 14, fontWeight: "600" },
-  addButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
-    elevation: 2,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
+  backButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
   },
-  addButtonText: { fontSize: 14, fontWeight: "700" },
+  backButtonText: {
+    fontSize: 16,
+    fontWeight: "500",
+  },
+  addButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  addButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
   headerTitle: {
     fontSize: 28,
-    fontWeight: "800",
-    letterSpacing: -0.5,
+    fontWeight: "700",
     marginBottom: 4,
   },
-  headerSubtitle: { fontSize: 16, fontWeight: "500" },
+  headerSubtitle: {
+    fontSize: 16,
+    fontWeight: "400",
+  },
   overallProgressContainer: {
     paddingHorizontal: 20,
-    paddingTop: 24,
-    paddingBottom: 8,
+    paddingTop: 20,
   },
   overallProgressCard: {
     borderRadius: 16,
     padding: 20,
     elevation: 2,
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 8,
+    shadowRadius: 4,
+  },
+  overallProgressHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  editBudgetButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: "center",
+    alignItems: "center",
   },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    marginBottom: 16,
-    letterSpacing: -0.3,
+    fontSize: 18,
+    fontWeight: "600",
   },
-  budgetListContainer: { paddingHorizontal: 20, paddingBottom: 40 },
+  progressSection: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  progressBarContainer: {
+    flex: 1,
+    height: 8,
+    borderRadius: 4,
+    overflow: "hidden",
+    marginRight: 12,
+  },
+  progressBar: {
+    height: "100%",
+    borderRadius: 4,
+  },
+  progressText: {
+    fontSize: 16,
+    fontWeight: "600",
+    minWidth: 48,
+    textAlign: "right",
+  },
+  statsContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  statItem: {
+    alignItems: "center",
+    flex: 1,
+  },
+  statValue: {
+    fontSize: 16,
+    fontWeight: "600",
+    marginBottom: 2,
+  },
+  statLabel: {
+    fontSize: 12,
+    fontWeight: "500",
+  },
+  warningBanner: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  warningText: {
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  budgetListContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 24,
+    paddingBottom: 40,
+  },
   budgetCard: {
     borderRadius: 16,
     padding: 20,
+    borderWidth: 1,
     elevation: 2,
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 8,
-    borderWidth: 1,
+    shadowRadius: 4,
   },
   budgetHeader: {
     flexDirection: "row",
@@ -949,184 +1175,207 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     flex: 1,
-    marginRight: 8,
   },
   iconContainer: {
     width: 48,
     height: 48,
-    borderRadius: 12,
-    alignItems: "center",
+    borderRadius: 24,
     justifyContent: "center",
+    alignItems: "center",
     marginRight: 12,
   },
-  budgetIcon: { fontSize: 24 },
-  budgetInfo: { flex: 1 },
+  budgetIcon: {
+    fontSize: 24,
+  },
+  budgetInfo: {
+    flex: 1,
+  },
   budgetTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    letterSpacing: -0.2,
+    fontSize: 16,
+    fontWeight: "600",
     marginBottom: 2,
   },
-  budgetPeriod: { fontSize: 14, fontWeight: "500" },
-  budgetActions: { flexDirection: "row", gap: 8 },
+  budgetPeriod: {
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  budgetActions: {
+    flexDirection: "row",
+    gap: 8,
+  },
   actionButton: {
     width: 36,
     height: 36,
-    borderRadius: 8,
-    alignItems: "center",
+    borderRadius: 18,
     justifyContent: "center",
-  },
-  progressSection: {
-    flexDirection: "row",
     alignItems: "center",
-    marginBottom: 16,
   },
-  progressBarContainer: {
-    flex: 1,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 12,
-    overflow: "hidden",
-  },
-  progressBar: { height: "100%", borderRadius: 4 },
-  progressText: {
-    fontSize: 14,
-    fontWeight: "700",
-    minWidth: 40,
-    textAlign: "right",
-  },
-  statsContainer: {
-    flexDirection: "row",
-    borderRadius: 12,
-    padding: 16,
+  emptyState: {
+    borderRadius: 16,
+    padding: 32,
+    alignItems: "center",
     marginTop: 8,
   },
-  statItem: { flex: 1, alignItems: "center" },
-  statValue: { fontSize: 16, fontWeight: "700", marginBottom: 4 },
-  statLabel: { fontSize: 12, fontWeight: "500" },
-  warningBanner: {
-    borderRadius: 8,
-    padding: 12,
-    marginTop: 12,
-    borderLeftWidth: 4,
+  emptyStateIcon: {
+    fontSize: 48,
+    marginBottom: 16,
   },
-  warningText: { fontSize: 13, fontWeight: "600" },
-  emptyState: {
-    borderRadius: 20,
-    padding: 48,
-    alignItems: "center",
-    marginTop: 20,
-    elevation: 2,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-  },
-  emptyStateIcon: { fontSize: 64, marginBottom: 16 },
   emptyStateTitle: {
-    fontSize: 22,
-    fontWeight: "700",
+    fontSize: 18,
+    fontWeight: "600",
     marginBottom: 8,
-    letterSpacing: -0.3,
   },
   emptyStateText: {
-    fontSize: 16,
+    fontSize: 14,
     textAlign: "center",
-    lineHeight: 22,
-    marginBottom: 32,
+    marginBottom: 24,
+    lineHeight: 20,
   },
   emptyStateButton: {
-    paddingHorizontal: 32,
-    paddingVertical: 16,
-    borderRadius: 24,
-    elevation: 3,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
   },
-  emptyStateButtonText: { fontSize: 16, fontWeight: "700" },
-  modalOverlay: { flex: 1, justifyContent: "flex-end" },
+  emptyStateButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
   modalContainer: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    maxHeight: "85%",
-    minHeight: "60%",
+    width: "90%",
+    maxWidth: 400,
+    maxHeight: "80%",
+    borderRadius: 16,
+    overflow: "hidden",
+  },
+  monthlyBudgetModalContainer: {
+    width: "90%",
+    maxWidth: 400,
+    borderRadius: 16,
+    overflow: "hidden",
   },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: 20,
-    borderBottomWidth: 1,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 16,
   },
-  modalTitle: { fontSize: 24, fontWeight: "700", letterSpacing: -0.3 },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "600",
+  },
   closeButton: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    alignItems: "center",
     justifyContent: "center",
+    alignItems: "center",
   },
-  closeButtonText: { fontSize: 24, fontWeight: "300" },
-  modalContent: { flex: 1, paddingHorizontal: 20 },
-  formSection: { marginBottom: 32 },
+  closeButtonText: {
+    fontSize: 24,
+    fontWeight: "300",
+  },
+  modalContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  monthlyBudgetContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  formSection: {
+    marginBottom: 24,
+  },
   formLabel: {
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: "500",
     marginBottom: 12,
-    letterSpacing: -0.1,
   },
-  categoryGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
+  categoryGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
   categoryOption: {
-    borderRadius: 12,
-    padding: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
     alignItems: "center",
-    minWidth: 100,
-    borderWidth: 2,
+    minWidth: 80,
   },
-  categoryIcon: { fontSize: 24, marginBottom: 8 },
-  categoryText: { fontSize: 12, fontWeight: "600", textAlign: "center" },
+  categoryIcon: {
+    fontSize: 20,
+    marginBottom: 4,
+  },
+  categoryText: {
+    fontSize: 12,
+    fontWeight: "500",
+    textAlign: "center",
+  },
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 4,
-    borderWidth: 2,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    height: 48,
   },
-  currencySymbol: { fontSize: 20, fontWeight: "600", marginRight: 8 },
+  currencySymbol: {
+    fontSize: 18,
+    fontWeight: "500",
+    marginRight: 8,
+  },
   amountInput: {
     flex: 1,
-    fontSize: 20,
-    fontWeight: "600",
-    paddingVertical: 16,
+    fontSize: 16,
+    fontWeight: "500",
   },
-  periodOptions: { flexDirection: "row", borderRadius: 12, padding: 4, gap: 4 },
+  periodOptions: {
+    flexDirection: "row",
+    gap: 8,
+  },
   periodOption: {
     flex: 1,
     paddingVertical: 12,
-    paddingHorizontal: 16,
     borderRadius: 8,
+    borderWidth: 1,
     alignItems: "center",
   },
-  periodText: { fontSize: 14, fontWeight: "600" },
+  periodText: {
+    fontSize: 14,
+    fontWeight: "500",
+  },
   modalActions: {
     flexDirection: "row",
-    gap: 16,
-    paddingTop: 24,
-    paddingBottom: 32,
+    gap: 12,
+    marginTop: 8,
   },
   modalButton: {
     flex: 1,
-    paddingVertical: 16,
-    borderRadius: 12,
+    paddingVertical: 12,
+    borderRadius: 8,
     alignItems: "center",
-    elevation: 2,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
   },
-  cancelButton: { borderWidth: 2 },
-  saveButton: { shadowOpacity: 0.3 },
-  cancelButtonText: { fontSize: 16, fontWeight: "600" },
-  saveButtonText: { fontSize: 16, fontWeight: "700" },
+  cancelButton: {
+    borderWidth: 1,
+  },
+  saveButton: {
+    // No additional styles needed
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: "500",
+  },
+  saveButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+  },
 });
