@@ -1358,7 +1358,7 @@ export default function DashboardScreen({ navigation }) {
           )}
         </View>
         {/* --- Recent Income Section --- */}
-        <View style={styles.recentSection}>
+        <View style={styles.recentSectioni}>
           <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
               Recent Income
@@ -1839,6 +1839,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: Math.max(screenWidth * 0.04, 12),
     marginTop: Math.max(screenWidth * 0.05, 14),
     marginBottom: Math.max(screenWidth * 0.22, 80),
+  },
+  recentSectioni: {
+    paddingHorizontal: Math.max(screenWidth * 0.04, 12),
+    marginTop: Math.max(screenWidth * 0.05, 14),
   },
   expenseItem: {
     flexDirection: "row",
