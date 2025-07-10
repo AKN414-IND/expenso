@@ -129,7 +129,7 @@ export default function ProfileScreen({ navigation }) {
         .select("*")
         .eq("id", session.user.id)
         .single();
-  
+
       if (error && error.code !== "PGRST116") {
         console.error("Error fetching profile:", error);
       } else if (data) {
@@ -139,6 +139,7 @@ export default function ProfileScreen({ navigation }) {
           username: data.username || "",
           monthly_income: data.monthly_income?.toString() || "",
           total_investments: data.total_investments?.toString() || "",
+          monthly_budget: data.monthly_budget?.toString() || "",
         });
       } else {
         await createInitialProfile();
@@ -149,13 +150,13 @@ export default function ProfileScreen({ navigation }) {
       setLoading(false);
     }
   };
-  
+
   const updateProfile = async () => {
     if (!editForm.full_name.trim()) {
       Alert.alert("Error", "Please enter your full name");
       return;
     }
-  
+
     try {
       const { data, error } = await supabase
         .from("profiles")
@@ -168,12 +169,15 @@ export default function ProfileScreen({ navigation }) {
           total_investments: editForm.total_investments
             ? parseFloat(editForm.total_investments)
             : null,
+          monthly_budget: editForm.monthly_budget
+            ? parseFloat(editForm.monthly_budget)
+            : null,
           updated_at: new Date().toISOString(),
         })
         .eq("id", session.user.id)
         .select()
         .single();
-  
+
       if (!error && data) {
         setProfile(data);
         setEditModalVisible(false);
@@ -187,7 +191,6 @@ export default function ProfileScreen({ navigation }) {
       Alert.alert("Error", "Failed to update profile");
     }
   };
-  
 
   const createInitialProfile = async () => {
     try {
@@ -468,6 +471,37 @@ export default function ProfileScreen({ navigation }) {
               </View>
             </View>
           </View>
+          <View
+            style={[styles.infoCard, { backgroundColor: theme.colors.surface }]}
+          >
+            <View style={styles.infoRow}>
+              <View style={styles.iconContainer}>
+                <Text style={{ fontSize: 18, color: theme.colors.primary }}>
+                  💰
+                </Text>
+              </View>
+              <View style={styles.infoContent}>
+                <Text
+                  style={[
+                    styles.infoLabel,
+                    { color: theme.colors.textTertiary },
+                  ]}
+                >
+                  Total Budget
+                </Text>
+                <Text
+                  style={[
+                    styles.infoValue,
+                    { color: theme.colors.textSecondary },
+                  ]}
+                >
+                  {profile?.monthly_budget
+                    ? `₹${profile.monthly_budget}`
+                    : "Not set"}
+                </Text>
+              </View>
+            </View>
+          </View>
         </View>
 
         <View style={styles.settingsSection}>
@@ -741,6 +775,33 @@ export default function ProfileScreen({ navigation }) {
                   keyboardType="numeric"
                   onChangeText={(text) =>
                     setEditForm({ ...editForm, total_investments: text })
+                  }
+                />
+              </View>
+              <View style={styles.inputGroup}>
+                <Text
+                  style={[
+                    styles.inputLabel,
+                    { color: theme.colors.textSecondary },
+                  ]}
+                >
+                  Monthly Budget (₹)
+                </Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: theme.colors.buttonSecondary,
+                      color: theme.colors.text,
+                      borderColor: theme.colors.border,
+                    },
+                  ]}
+                  placeholder="Enter your monthly budget"
+                  placeholderTextColor={theme.colors.textTertiary}
+                  value={editForm.monthly_budget}
+                  keyboardType="numeric"
+                  onChangeText={(text) =>
+                    setEditForm({ ...editForm, monthly_budget: text })
                   }
                 />
               </View>
