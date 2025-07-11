@@ -1,1004 +1,384 @@
-import React, { useState, useEffect } from 'react';
+import React from "react";
 import {
   View,
   Text,
-  ScrollView,
   TouchableOpacity,
-  Animated,
-  RefreshControl,
-  ActivityIndicator,
-  Alert,
-  Modal,
-} from 'react-native';
-import Slider from '@react-native-community/slider';
+  StyleSheet,
+  ScrollView,
+  Dimensions,
+  Linking,
+} from "react-native";
 import {
-  Brain,
   ArrowLeft,
-  CreditCard,
-  Scissors,
-  TrendingUp as TrendingUpIcon
-} from 'lucide-react-native';
-import { supabase } from '../lib/supabase';
-import { useAuth } from '../context/AuthContext';
-import { useTheme } from '../context/ThemeContext';
+  Brain,
+  TrendingUp,
+  Target,
+  PieChart,
+  Calendar,
+  Bell,
+  DollarSign,
+  BarChart3,
+  Lightbulb,
+  MessageCircle,
+  Sparkles,
+} from "lucide-react-native";
+import { useTheme } from "../context/ThemeContext";
+
+const { width } = Dimensions.get("window");
 
 export default function SmartInsightsScreen({ navigation }) {
-  const { session } = useAuth();
   const { theme } = useTheme();
 
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [selectedPeriod, setSelectedPeriod] = useState('month');
-  const [animatedValue] = useState(new Animated.Value(0));
-  const [aiAnalysisLoading, setAiAnalysisLoading] = useState(false);
-  const [profile, setProfile] = useState(null);
-  const [showSimulation, setShowSimulation] = useState(false);
-  const [simSpend, setSimSpend] = useState(1);
-
-  const [insights, setInsights] = useState({
-    spendingTrend: [],
-    categoryBreakdown: [],
-    predictions: { nextMonth: 0, budgetOverrun: 0 },
-    recommendations: [],
-    achievements: [],
-    alerts: [],
-    financialScore: 0,
-    savingsOpportunities: [],
-    subscriptionAnalysis: {
-      activeSubscriptions: [],
-      potentialCancellations: [],
-      totalMonthlyCost: 0,
-      potentialSavings: 0,
+  const expectedFeatures = [
+    {
+      icon: <TrendingUp color={theme.colors.primary} size={24} />,
+      title: "Spending Trends",
+      description: "AI-powered analysis of your spending patterns and trends over time",
+      color: "#4ECDC4",
     },
-    costCuttingAI: {
-      categories: [],
-      suggestions: [],
-      totalPotentialSavings: 0,
+    {
+      icon: <Target color={theme.colors.primary} size={24} />,
+      title: "Budget Recommendations",
+      description: "Smart budget suggestions based on your income and spending habits",
+      color: "#FF6B6B",
     },
-    investmentOpportunities: {
-      suggestions: [],
-      availableAmount: 0,
-      riskProfile: 'moderate',
+    {
+      icon: <PieChart color={theme.colors.primary} size={24} />,
+      title: "Category Insights",
+      description: "Detailed breakdown of spending by category with optimization tips",
+      color: "#45B7D1",
     },
-  });
+    {
+      icon: <Calendar color={theme.colors.primary} size={24} />,
+      title: "Seasonal Patterns",
+      description: "Identify recurring expenses and seasonal spending patterns",
+      color: "#96CEB4",
+    },
+    {
+      icon: <Bell color={theme.colors.primary} size={24} />,
+      title: "Smart Alerts",
+      description: "Proactive notifications about unusual spending or budget overruns",
+      color: "#FECA57",
+    },
+    {
+      icon: <DollarSign color={theme.colors.primary} size={24} />,
+      title: "Savings Opportunities",
+      description: "AI-identified areas where you can save money and reduce expenses",
+      color: "#FF9FF3",
+    },
+    {
+      icon: <BarChart3 color={theme.colors.primary} size={24} />,
+      title: "Financial Health Score",
+      description: "Overall financial wellness score with personalized improvement tips",
+      color: "#54A0FF",
+    },
+    {
+      icon: <Lightbulb color={theme.colors.primary} size={24} />,
+      title: "Smart Recommendations",
+      description: "Personalized financial advice based on your spending behavior",
+      color: "#5F27CD",
+    },
+  ];
 
-  useEffect(() => {
-    fetchProfileData();
-    fetchInsightsData();
-    startAnimation();
-  }, [selectedPeriod]);
-
-  const fetchProfileData = async () => {
-    const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', session.user.id)
-      .single();
-    setProfile(data);
-  };
-
-  const startAnimation = () => {
-    Animated.timing(animatedValue, {
-      toValue: 1,
-      duration: 1000,
-      useNativeDriver: true,
-    }).start();
-  };
-
-  const fetchInsightsData = async () => {
-    setLoading(true);
-    const { data: expenses } = await supabase
-      .from('expenses')
-      .select('*')
-      .eq('user_id', session.user.id)
-      .order('date', { ascending: false });
-    const processedInsights = await generateInsights(expenses || []);
-    setInsights(processedInsights);
-    setLoading(false);
-  };
-
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await fetchInsightsData();
-    setRefreshing(false);
-  };
-
-  const analyzeSubscriptions = async (expenses) => {
-    const subscriptionKeywords = [
-      'netflix', 'spotify', 'amazon prime', 'youtube premium', 'disney+',
-      'adobe', 'microsoft', 'google', 'dropbox', 'icloud', 'subscription',
-      'monthly', 'annual', 'premium', 'pro', 'plus', 'membership'
-    ];
-    const potentialSubscriptions = expenses.filter(expense => {
-      const title = expense.title?.toLowerCase() || '';
-      const merchant = expense.merchant?.toLowerCase() || '';
-      return subscriptionKeywords.some(keyword =>
-        title.includes(keyword) || merchant.includes(keyword)
-      );
-    });
-    const subscriptionGroups = {};
-    potentialSubscriptions.forEach(expense => {
-      const key = expense.merchant || expense.title;
-      if (!subscriptionGroups[key]) {
-        subscriptionGroups[key] = [];
-      }
-      subscriptionGroups[key].push(expense);
-    });
-    const activeSubscriptions = [];
-    const potentialCancellations = [];
-    let totalMonthlyCost = 0;
-    let potentialSavings = 0;
-    for (const [key, group] of Object.entries(subscriptionGroups)) {
-      if (group.length >= 2) {
-        const avgAmount = group.reduce((sum, exp) => sum + parseFloat(exp.amount), 0) / group.length;
-        const lastUsed = new Date(group[0].date);
-        const daysSinceLastUsed = Math.floor((new Date() - lastUsed) / (1000 * 60 * 60 * 24));
-        const subscriptionData = {
-          name: key,
-          amount: avgAmount,
-          frequency: 'Monthly',
-          lastUsed: lastUsed,
-          daysSinceLastUsed,
-          category: group[0].category || 'Entertainment',
-          usagePattern: group.length > 6 ? 'Regular' : 'Occasional',
-        };
-        activeSubscriptions.push(subscriptionData);
-        totalMonthlyCost += avgAmount;
-        if (daysSinceLastUsed > 60 || subscriptionData.usagePattern === 'Occasional') {
-          potentialCancellations.push({
-            ...subscriptionData,
-            reason: daysSinceLastUsed > 60 ? 'Not used recently' : 'Low usage pattern',
-            potentialSaving: avgAmount,
-          });
-          potentialSavings += avgAmount;
+  const handleWhatsAppRedirect = () => {
+    const phoneNumber = "918075648949"; // Replace with your WhatsApp number
+    const message = encodeURIComponent(
+      "Hi! I have some ideas here they are  " );
+    
+    const whatsappUrl = `whatsapp://send?phone=${phoneNumber}&text=${message}`;
+    const webWhatsappUrl = `https://wa.me/${phoneNumber}?text=${message}`;
+    
+    Linking.canOpenURL(whatsappUrl)
+      .then((supported) => {
+        if (supported) {
+          return Linking.openURL(whatsappUrl);
+        } else {
+          return Linking.openURL(webWhatsappUrl);
         }
-      }
-    }
-    return {
-      activeSubscriptions,
-      potentialCancellations,
-      totalMonthlyCost,
-      potentialSavings,
-    };
+      })
+      .catch((err) => console.error("Error opening WhatsApp:", err));
   };
 
-  const analyzeCostCutting = async (expenses) => {
-    const categorySpending = {};
-    const spendingPatterns = {};
-    expenses.forEach(expense => {
-      const category = expense.category || 'Other';
-      const date = new Date(expense.date);
-      const month = date.toISOString().slice(0, 7);
-      if (!categorySpending[category]) {
-        categorySpending[category] = { total: 0, count: 0, items: [] };
-      }
-      categorySpending[category].total += parseFloat(expense.amount);
-      categorySpending[category].count += 1;
-      categorySpending[category].items.push(expense);
-      if (!spendingPatterns[month]) {
-        spendingPatterns[month] = {};
-      }
-      if (!spendingPatterns[month][category]) {
-        spendingPatterns[month][category] = 0;
-      }
-      spendingPatterns[month][category] += parseFloat(expense.amount);
-    });
-    const suggestions = [];
-    let totalPotentialSavings = 0;
-    for (const [category, data] of Object.entries(categorySpending)) {
-      if (data.total > 1000) {
-        const avgMonthlySpending = data.total / 3;
-        const suggestion = await generateCostCuttingSuggestion(category, data, avgMonthlySpending);
-        if (suggestion) {
-          suggestions.push(suggestion);
-          totalPotentialSavings += suggestion.potentialSaving;
-        }
-      }
-    }
-    return {
-      categories: Object.entries(categorySpending).map(([category, data]) => ({
-        category,
-        ...data,
-        avgPerTransaction: data.total / data.count,
-      })),
-      suggestions,
-      totalPotentialSavings,
-    };
-  };
-
-  const generateCostCuttingSuggestion = async (category, data, avgMonthlySpending) => {
-    const suggestions = {
-      'Food': {
-        title: 'Optimize Food Spending',
-        description: 'Consider meal planning, bulk buying, or cooking at home more often',
-        potentialSaving: avgMonthlySpending * 0.25,
-        actionItems: [
-          'Plan weekly meals',
-          'Buy groceries in bulk',
-          'Cook at home 2-3 more times per week',
-          'Use food delivery apps less frequently'
-        ],
-        impact: 'High'
-      },
-      'Transportation': {
-        title: 'Reduce Transportation Costs',
-        description: 'Explore carpooling, public transport, or ride-sharing alternatives',
-        potentialSaving: avgMonthlySpending * 0.20,
-        actionItems: [
-          'Use public transport when possible',
-          'Carpool with colleagues',
-          'Consider bike or walk for short distances',
-          'Optimize ride-sharing usage'
-        ],
-        impact: 'Medium'
-      },
-      'Entertainment': {
-        title: 'Smart Entertainment Spending',
-        description: 'Review subscriptions and find free or cheaper alternatives',
-        potentialSaving: avgMonthlySpending * 0.30,
-        actionItems: [
-          'Cancel unused subscriptions',
-          'Share family plans with relatives',
-          'Explore free entertainment options',
-          'Look for promotional offers'
-        ],
-        impact: 'Medium'
-      },
-      'Shopping': {
-        title: 'Strategic Shopping Approach',
-        description: 'Implement the 24-hour rule and focus on needs vs wants',
-        potentialSaving: avgMonthlySpending * 0.35,
-        actionItems: [
-          'Wait 24 hours before non-essential purchases',
-          'Create shopping lists and stick to them',
-          'Compare prices across platforms',
-          'Buy during sales and discounts'
-        ],
-        impact: 'High'
-      },
-    };
-    return suggestions[category] || null;
-  };
-
-  const analyzeInvestmentOpportunities = async (expenses) => {
-    const totalExpenses = expenses.reduce((sum, exp) => sum + parseFloat(exp.amount), 0);
-    const monthlyExpenses = totalExpenses / 3;
-    const potentialMonthlySavings = insights.costCuttingAI.totalPotentialSavings +
-      insights.subscriptionAnalysis.potentialSavings;
-    const estimatedDisposableIncome = monthlyExpenses * 0.15;
-    const availableAmount = potentialMonthlySavings + estimatedDisposableIncome;
-    const suggestions = [];
-    if (availableAmount > 500) {
-      suggestions.push({
-        type: 'SIP',
-        title: 'Start Mutual Fund SIP',
-        description: `Begin with ₹${Math.floor(availableAmount * 0.6)} monthly SIP in diversified equity funds`,
-        expectedReturn: '12-15% annually',
-        risk: 'Moderate',
-        amount: Math.floor(availableAmount * 0.6),
-        timeHorizon: '3-5 years',
-      });
-    }
-    if (availableAmount > 1000) {
-      suggestions.push({
-        type: 'PPF',
-        title: 'Public Provident Fund',
-        description: `Allocate ₹${Math.floor(availableAmount * 0.3)} monthly for tax-saving investment`,
-        expectedReturn: '7-8% annually',
-        risk: 'Low',
-        amount: Math.floor(availableAmount * 0.3),
-        timeHorizon: '15 years',
-      });
-    }
-    if (availableAmount > 2000) {
-      suggestions.push({
-        type: 'Emergency Fund',
-        title: 'Build Emergency Fund',
-        description: `Save ₹${Math.floor(availableAmount * 0.4)} monthly for 6-month expense coverage`,
-        expectedReturn: '4-6% annually',
-        risk: 'Very Low',
-        amount: Math.floor(availableAmount * 0.4),
-        timeHorizon: '1-2 years',
-      });
-    }
-    return {
-      suggestions,
-      availableAmount,
-      riskProfile: availableAmount > 2000 ? 'aggressive' :
-        availableAmount > 1000 ? 'moderate' : 'conservative',
-    };
-  };
-
-  const generateInsights = async (expenses) => {
-    const baseInsights = await generateBaseInsights(expenses);
-    const subscriptionAnalysis = await analyzeSubscriptions(expenses);
-    const costCuttingAI = await analyzeCostCutting(expenses);
-    const investmentOpportunities = await analyzeInvestmentOpportunities(expenses);
-    return {
-      ...baseInsights,
-      subscriptionAnalysis,
-      costCuttingAI,
-      investmentOpportunities,
-    };
-  };
-
-  const generateBaseInsights = async (expenses) => {
-    const periodData = filterExpensesByPeriod(expenses, selectedPeriod);
-    return {
-      spendingTrend: generateSpendingTrend(periodData),
-      categoryBreakdown: generateCategoryBreakdown(periodData),
-      predictions: generatePredictions(expenses),
-      recommendations: [],
-      achievements: [],
-      alerts: [],
-      financialScore: 75,
-      savingsOpportunities: [],
-    };
-  };
-
-  const filterExpensesByPeriod = (expenses, period) => {
-    const now = new Date();
-    return expenses.filter(exp => {
-      const expenseDate = new Date(exp.date);
-      const diffDays = Math.floor((now - expenseDate) / (1000 * 60 * 60 * 24));
-      switch (period) {
-        case 'week': return diffDays <= 7;
-        case 'month': return diffDays <= 30;
-        case 'quarter': return diffDays <= 90;
-        case 'year': return diffDays <= 365;
-        default: return true;
-      }
-    });
-  };
-
-  const generateSpendingTrend = (expenses) => {
-    const trendData = [];
-    const today = new Date();
-    for (let i = 6; i >= 0; i--) {
-      const date = new Date(today);
-      date.setDate(date.getDate() - i);
-      const dayExpenses = expenses.filter(exp =>
-        new Date(exp.date).toDateString() === date.toDateString()
-      );
-      const total = dayExpenses.reduce((sum, exp) => sum + parseFloat(exp.amount || 0), 0);
-      trendData.push({
-        date: date.toLocaleDateString('en', { weekday: 'short' }),
-        amount: total,
-      });
-    }
-    return trendData;
-  };
-
-  const generateCategoryBreakdown = (expenses) => {
-    const categoryTotals = {};
-    expenses.forEach(exp => {
-      const category = exp.category || 'Other';
-      categoryTotals[category] = (categoryTotals[category] || 0) + parseFloat(exp.amount || 0);
-    });
-    return Object.entries(categoryTotals)
-      .map(([category, amount]) => ({
-        category,
-        amount,
-        percentage: 0,
-      }))
-      .sort((a, b) => b.amount - a.amount)
-      .slice(0, 5);
-  };
-
-  const generatePredictions = (expenses) => {
-    if (expenses.length === 0) {
-      return { nextMonth: 0, budgetOverrun: 0 };
-    }
-    const last30Days = expenses.filter(exp => {
-      const expenseDate = new Date(exp.date);
-      const now = new Date();
-      const diffDays = Math.floor((now - expenseDate) / (1000 * 60 * 60 * 24));
-      return diffDays <= 30;
-    });
-    const totalLast30Days = last30Days.reduce((sum, exp) => sum + parseFloat(exp.amount || 0), 0);
-    const dailyAverage = totalLast30Days / 30;
-    const nextMonthPrediction = dailyAverage * 30;
-    return {
-      nextMonth: Math.round(nextMonthPrediction),
-      budgetOverrun: 0,
-    };
-  };
-
-  const FinancialHealthCard = ({ income, expenses, investments }) => {
-    const ratio = income ? (expenses / income) : 0;
-    let advice = '';
-    if (!income) advice = "Add your income for better insights!";
-    else if (ratio > 0.7) advice = "High spend: try to keep under 60%!";
-    else if (ratio < 0.4) advice = "Great savings! Consider investing more.";
-    return (
-      <View style={{
-        backgroundColor: theme.colors.surfaceHighlight,
-        borderRadius: 18,
-        padding: 18,
-        marginBottom: 20,
-        borderLeftWidth: 5,
-        borderLeftColor: theme.colors.primary,
-      }}>
-        <Text style={{
-          fontWeight: '700',
-          fontSize: 17,
-          color: theme.colors.text,
-          marginBottom: 4,
-        }}>Financial Health</Text>
-        <Text style={{ color: theme.colors.textSecondary }}>Income: ₹{income || '--'} | Expenses: ₹{expenses.toFixed(0)}</Text>
-        <Text style={{ color: theme.colors.textSecondary }}>Investments: ₹{investments || '--'}</Text>
-        <Text style={{ color: theme.colors.textSecondary }}>Expense/Income: {(ratio * 100).toFixed(0)}%</Text>
-        <Text style={{ color: ratio > 0.7 ? theme.colors.error : theme.colors.success }}>{advice}</Text>
-        <Text style={{
-          backgroundColor: theme.colors.primary,
-          color: theme.colors.buttonText,
-          alignSelf: 'flex-start',
-          borderRadius: 8,
-          paddingVertical: 2,
-          paddingHorizontal: 9,
-          marginTop: 7,
-          fontSize: 12,
-          fontWeight: '600',
-        }}>Premium AI</Text>
-      </View>
-    );
-  };
-
-  const SubscriptionAnalysisCard = () => (
-    <Animated.View style={{
-      backgroundColor: theme.colors.surface,
-      borderRadius: 16,
-      padding: 20,
-      marginBottom: 20,
-      elevation: 3,
-      shadowColor: theme.colors.shadow,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
-      borderLeftWidth: 4,
-      borderLeftColor: theme.colors.primary,
-      opacity: animatedValue,
-    }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
-        <CreditCard color={theme.colors.error} size={24} />
-        <Text style={{ fontSize: 18, fontWeight: '700', color: theme.colors.text, marginLeft: 8 }}>Subscription Analysis</Text>
-      </View>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginBottom: 16 }}>
-        <View style={{ alignItems: 'center' }}>
-          <Text style={{ fontSize: 24, fontWeight: '800', color: theme.colors.primary }}>
-            ₹{insights.subscriptionAnalysis.totalMonthlyCost.toFixed(0)}
+  const FeatureCard = ({ feature, index }) => (
+    <View
+      style={[
+        styles.featureCard,
+        {
+          backgroundColor: theme.colors.surface,
+          borderColor: theme.colors.borderLight,
+          marginBottom: index === expectedFeatures.length - 1 ? 20 : 16,
+        },
+      ]}
+    >
+      <View style={styles.featureHeader}>
+        <View style={[styles.featureIcon, { backgroundColor: feature.color + "15" }]}>
+          {feature.icon}
+        </View>
+        <View style={styles.featureInfo}>
+          <Text style={[styles.featureTitle, { color: theme.colors.text }]}>
+            {feature.title}
           </Text>
-          <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginTop: 4 }}>Monthly Cost</Text>
-        </View>
-        <View style={{ alignItems: 'center' }}>
-          <Text style={{ fontSize: 24, fontWeight: '800', color: theme.colors.success }}>
-            ₹{insights.subscriptionAnalysis.potentialSavings.toFixed(0)}
+          <Text style={[styles.featureDescription, { color: theme.colors.textSecondary }]}>
+            {feature.description}
           </Text>
-          <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginTop: 4 }}>Potential Savings</Text>
         </View>
       </View>
-      {insights.subscriptionAnalysis.potentialCancellations.length > 0 && (
-        <View style={{
-          borderTopWidth: 1,
-          borderTopColor: theme.colors.border,
-          paddingTop: 16,
-        }}>
-          <Text style={{ fontSize: 14, fontWeight: '600', color: theme.colors.text, marginBottom: 12 }}>Suggested Cancellations:</Text>
-          {insights.subscriptionAnalysis.potentialCancellations.slice(0, 3).map((sub, index) => (
-            <TouchableOpacity key={index} style={{
-              backgroundColor: theme.colors.surfaceHighlight,
-              borderRadius: 8,
-              padding: 12,
-              marginBottom: 8,
-            }}
-              onPress={() => {
-                Alert.alert(
-                  "Cancel Subscription",
-                  `Copy message to cancel ${sub.name}?`,
-                  [
-                    { text: "Cancel" },
-                    {
-                      text: "Copy Message",
-                      onPress: () => {
-                        const msg = `I want to cancel my ${sub.name} subscription as it's not in use.`;
-                        if (navigator.clipboard) navigator.clipboard.writeText(msg);
-                      }
-                    }
-                  ]
-                );
-              }}>
-              <Text style={{ fontSize: 14, fontWeight: '600', color: theme.colors.text }}>{sub.name} - ₹{sub.amount.toFixed(0)}/month</Text>
-              <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginTop: 4 }}>{sub.reason}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
-    </Animated.View>
+      <View style={[styles.comingSoonBadge, { backgroundColor: theme.colors.warning + "15" }]}>
+        <Text style={[styles.comingSoonText, { color: theme.colors.warning }]}>
+          Coming Soon
+        </Text>
+      </View>
+    </View>
   );
-
-
-  const CostCuttingCard = () => (
-    <Animated.View style={{
-      backgroundColor: theme.colors.surface,
-      borderRadius: 16,
-      padding: 20,
-      marginBottom: 20,
-      elevation: 3,
-      shadowColor: theme.colors.shadow,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
-      borderLeftWidth: 4,
-      borderLeftColor: theme.colors.warning,
-      opacity: animatedValue,
-    }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
-        <Scissors color={theme.colors.warning} size={24} />
-        <Text style={{ fontSize: 18, fontWeight: '700', color: theme.colors.text, marginLeft: 8 }}>AI Cost Cutting</Text>
-      </View>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginBottom: 16 }}>
-        <View style={{ alignItems: 'center' }}>
-          <Text style={{ fontSize: 24, fontWeight: '800', color: theme.colors.success }}>
-            ₹{insights.costCuttingAI.totalPotentialSavings.toFixed(0)}
-          </Text>
-          <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginTop: 4 }}>Potential Monthly Savings</Text>
-        </View>
-      </View>
-      {insights.costCuttingAI.suggestions.length > 0 && (
-        <View style={{
-          borderTopWidth: 1,
-          borderTopColor: theme.colors.border,
-          paddingTop: 16,
-        }}>
-          {insights.costCuttingAI.suggestions.slice(0, 2).map((suggestion, index) => (
-            <TouchableOpacity key={index} style={{
-              backgroundColor: theme.colors.surfaceHighlight,
-              borderRadius: 8,
-              padding: 12,
-              marginBottom: 8,
-              borderLeftWidth: 3,
-              borderLeftColor: theme.colors.warning,
-            }}
-              onPress={() => setShowSimulation(true)}>
-              <Text style={{ fontSize: 14, fontWeight: '600', color: theme.colors.text }}>{suggestion.title}</Text>
-              <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginVertical: 4 }}>{suggestion.description}</Text>
-              <Text style={{ fontSize: 12, fontWeight: '600', color: theme.colors.success }}>
-                Save up to ₹{suggestion.potentialSaving.toFixed(0)}/month
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
-    </Animated.View>
-  );
-
-
-  const InvestmentOpportunityCard = () => (
-    <Animated.View style={{
-      backgroundColor: theme.colors.surface,
-      borderRadius: 16,
-      padding: 20,
-      marginBottom: 20,
-      elevation: 3,
-      shadowColor: theme.colors.shadow,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
-      borderLeftWidth: 4,
-      borderLeftColor: theme.colors.success,
-      opacity: animatedValue,
-    }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
-        <TrendingUpIcon color={theme.colors.success} size={24} />
-        <Text style={{ fontSize: 18, fontWeight: '700', color: theme.colors.text, marginLeft: 8 }}>Investment Opportunities</Text>
-      </View>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginBottom: 16 }}>
-        <View style={{ alignItems: 'center' }}>
-          <Text style={{ fontSize: 24, fontWeight: '800', color: theme.colors.primary }}>
-            ₹{insights.investmentOpportunities.availableAmount.toFixed(0)}
-          </Text>
-          <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginTop: 4 }}>Available to Invest</Text>
-        </View>
-      </View>
-      {insights.investmentOpportunities.suggestions.length > 0 && (
-        <View style={{
-          borderTopWidth: 1,
-          borderTopColor: theme.colors.border,
-          paddingTop: 16,
-        }}>
-          {insights.investmentOpportunities.suggestions.slice(0, 2).map((investment, index) => (
-            <TouchableOpacity key={index} style={{
-              backgroundColor: theme.colors.surfaceHighlight,
-              borderRadius: 8,
-              padding: 12,
-              marginBottom: 8,
-              borderLeftWidth: 3,
-              borderLeftColor: theme.colors.success,
-            }}
-              onPress={() => {
-                Alert.alert(
-                  "Invest Now",
-                  `Add ₹${investment.amount} to "${investment.title}"?`,
-                  [
-                    { text: "Cancel" },
-                    {
-                      text: "Add Investment",
-                      onPress: () => {
-                        Alert.alert("Added!", "Your investment has been added to the tracker.");
-                      }
-                    }
-                  ]
-                );
-              }}>
-              <Text style={{ fontSize: 14, fontWeight: '600', color: theme.colors.text }}>{investment.title}</Text>
-              <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginVertical: 4 }}>{investment.description}</Text>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <Text style={{ fontSize: 12, fontWeight: '600', color: theme.colors.success }}>{investment.expectedReturn}</Text>
-                <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>{investment.risk} Risk</Text>
-              </View>
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
-    </Animated.View>
-  );
-
-
-  const runAIAnalysis = async () => {
-    setAiAnalysisLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    await fetchInsightsData();
-    Alert.alert('Analysis Complete', 'AI has updated your insights with new recommendations!');
-    setAiAnalysisLoading(false);
-  };
-
-  if (loading) {
-    return (
-      <View style={{
-        flex: 1,
-        backgroundColor: theme.colors.background,
-        justifyContent: 'center',
-        alignItems: 'center',
-      }}>
-        <ActivityIndicator size="large" color={theme.colors.primary} />
-        <Text style={{ marginTop: 16, fontSize: 16, color: theme.colors.textSecondary }}>Analyzing your expenses with AI...</Text>
-      </View>
-    );
-  }
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
-      <View style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: 20,
-        paddingTop: 50,
-        paddingBottom: 20,
-        backgroundColor: theme.colors.surface,
-        borderBottomWidth: 1,
-        borderBottomColor: theme.colors.border,
-      }}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
         <TouchableOpacity
-          style={{ padding: 8 }}
+          style={[styles.backButton, { backgroundColor: theme.colors.buttonSecondary }]}
           onPress={() => navigation.goBack()}
         >
           <ArrowLeft color={theme.colors.text} size={24} />
         </TouchableOpacity>
-        <Text style={{ fontSize: 20, fontWeight: '700', color: theme.colors.text }}>AI Smart Insights</Text>
-        <TouchableOpacity
-          style={{ padding: 8 }}
-          onPress={runAIAnalysis}
-          disabled={aiAnalysisLoading}
-        >
-          {aiAnalysisLoading ? (
-            <ActivityIndicator color={theme.colors.primary} size={20} />
-          ) : (
-            <Brain color={theme.colors.primary} size={24} />
-          )}
-        </TouchableOpacity>
+        <Text style={[styles.headerTitle, { color: theme.colors.text }]}>Smart Insights</Text>
+        <View style={styles.placeholder} />
       </View>
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ padding: 20 }}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />
-        }
-        showsVerticalScrollIndicator={false}
-      >
-        {profile && (
-          <FinancialHealthCard
-            income={profile.monthly_income}
-            investments={profile.total_investments}
-            expenses={insights.categoryBreakdown.reduce((sum, c) => sum + c.amount, 0)}
-          />
-        )}
-        <SubscriptionAnalysisCard />
-        <CostCuttingCard />
-        <InvestmentOpportunityCard />
-        <TouchableOpacity
-          style={{
-            backgroundColor: theme.colors.primary,
-            borderRadius: 12,
-            padding: 16,
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginTop: 20,
-          }}
-          onPress={runAIAnalysis}
-          disabled={aiAnalysisLoading}
-        >
-          <Brain color={theme.colors.buttonText} size={20} />
-          <Text style={{
-            fontSize: 16,
-            fontWeight: '600',
-            color: theme.colors.buttonText,
-            marginLeft: 8,
-          }}>
-            {aiAnalysisLoading ? 'Analyzing...' : 'Run Deep AI Analysis'}
+
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Hero Section */}
+        <View style={[styles.heroSection, { backgroundColor: theme.colors.surface }]}>
+          <View style={[styles.heroIcon, { backgroundColor: theme.colors.primary + "15" }]}>
+            <Brain color={theme.colors.primary} size={48} />
+          </View>
+          <Text style={[styles.heroTitle, { color: theme.colors.text }]}>
+            AI-Powered Financial Insights
           </Text>
-        </TouchableOpacity>
-      </ScrollView>
-      <Modal
-        visible={showSimulation}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowSimulation(false)}
-      >
-        <View style={{
-          flex: 1,
-          backgroundColor: theme.colors.overlay,
-          justifyContent: 'center',
-          alignItems: 'center'
-        }}>
-          <View style={{
-            backgroundColor: theme.colors.surface,
-            borderRadius: 20,
-            padding: 28,
-            width: '85%'
-          }}>
-            <Text style={{ fontWeight: '700', fontSize: 18, marginBottom: 20, color: theme.colors.text }}>Simulate Cost Cutting</Text>
-            <Text style={{ color: theme.colors.textSecondary }}>Adjust Food Spending:</Text>
-            <Slider
-              style={{ width: '100%', height: 40 }}
-              minimumValue={0.6}
-              maximumValue={1}
-              value={simSpend}
-              minimumTrackTintColor={theme.colors.success}
-              maximumTrackTintColor={theme.colors.border}
-              step={0.05}
-              onValueChange={setSimSpend}
-            />
-            <Text style={{ marginVertical: 10, color: theme.colors.text }}>
-              {`Spending: ${(simSpend * 100).toFixed(0)}% of current`}
+          <Text style={[styles.heroSubtitle, { color: theme.colors.textSecondary }]}>
+            Get personalized insights and recommendations to optimize your financial health
+          </Text>
+          <View style={[styles.sparkleContainer]}>
+            <Sparkles color={theme.colors.primary} size={20} />
+            <Text style={[styles.sparkleText, { color: theme.colors.primary }]}>
+              Powered by Advanced AI
             </Text>
-            <Text style={{ marginVertical: 10, color: theme.colors.text }}>
-              {`Estimated Savings: ₹${(insights.costCuttingAI.suggestions.length > 0
-                ? insights.costCuttingAI.suggestions[0].potentialSaving * (1 - simSpend)
-                : 0).toFixed(0)}/month`}
-            </Text>
-            <TouchableOpacity
-              style={{
-                marginTop: 18,
-                backgroundColor: theme.colors.success,
-                borderRadius: 12,
-                padding: 14,
-                alignItems: 'center'
-              }}
-              onPress={() => setShowSimulation(false)}
-            >
-              <Text style={{ color: theme.colors.buttonText, fontWeight: '700' }}>Done</Text>
-            </TouchableOpacity>
           </View>
         </View>
-      </Modal>
+
+        {/* Coming Soon Banner */}
+        <View style={[styles.comingSoonBanner, { backgroundColor: theme.colors.warning + "10", borderColor: theme.colors.warning + "30" }]}>
+          <Text style={[styles.comingSoonBannerTitle, { color: theme.colors.warning }]}>
+            🚧 Under Development
+          </Text>
+          <Text style={[styles.comingSoonBannerText, { color: theme.colors.textSecondary }]}>
+            We're working hard to bring you these amazing features. Stay tuned!
+          </Text>
+        </View>
+
+        {/* Expected Features */}
+        <View style={styles.featuresSection}>
+          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+            Expected Features
+          </Text>
+          <Text style={[styles.sectionSubtitle, { color: theme.colors.textSecondary }]}>
+            Here's what you can expect from Smart Insights:
+          </Text>
+          
+          {expectedFeatures.map((feature, index) => (
+            <FeatureCard key={index} feature={feature} index={index} />
+          ))}
+        </View>
+
+        {/* CTA Section */}
+        <View style={[styles.ctaSection, { backgroundColor: theme.colors.surface }]}>
+          <Text style={[styles.ctaTitle, { color: theme.colors.text }]}>
+            Want to know more?
+          </Text>
+          <Text style={[styles.ctaSubtitle, { color: theme.colors.textSecondary }]}>
+            Have questions or suggestions about these features? Let's chat!
+          </Text>
+          <TouchableOpacity
+            style={[styles.whatsappButton, { backgroundColor: "#25D366" }]}
+            onPress={handleWhatsAppRedirect}
+          >
+            <MessageCircle color="#fff" size={20} />
+            <Text style={styles.whatsappButtonText}>Chat on WhatsApp</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
     </View>
   );
 }
 
-const styles = {
+const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
-  },
-  loadingContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#64748b',
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 20,
-    paddingTop: 50,
-    paddingBottom: 20,
-    backgroundColor: '#fff',
+    paddingTop: 60,
+    paddingBottom: 18,
     borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#1e293b',
+    justifyContent: "space-between",
   },
   backButton: {
     padding: 8,
+    borderRadius: 12,
   },
-  aiButton: {
-    padding: 8,
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    flex: 1,
+    textAlign: "center",
   },
-  scrollView: {
+  placeholder: {
+    width: 40,
+  },
+  content: {
     flex: 1,
   },
-  scrollContent: {
-    padding: 20,
+  heroSection: {
+    margin: 20,
+    borderRadius: 20,
+    padding: 30,
+    alignItems: "center",
+    elevation: 2,
   },
-  aiCard: {
-    backgroundColor: '#fff',
+  heroIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+  },
+  heroTitle: {
+    fontSize: 24,
+    fontWeight: "700",
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  heroSubtitle: {
+    fontSize: 16,
+    textAlign: "center",
+    lineHeight: 24,
+    marginBottom: 16,
+  },
+  sparkleContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  sparkleText: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  comingSoonBanner: {
+    marginHorizontal: 20,
     borderRadius: 16,
     padding: 20,
+    borderWidth: 1,
     marginBottom: 20,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    borderLeftWidth: 4,
-    borderLeftColor: '#4A90E2',
   },
-  aiCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  aiCardTitle: {
+  comingSoonBannerTitle: {
     fontSize: 18,
-    fontWeight: '700',
-    color: '#1e293b',
-    marginLeft: 8,
+    fontWeight: "700",
+    marginBottom: 8,
   },
-  aiMetrics: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 16,
-  },
-  aiMetric: {
-    alignItems: 'center',
-  },
-  aiMetricValue: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#4A90E2',
-  },
-  aiMetricLabel: {
-    fontSize: 12,
-    color: '#64748b',
-    marginTop: 4,
-  },
-  aiSuggestions: {
-    borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
-    paddingTop: 16,
-  },
-  aiSuggestionsTitle: {
+  comingSoonBannerText: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#1e293b',
+    lineHeight: 20,
+  },
+  featuresSection: {
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  sectionTitle: {
+    fontSize: 22,
+    fontWeight: "700",
+    marginBottom: 8,
+  },
+  sectionSubtitle: {
+    fontSize: 16,
+    lineHeight: 24,
+    marginBottom: 24,
+  },
+  featureCard: {
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    elevation: 2,
+  },
+  featureHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
     marginBottom: 12,
   },
-  aiSuggestionItem: {
-    backgroundColor: '#f8fafc',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 8,
-  },
-  aiSuggestionText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1e293b',
-  },
-  aiSuggestionReason: {
-    fontSize: 12,
-    color: '#64748b',
-    marginTop: 4,
-  },
-  costCuttingSuggestion: {
-    backgroundColor: '#fff8dc',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 8,
-    borderLeftWidth: 3,
-    borderLeftColor: '#F39C12',
-  },
-  costCuttingTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1e293b',
-  },
-  costCuttingDescription: {
-    fontSize: 12,
-    color: '#64748b',
-    marginVertical: 4,
-  },
-  costCuttingSaving: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#27AE60',
-  },
-  investmentSuggestion: {
-    backgroundColor: '#f0fff4',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 8,
-    borderLeftWidth: 3,
-    borderLeftColor: '#27AE60',
-  },
-  investmentTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1e293b',
-  },
-  investmentDescription: {
-    fontSize: 12,
-    color: '#64748b',
-    marginVertical: 4,
-  },
-  investmentMeta: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  investmentReturn: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#27AE60',
-  },
-  investmentRisk: {
-    fontSize: 12,
-    color: '#64748b',
-  },
-  deepAnalysisButton: {
-    backgroundColor: '#4A90E2',
+  featureIcon: {
+    width: 48,
+    height: 48,
     borderRadius: 12,
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 16,
   },
-  deepAnalysisText: {
+  featureInfo: {
+    flex: 1,
+  },
+  featureTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
+    fontWeight: "700",
+    marginBottom: 6,
   },
-  finHealthCard: {
-    backgroundColor: '#e0f2fe',
-    borderRadius: 18,
-    padding: 18,
-    marginBottom: 20,
-    borderLeftWidth: 5,
-    borderLeftColor: '#4A90E2',
+  featureDescription: {
+    fontSize: 14,
+    lineHeight: 20,
   },
-  finHealthTitle: {
-    fontWeight: '700',
-    fontSize: 17,
-    color: '#1e293b',
-    marginBottom: 4,
+  comingSoonBadge: {
+    alignSelf: "flex-start",
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
-  aiBadge: {
-    backgroundColor: '#4A90E2',
-    color: '#fff',
-    alignSelf: 'flex-start',
-    borderRadius: 8,
-    paddingVertical: 2,
-    paddingHorizontal: 9,
-    marginTop: 7,
+  comingSoonText: {
     fontSize: 12,
-    fontWeight: '600',
-  }
-};
+    fontWeight: "600",
+  },
+  ctaSection: {
+    margin: 20,
+    borderRadius: 20,
+    padding: 30,
+    alignItems: "center",
+    elevation: 2,
+  },
+  ctaTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    marginBottom: 8,
+  },
+  ctaSubtitle: {
+    fontSize: 16,
+    textAlign: "center",
+    lineHeight: 24,
+    marginBottom: 24,
+  },
+  whatsappButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+    borderRadius: 16,
+    gap: 12,
+    shadowColor: "#25D366",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  whatsappButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+});

@@ -557,7 +557,6 @@ const OnboardingOverlay = ({ isVisible, onComplete, onStepChange }) => {
   );
 };
 
-
 const Avatar = ({ name, email, size = 50, style, onPress, nativeID }) => {
   const getInitials = useCallback((name, email) => {
     if (name && name.trim()) {
@@ -711,6 +710,7 @@ export default function DashboardScreen({ navigation }) {
   const [showDeleteAlert, setShowDeleteAlert] = useState(false);
   const [expenseToDelete, setExpenseToDelete] = useState(null);
   const [incomes, setIncomes] = useState([]);
+  const [investments, setInvestments] = useState([]);
 
   const [showOnboarding, setShowOnboarding] = useState(false);
 
@@ -740,7 +740,16 @@ export default function DashboardScreen({ navigation }) {
       }
     }, [session])
   );
-
+  const fetchInvestments = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("investments")
+        .select("*")
+        .eq("user_id", session.user.id)
+        .order("date", { ascending: false });
+      if (!error) setInvestments(data || []);
+    } catch {}
+  };
   useFocusEffect(
     useCallback(() => {
       if (
@@ -804,6 +813,7 @@ export default function DashboardScreen({ navigation }) {
         fetchBudgets(),
         fetchReminders(),
         fetchIncomes(),
+        fetchInvestments(),
       ]).finally(() => setRefreshing(false));
     } catch (error) {
       RNAlert.alert(
@@ -1060,7 +1070,6 @@ export default function DashboardScreen({ navigation }) {
       isSet: totalBudget > 0,
     };
   }, [profile, monthlyExpenses]);
-  
 
   const renderExpenseItem = useCallback(
     ({ item }) => (
@@ -1343,17 +1352,24 @@ export default function DashboardScreen({ navigation }) {
           {/* Category Specific Budgets */}
           {budgets.length > 0 && (
             <>
-              {budgetProgress.map((item) => (
-                <BudgetBar
-                  key={item.id}
-                  label={item.category}
-                  spent={item.spent}
-                  budget={parseFloat(item.amount) || 0}
-                  color={item.color}
-                  icon={item.icon}
-                  theme={theme}
-                />
-              ))}
+              {budgetProgress
+                .sort((a, b) =>
+                  b.budget > 0 && a.budget > 0
+                    ? b.spent / b.budget - a.spent / a.budget
+                    : 0
+                )
+                .slice(0, 5)
+                .map((item) => (
+                  <BudgetBar
+                    key={item.id}
+                    label={item.category}
+                    spent={item.spent}
+                    budget={parseFloat(item.amount) || 0}
+                    color={item.color}
+                    icon={item.icon}
+                    theme={theme}
+                  />
+                ))}
             </>
           )}
         </View>
@@ -1412,7 +1428,7 @@ export default function DashboardScreen({ navigation }) {
 
         {/* --- Recent Expenses Section --- */}
         <View
-          style={styles.recentSection}
+          style={styles.recentSectioni}
           ref={(ref) => setTargetRef("recent-section", ref)}
         >
           <View style={styles.sectionHeader}>
@@ -1461,6 +1477,106 @@ export default function DashboardScreen({ navigation }) {
                 ]}
               >
                 Add your first expense to get started!
+              </Text>
+            </View>
+          )}
+        </View>
+        {/* --- Recent Investments Section --- */}
+        <View style={styles.recentSection}>
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+              Recent Investments
+            </Text>
+            <TouchableOpacity
+              onPress={() => navigation.navigate("InvestmentsScreen")} // change as needed
+            >
+              <Text
+                style={[styles.seeAllText, { color: theme.colors.primary }]}
+              >
+                See All
+              </Text>
+            </TouchableOpacity>
+          </View>
+          {investments.length > 0 ? (
+            <FlatList
+              data={investments.slice(0, 5)}
+              renderItem={({ item }) => (
+                <View
+                  style={[
+                    styles.expenseItem,
+                    {
+                      backgroundColor: theme.colors.surface,
+                      borderLeftWidth: 4,
+                      borderLeftColor: theme.colors.success,
+                    },
+                  ]}
+                >
+                  <View style={styles.expenseInfo}>
+                    <Text
+                      style={[
+                        styles.expenseTitle,
+                        { color: theme.colors.textSecondary },
+                      ]}
+                    >
+                      {item.title || "Investment"}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.expenseDate,
+                        { color: theme.colors.textSecondary },
+                      ]}
+                    >
+                      {item.date
+                        ? new Date(item.date).toLocaleDateString()
+                        : "No date"}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.expenseCategory,
+                        { color: theme.colors.textSecondary },
+                      ]}
+                    >
+                      {item.type || "N/A"}
+                    </Text>
+                  </View>
+                  <Text
+                    style={[
+                      styles.expenseAmount,
+                      { color: theme.colors.success },
+                    ]}
+                  >
+                    ₹{(parseFloat(item.amount) || 0).toFixed(2)}
+                  </Text>
+                </View>
+              )}
+              keyExtractor={(item) =>
+                item.id?.toString() || Math.random().toString()
+              }
+              scrollEnabled={false}
+              showsVerticalScrollIndicator={false}
+            />
+          ) : (
+            <View
+              style={[
+                styles.emptyState,
+                { backgroundColor: theme.colors.surface },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.emptyStateText,
+                  { color: theme.colors.textSecondary },
+                ]}
+              >
+                No investments yet
+              </Text>
+              <Text
+                style={[
+                  styles.emptyStateSubtext,
+                  { color: theme.colors.textTertiary },
+                ]}
+              >
+                Add your first investment to get started!
               </Text>
             </View>
           )}

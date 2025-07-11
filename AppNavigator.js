@@ -18,6 +18,7 @@ import PrivacySecurityScreen from "./screens/PrivacySecurityScreen";
 import PaymentReminderScreen from "./screens/PaymentReminderScreen";
 import SmartInsightsScreen from "./screens/SmartInsightsScreen";
 import IncomeManagement from "./screens/IncomeManagement.js";
+import InvestmentsScreen from "./screens/InvestmentsScreen.js"
 
 import Toast from "react-native-toast-message";
 
@@ -82,6 +83,7 @@ export default function AppNavigator() {
               <Stack.Screen name="AppSettings" component={AppSettingsScreen} />
               <Stack.Screen name="SmartInsights" component={SmartInsightsScreen} />
               <Stack.Screen name="IncomeManagement" component={IncomeManagement} />
+              <Stack.Screen name="InvestmentsScreen" component={InvestmentsScreen} />
 
               <Stack.Screen
                 name="PaymentReminder"
