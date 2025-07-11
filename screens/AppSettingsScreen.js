@@ -47,6 +47,13 @@ export default function AppSettingsScreen({ navigation }) {
   const [isLoading, setIsLoading] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(null);
   const [dateRange, setDateRange] = useState({ from: null, to: null });
+  const [exportOptions, setExportOptions] = useState({
+    expenses: true,
+    budgets: false,
+    reminders: false,
+    incomes: false,
+    investments: false,
+  });
 
   const [alertProps, setAlertProps] = useState({
     open: false,
@@ -308,68 +315,131 @@ export default function AppSettingsScreen({ navigation }) {
     });
   };
 
-  const exportDataAsPDF = async () => {
+  const exportAppSettings = async () => {
     if (!dateRange.from || !dateRange.to) {
-      showDateMissingAlert();
+      setAlertProps({
+        open: true,
+        title: "Missing Date Range",
+        message: "Please select a start and end date for export.",
+        confirmText: "OK",
+        showCancel: false,
+      });
       return;
     }
     setIsLoading(true);
+  
     try {
-      const { data: expenses } = await supabase
-        .from("expenses")
-        .select("*")
-        .eq("user_id", session.user.id)
-        .gte("date", dateRange.from)
-        .lte("date", dateRange.to)
-        .order("date", { ascending: true });
-
-      if (!expenses || expenses.length === 0) {
-        setAlertProps({
-          open: true,
-          title: "No Data",
-          message: "No expenses found for the selected period.",
-          confirmText: "OK",
-          showCancel: false,
-          icon: <FileText color="#fff" size={40} />,
-          iconBg: "#06b6d4",
-          confirmColor: "#06b6d4",
-          confirmTextColor: "#fff",
-          cancelText: null,
-          onConfirm: () => setAlertProps((a) => ({ ...a, open: false })),
-          onCancel: null,
-        });
-        setIsLoading(false);
-        return;
-      }
-
-      let chartImageBase64 = null;
-
-      const html = generateExpenseReportHTML(
-        expenses,
-        dateRange,
-        chartImageBase64
-      );
-      const { uri } = await Print.printToFileAsync({ html });
-
+      let htmlContent = `
+        <html>
+          <head>
+            <meta charset="utf-8" />
+            <title>Expenso App Settings Export</title>
+            <style>
+              body { font-family: sans-serif; padding: 18px; font-size: 15px; color: #262626; }
+              h1 { font-size: 26px; margin-bottom: 0; color: #009688; }
+              h2 { font-size: 19px; margin-top: 20px; color: #374151; }
+              table { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
+              th, td { border: 1px solid #e5e7eb; padding: 6px 8px; }
+              th { background: #f0fdf4; color: #059669; font-weight: 700; }
+              tr:nth-child(even) { background: #f9fafb; }
+              .small { color: #64748b; font-size: 13px; margin-top: 0; }
+            </style>
+          </head>
+          <body>
+            <h1>Expenso Data Export</h1>
+            <p class="small">Period: ${dateRange.from} to ${dateRange.to}</p>
+            <p class="small">Exported: ${new Date().toLocaleString()}</p>
+      `;
+  
+      // Fetch and render each selected type
+      const fetchSection = async (section, label, query, renderRow) => {
+        const { data, error } = await query;
+        if (error || !data || data.length === 0) return `<h2>${label}</h2><p>No records.</p>`;
+        const headers = Object.keys(data[0]);
+        return `
+          <h2>${label} (${data.length})</h2>
+          <table>
+            <tr>${headers.map((h) => `<th>${h}</th>`).join("")}</tr>
+            ${data.map(renderRow ? renderRow : (row) =>
+              `<tr>${headers.map((key) => `<td>${row[key] || ""}</td>`).join("")}</tr>`
+            ).join("")}
+          </table>
+        `;
+      };
+  
+      // Array of promises for the selected types
+      const sections = [];
+      if (exportOptions.expenses)
+        sections.push(
+          fetchSection(
+            "expenses",
+            "Expenses",
+            supabase.from("expenses")
+              .select("*")
+              .eq("user_id", session.user.id)
+              .gte("date", dateRange.from)
+              .lte("date", dateRange.to)
+              .order("date", { ascending: true })
+          )
+        );
+      if (exportOptions.budgets)
+        sections.push(
+          fetchSection(
+            "budgets",
+            "Budgets",
+            supabase.from("budgets").select("*").eq("user_id", session.user.id)
+          )
+        );
+      if (exportOptions.reminders)
+        sections.push(
+          fetchSection(
+            "reminders",
+            "Reminders",
+            supabase.from("payment_reminders").select("*").eq("user_id", session.user.id)
+          )
+        );
+      if (exportOptions.incomes)
+        sections.push(
+          fetchSection(
+            "incomes",
+            "Income",
+            supabase.from("side_incomes").select("*").eq("user_id", session.user.id)
+          )
+        );
+      if (exportOptions.investments)
+        sections.push(
+          fetchSection(
+            "investments",
+            "Investments",
+            supabase.from("investments").select("*").eq("user_id", session.user.id)
+          )
+        );
+  
+      // Build final HTML
+      const sectionHtmls = await Promise.all(sections);
+      htmlContent += sectionHtmls.join("");
+  
+      htmlContent += `</body></html>`;
+  
+      // Print to PDF
+      const { uri } = await Print.printToFileAsync({
+        html: htmlContent,
+        base64: false,
+      });
+  
+      // Share
       await Sharing.shareAsync(uri, {
         mimeType: "application/pdf",
-        dialogTitle: "Export Expense Report (PDF)",
+        dialogTitle: "Export App Settings (PDF)",
         UTI: "com.adobe.pdf",
       });
-
+  
       setAlertProps({
         open: true,
         title: "Export Successful",
-        message: `Expense report exported as PDF! ${expenses.length} expenses included.`,
+        message: "Your selected data was exported as PDF.",
         confirmText: "OK",
         showCancel: false,
-        icon: <Download color="#fff" size={40} />,
-        iconBg: "#10b981",
-        confirmColor: "#10b981",
-        confirmTextColor: "#fff",
-        cancelText: null,
-        onConfirm: () => setAlertProps((a) => ({ ...a, open: false })),
-        onCancel: null,
       });
     } catch (e) {
       setAlertProps({
@@ -378,18 +448,11 @@ export default function AppSettingsScreen({ navigation }) {
         message: "Could not export data.",
         confirmText: "OK",
         showCancel: false,
-        icon: <FileText color="#fff" size={40} />,
-        iconBg: "#ef4444",
-        confirmColor: "#ef4444",
-        confirmTextColor: "#fff",
-        cancelText: null,
-        onConfirm: () => setAlertProps((a) => ({ ...a, open: false })),
-        onCancel: null,
       });
     }
+  
     setIsLoading(false);
   };
-
   const Card = ({ icon, title, children, style }) => (
     <View
       style={[
@@ -632,15 +695,65 @@ export default function AppSettingsScreen({ navigation }) {
               </Text>
             </TouchableOpacity>
           </View>
+          <View style={{ marginTop: 12 }}>
+            {[
+              { key: "expenses", label: "Expenses" },
+              { key: "budgets", label: "Budgets" },
+              { key: "reminders", label: "Reminders" },
+              { key: "incomes", label: "Income" },
+              { key: "investments", label: "Investments" },
+            ].map((item) => (
+              <TouchableOpacity
+                key={item.key}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  marginVertical: 5,
+                }}
+                onPress={() =>
+                  setExportOptions((prev) => ({
+                    ...prev,
+                    [item.key]: !prev[item.key],
+                  }))
+                }
+              >
+                <View
+                  style={{
+                    width: 22,
+                    height: 22,
+                    borderWidth: 2,
+                    borderColor: theme.colors.primary,
+                    borderRadius: 6,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    marginRight: 10,
+                    backgroundColor: exportOptions[item.key]
+                      ? theme.colors.primary
+                      : theme.colors.surface,
+                  }}
+                >
+                  {exportOptions[item.key] && (
+                    <Text style={{ color: "#fff", fontSize: 16 }}>✓</Text>
+                  )}
+                </View>
+                <Text
+                  style={{ color: theme.colors.textSecondary, fontSize: 16 }}
+                >
+                  {item.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
           <TouchableOpacity
             style={[
               styles.exportButton,
               { backgroundColor: theme.colors.primary, marginTop: 10 },
             ]}
-            onPress={exportDataAsPDF}
+            onPress={exportAppSettings}
           >
             <Download color="#fff" size={18} style={{ marginRight: 8 }} />
-            <Text style={styles.exportButtonText}>Export PDF</Text>
+            <Text style={styles.exportButtonText}>Export Selected</Text>
           </TouchableOpacity>
         </Card>
 
@@ -806,11 +919,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 12,
     paddingHorizontal: 20,
-    alignItems: "center",
-    justifyContent: "center",
+    
     marginTop: 12,
-    width: 140,
-    alignSelf: "flex-start",
+    width: '100%',
+    alignSelf: "flex",
     flexDirection: "row",
     elevation: 2,
     shadowOffset: { width: 0, height: 2 },
@@ -830,7 +942,7 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     alignItems: "center",
     marginTop: 10,
-    width: 150,
+    width: '100%',
     alignSelf: "center",
   },
   deleteButtonText: {
