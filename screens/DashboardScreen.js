@@ -70,112 +70,143 @@ const ONBOARDING_STEPS = [
       "Let's take a quick tour to help you get started with managing your finances effectively.",
     targetId: null,
     position: "center",
+    icon: "🎉",
   },
   {
     id: "profile",
     title: "Your Profile",
     description:
-      "Tap your avatar to view and edit your profile information, including your name and preferences.",
+      "Tap your avatar to view and edit your profile and preferences.",
     targetId: "profile-avatar",
     position: "bottom",
+    icon: "👤",
   },
   {
-    id: "stats",
+    id: "quick-stats",
     title: "Quick Stats",
     description:
-      "These cards show your spending summary - current month total and today's expenses at a glance.",
+      "These cards show your current month's total and today's expenses at a glance.",
     targetId: "stats-container",
     position: "bottom",
+    icon: "📊",
   },
   {
     id: "heatmap",
-    title: "Monthly Spending Heatmap",
+    title: "Spending Heatmap",
     description:
-      "This heatmap gives you a bird’s-eye view of your daily spending for the current month. Each square represents a day—tap on any date to see the total spent and a category breakdown. The color and emoji show how much you spent: darker colors and 🔥 mean higher spending, while lighter colors and 🧊 or 😴 mean low or no expenses.",
+      "See your daily spending pattern for the month. Tap any day for a breakdown.",
     targetId: "chart-container",
     position: "bottom",
+    icon: "🔥",
   },
   {
     id: "reminders",
     title: "Payment Reminders",
     description:
-      "Set up reminders for bills and recurring payments. Never miss a payment again!",
+      "Set up reminders for bills, subscriptions, and recurring payments so you never miss one.",
     targetId: "reminders-section",
-    position: "bottom",
+    position: "top",
+    icon: "🔔",
   },
   {
     id: "budget",
     title: "Budget Tracking",
     description:
-      "Monitor your spending against set budgets. The progress bars show how much you've spent vs. your limits.",
+      "Monitor your spending against your budgets. The progress bars help you stay within your limits.",
     targetId: "budget-section",
+    position: "top",
+    icon: "💰",
+  },
+  {
+    id: "recent-income",
+    title: "Recent Income",
+    description:
+      "View your latest income entries here. Tap to see more details or manage them.",
+    targetId: "recent-income-section",
     position: "bottom",
+    icon: "💵",
   },
   {
     id: "recent",
     title: "Recent Expenses",
     description:
-      "View your latest transactions here. Long-press any expense to delete it quickly.",
+      "Here are your latest expenses. Long-press any item to delete or edit it.",
     targetId: "recent-section",
     position: "top",
+    icon: "📝",
+  },
+  {
+    id: "investments",
+    title: "Recent Investments",
+    description:
+      "Track your stocks, crypto, and mutual fund investments. Tap for the detailed investments page.",
+    targetId: "investments-section",
+    position: "bottom",
+    icon: "📈",
   },
   {
     id: "taskbar",
     title: "Quick Actions",
     description:
-      "Use this floating taskbar to quickly access all major features of the app.",
+      "This floating taskbar lets you quickly access budgets, reminders, add new expense, view all expenses, or get insights.",
     targetId: "taskbar",
     position: "top",
+    icon: "⚡",
   },
   {
     id: "add-expense",
     title: "Add New Expense",
     description:
-      "The plus button is your main tool - tap it whenever you make a purchase to track your spending.",
+      "The plus button is your main tool. Tap it to record a new expense instantly.",
     targetId: "add-button",
     position: "top",
+    icon: "➕",
   },
   {
     id: "budget-btn",
     title: "Budget Management",
     description:
-      "Create and manage your budgets here. Set spending limits for different categories.",
+      "Create and manage your budgets for different categories here.",
     targetId: "budget-btn",
     position: "top",
+    icon: "💰",
   },
   {
     id: "reminders-btn",
     title: "Payment Reminders",
-    description:
-      "Set up reminders for bills, subscriptions, and other recurring payments.",
+    description: "Set up reminders for bills and recurring payments here.",
     targetId: "reminders-btn",
     position: "top",
+    icon: "🔔",
   },
   {
     id: "expenses-btn",
     title: "All Expenses",
-    description:
-      "View, filter, and analyze all your expenses with powerful sorting and filtering options.",
+    description: "View and analyze all your expenses with powerful filters.",
     targetId: "expenses-btn",
     position: "top",
+    icon: "📊",
   },
   {
     id: "insights-btn",
     title: "Smart Insights",
     description:
-      "Get AI-powered insights about your spending patterns and personalized recommendations.",
+      "Get AI-powered insights and personalized recommendations for your spending.",
     targetId: "insights-btn",
     position: "top",
+    icon: "🧠",
   },
   {
     id: "complete",
     title: "You're All Set! 🚀",
     description:
-      "Start by adding your first expense or setting up a budget. Happy tracking!",
+      "Start by adding your first expense, income, or investment. Happy tracking!",
     targetId: null,
     position: "center",
+    icon: "🚀",
   },
 ];
+
 const ONBOARDING_FLAG_KEY = "onboarding_completed";
 
 const checkOnboardingCompleted = async () => {
@@ -217,18 +248,21 @@ const OnboardingOverlay = ({ isVisible, onComplete, onStepChange }) => {
       }).start();
     }
   }, [isVisible]);
+  
 
   useEffect(() => {
     if (isVisible && tooltipMeasured) measureTargetElement();
     // eslint-disable-next-line
   }, [currentStep, isVisible, tooltipMeasured]);
 
-  const measureTargetElement = () => {
+  const measureTargetElement = useCallback(() => {
     const step = ONBOARDING_STEPS[currentStep];
     if (!step.targetId) {
       setTargetLayout(null);
       return;
     }
+  
+    // Add a longer delay for better reliability
     setTimeout(() => {
       try {
         const targetRef = global.targetRefs?.[step.targetId];
@@ -241,14 +275,29 @@ const OnboardingOverlay = ({ isVisible, onComplete, onStepChange }) => {
                 width,
                 height,
               });
+            } else {
+              // Retry once if measurements are invalid
+              setTimeout(() => {
+                targetRef.measure((x2, y2, width2, height2, pageX2, pageY2) => {
+                  if (width2 > 0 && height2 > 0) {
+                    setTargetLayout({
+                      x: pageX2,
+                      y: pageY2,
+                      width: width2,
+                      height: height2,
+                    });
+                  }
+                });
+              }, 100);
             }
           });
         }
-      } catch {
+      } catch (error) {
+        console.warn("Error measuring target element:", error);
         setTargetLayout(null);
       }
-    }, 200);
-  };
+    }, 400); // Increased delay for better reliability
+  }, [currentStep]);
 
   const handleNext = () => {
     if (currentStep < ONBOARDING_STEPS.length - 1) {
@@ -695,10 +744,13 @@ export default function DashboardScreen({ navigation }) {
   const route = useRoute();
   const { session } = useAuth();
   const { theme } = useTheme();
+  const nav = useNavigation();
+  
+  // All refs should be declared early
   const targetRefs = useRef({});
   const scrollViewRef = useRef(null);
-  const nav = useNavigation();
 
+  // All useState hooks should be declared together at the top
   const [expenses, setExpenses] = useState([]);
   const [budgets, setBudgets] = useState([]);
   const [profile, setProfile] = useState(null);
@@ -711,119 +763,156 @@ export default function DashboardScreen({ navigation }) {
   const [expenseToDelete, setExpenseToDelete] = useState(null);
   const [incomes, setIncomes] = useState([]);
   const [investments, setInvestments] = useState([]);
-
   const [showOnboarding, setShowOnboarding] = useState(false);
 
-  useEffect(() => {
-    let isMounted = true;
-    if (session?.user) {
-      initializeData();
-      if (route.params?.showOnboarding) {
-        setShowOnboarding(true);
-        navigation.setParams({ showOnboarding: undefined });
-        return;
+  // All useCallback hooks should be declared together
+  const setTargetRef = useCallback((id, ref) => {
+    if (ref && id) {
+      if (!global.targetRefs) {
+        global.targetRefs = {};
       }
-    }
-    return () => {
-      isMounted = false;
-    };
-  }, [session, route.params?.showOnboarding]);
-
-  useEffect(() => {
-    global.targetRefs = {};
-  }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      if (session?.user) {
-        initializeData();
-      }
-    }, [session])
-  );
-  const fetchInvestments = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("investments")
-        .select("*")
-        .eq("user_id", session.user.id)
-        .order("date", { ascending: false });
-      if (!error) setInvestments(data || []);
-    } catch {}
-  };
-  useFocusEffect(
-    useCallback(() => {
-      if (
-        navigation.getState().routes[navigation.getState().index].params
-          ?.showOnboarding
-      ) {
-        setShowOnboarding(true);
-        navigation.setParams({ showOnboarding: undefined });
-      }
-    }, [navigation])
-  );
-
-  const fetchIncomes = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("side_incomes")
-        .select("*")
-        .eq("user_id", session.user.id)
-        .order("date", { ascending: false });
-      if (!error) setIncomes(data || []);
-    } catch {}
-  };
-
-  const checkFirstVisit = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("user_preferences")
-        .select("onboarding_completed")
-        .eq("user_id", session.user.id)
-        .single();
-
-      if (error || !data?.onboarding_completed) {
-        setShowOnboarding(true);
-        setIsFirstVisit(true);
-      } else {
-        setIsFirstVisit(false);
-      }
-    } catch (error) {
-      setShowOnboarding(true);
-      setIsFirstVisit(true);
-    }
-  };
-
-  const setTargetRef = (id, ref) => {
-    if (ref && global.targetRefs) {
       global.targetRefs[id] = ref;
     }
-  };
+  }, []);
 
-  const completeOnboarding = async () => {
-    await setOnboardingCompleted();
-    setShowOnboarding(false);
-  };
+  const handleOnboardingStepChange = useCallback((stepId) => {
+    const step = ONBOARDING_STEPS.find((s) => s.id === stepId);
+    
+    if (!step) return;
 
-  const initializeData = async () => {
-    setLoading(true);
-    try {
-      await Promise.all([
-        fetchProfile(),
-        fetchExpenses(),
-        fetchBudgets(),
-        fetchReminders(),
-        fetchIncomes(),
-        fetchInvestments(),
-      ]).finally(() => setRefreshing(false));
-    } catch (error) {
-      RNAlert.alert(
-        "Error",
-        "Failed to load dashboard data. Please try again."
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
+    // If no target, don't scroll
+    if (!step.targetId) return;
+
+    // Wait a bit for any animations to complete
+    setTimeout(() => {
+      const targetRef = global.targetRefs?.[step.targetId];
+      
+      if (!targetRef || !scrollViewRef.current) return;
+
+      try {
+        targetRef.measure((x, y, width, height, pageX, pageY) => {
+          if (width <= 0 || height <= 0) return;
+
+          const windowHeight = Dimensions.get("window").height;
+          
+          // Calculate optimal scroll position based on step position
+          let targetScrollY;
+          
+          switch (step.position) {
+            case "top":
+              // For top tooltips, scroll so element is in lower half
+              targetScrollY = pageY - windowHeight * 0.7;
+              break;
+            case "bottom":
+              // For bottom tooltips, scroll so element is in upper half
+              targetScrollY = pageY - windowHeight * 0.3;
+              break;
+            case "center":
+              // For center tooltips, center the element
+              targetScrollY = pageY - windowHeight * 0.5 + height * 0.5;
+              break;
+            default:
+              targetScrollY = pageY - windowHeight * 0.5;
+          }
+
+          // Add some padding and ensure we don't scroll beyond bounds
+          const scrollPadding = 50;
+          targetScrollY = Math.max(0, targetScrollY - scrollPadding);
+
+          scrollViewRef.current.scrollTo({
+            y: targetScrollY,
+            animated: true,
+          });
+        });
+      } catch (error) {
+        console.warn("Error measuring target element:", error);
+      }
+    }, 300);
+  }, []);
+
+  const calculateStatistics = useCallback((expenseData) => {
+    const now = new Date();
+    setMonthlyExpenses(
+      expenseData
+        .filter((e) => {
+          if (!e.date) return false;
+          const d = new Date(e.date);
+          return (
+            d.getMonth() === now.getMonth() &&
+            d.getFullYear() === now.getFullYear()
+          );
+        })
+        .reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0)
+    );
+  }, []);
+
+  const getMonthlyCategorySpending = useCallback(
+    (category) => {
+      const now = new Date();
+      return expenses
+        .filter((expense) => {
+          if (expense.category !== category || !expense.date) return false;
+          const expenseDate = new Date(expense.date);
+          return (
+            expenseDate.getFullYear() === now.getFullYear() &&
+            expenseDate.getMonth() === now.getMonth()
+          );
+        })
+        .reduce((sum, expense) => sum + (parseFloat(expense.amount) || 0), 0);
+    },
+    [expenses]
+  );
+
+  const handleDelete = useCallback((expense) => {
+    setExpenseToDelete(expense);
+    setShowDeleteAlert(true);
+  }, []);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    Promise.all([fetchExpenses(), fetchBudgets(), fetchReminders()]).finally(
+      () => setRefreshing(false)
+    );
+  }, []);
+
+  const renderExpenseItem = useCallback(
+    ({ item }) => (
+      <TouchableOpacity
+        style={[styles.expenseItem, { backgroundColor: theme.colors.surface }]}
+        onLongPress={() => handleDelete(item)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.expenseInfo}>
+          <Text
+            style={[styles.expenseTitle, { color: theme.colors.textSecondary }]}
+          >
+            {item.title || "Untitled"}
+          </Text>
+          <Text
+            style={[styles.expenseDate, { color: theme.colors.textSecondary }]}
+          >
+            {item.date ? new Date(item.date).toLocaleDateString() : "No date"}
+          </Text>
+          {item.category && (
+            <Text
+              style={[
+                styles.expenseCategory,
+                { color: theme.colors.textSecondary },
+              ]}
+            >
+              {EXPENSE_CATEGORIES.find((cat) => cat.name === item.category)
+                ?.icon || "📝"}{" "}
+              {item.category}
+            </Text>
+          )}
+        </View>
+        <Text style={[styles.expenseAmount, { color: theme.colors.primary }]}>
+          ₹{(parseFloat(item.amount) || 0).toFixed(2)}
+        </Text>
+      </TouchableOpacity>
+    ),
+    [handleDelete, theme]
+  );
 
   const renderIncomeItem = useCallback(
     ({ item }) => (
@@ -867,6 +956,103 @@ export default function DashboardScreen({ navigation }) {
     ),
     [theme]
   );
+
+  // All useMemo hooks should be declared together
+  const getPieChartData = useMemo(() => {
+    const categoryMap = {};
+    expenses.forEach((item) => {
+      const amount = parseFloat(item.amount);
+      if (!item.category || isNaN(amount) || amount <= 0) return;
+      categoryMap[item.category] = (categoryMap[item.category] || 0) + amount;
+    });
+    return Object.entries(categoryMap)
+      .filter(([cat, amt]) => cat && amt > 0)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([category, amount], index) => {
+        const categoryObj = EXPENSE_CATEGORIES.find((c) => c.name === category);
+        return {
+          name: category,
+          amount: amount,
+          color:
+            categoryObj?.color || CHART_COLORS[index % CHART_COLORS.length],
+          legendFontColor: "#222",
+          legendFontSize: 14,
+          icon: categoryObj?.icon || "📝",
+        };
+      });
+  }, [expenses]);
+
+  const budgetProgress = useMemo(() => {
+    return budgets.map((budget) => {
+      const spent = getMonthlyCategorySpending(budget.category);
+      const categoryData = EXPENSE_CATEGORIES.find(
+        (cat) => cat.name === budget.category
+      );
+      return {
+        ...budget,
+        spent,
+        icon: categoryData?.icon || "📝",
+        color: categoryData?.color || "#747D8C",
+        isOverBudget: spent > parseFloat(budget.amount || 0),
+      };
+    });
+  }, [budgets, getMonthlyCategorySpending]);
+
+  const uniqueReminders = useMemo(() => {
+    return reminders
+      .sort((a, b) => {
+        const dateA = new Date(
+          `${a.next_due_date}T${a.reminder_time || "00:00"}`
+        );
+        const dateB = new Date(
+          `${b.next_due_date}T${b.reminder_time || "00:00"}`
+        );
+        return dateA - dateB;
+      })
+      .filter(
+        (rem, idx, arr) =>
+          arr.findIndex(
+            (r) =>
+              r.title === rem.title &&
+              r.next_due_date === rem.next_due_date &&
+              r.reminder_time === rem.reminder_time
+          ) === idx
+      );
+  }, [reminders]);
+
+  const overallMonthlyBudgetProgress = useMemo(() => {
+    const totalBudget = parseFloat(profile?.monthly_budget) || 0;
+    const spent = monthlyExpenses;
+    return {
+      total: totalBudget,
+      spent: spent,
+      isSet: totalBudget > 0,
+    };
+  }, [profile, monthlyExpenses]);
+
+  // Function declarations (not hooks)
+  const fetchInvestments = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("investments")
+        .select("*")
+        .eq("user_id", session.user.id)
+        .order("date", { ascending: false });
+      if (!error) setInvestments(data || []);
+    } catch {}
+  };
+
+  const fetchIncomes = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("side_incomes")
+        .select("*")
+        .eq("user_id", session.user.id)
+        .order("date", { ascending: false });
+      if (!error) setIncomes(data || []);
+    } catch {}
+  };
 
   const fetchProfile = async () => {
     try {
@@ -934,91 +1120,31 @@ export default function DashboardScreen({ navigation }) {
     } catch {}
   };
 
-  const calculateStatistics = useCallback((expenseData) => {
-    const now = new Date();
-    setMonthlyExpenses(
-      expenseData
-        .filter((e) => {
-          if (!e.date) return false;
-          const d = new Date(e.date);
-          return (
-            d.getMonth() === now.getMonth() &&
-            d.getFullYear() === now.getFullYear()
-          );
-        })
-        .reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0)
-    );
-  }, []);
+  const completeOnboarding = async () => {
+    await setOnboardingCompleted();
+    setShowOnboarding(false);
+  };
 
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    Promise.all([fetchExpenses(), fetchBudgets(), fetchReminders()]).finally(
-      () => setRefreshing(false)
-    );
-  }, []);
-
-  const getPieChartData = useMemo(() => {
-    const categoryMap = {};
-    expenses.forEach((item) => {
-      const amount = parseFloat(item.amount);
-      if (!item.category || isNaN(amount) || amount <= 0) return;
-      categoryMap[item.category] = (categoryMap[item.category] || 0) + amount;
-    });
-    return Object.entries(categoryMap)
-      .filter(([cat, amt]) => cat && amt > 0)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 6)
-      .map(([category, amount], index) => {
-        const categoryObj = EXPENSE_CATEGORIES.find((c) => c.name === category);
-        return {
-          name: category,
-          amount: amount,
-          color:
-            categoryObj?.color || CHART_COLORS[index % CHART_COLORS.length],
-          legendFontColor: "#222",
-          legendFontSize: 14,
-          icon: categoryObj?.icon || "📝",
-        };
-      });
-  }, [expenses]);
-
-  const getMonthlyCategorySpending = useCallback(
-    (category) => {
-      const now = new Date();
-      return expenses
-        .filter((expense) => {
-          if (expense.category !== category || !expense.date) return false;
-          const expenseDate = new Date(expense.date);
-          return (
-            expenseDate.getFullYear() === now.getFullYear() &&
-            expenseDate.getMonth() === now.getMonth()
-          );
-        })
-        .reduce((sum, expense) => sum + (parseFloat(expense.amount) || 0), 0);
-    },
-    [expenses]
-  );
-
-  const budgetProgress = useMemo(() => {
-    return budgets.map((budget) => {
-      const spent = getMonthlyCategorySpending(budget.category);
-      const categoryData = EXPENSE_CATEGORIES.find(
-        (cat) => cat.name === budget.category
+  const initializeData = async () => {
+    setLoading(true);
+    try {
+      await Promise.all([
+        fetchProfile(),
+        fetchExpenses(),
+        fetchBudgets(),
+        fetchReminders(),
+        fetchIncomes(),
+        fetchInvestments(),
+      ]).finally(() => setRefreshing(false));
+    } catch (error) {
+      RNAlert.alert(
+        "Error",
+        "Failed to load dashboard data. Please try again."
       );
-      return {
-        ...budget,
-        spent,
-        icon: categoryData?.icon || "📝",
-        color: categoryData?.color || "#747D8C",
-        isOverBudget: spent > parseFloat(budget.amount || 0),
-      };
-    });
-  }, [budgets, getMonthlyCategorySpending]);
-
-  const handleDelete = useCallback((expense) => {
-    setExpenseToDelete(expense);
-    setShowDeleteAlert(true);
-  }, []);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const deleteExpense = async (expenseId) => {
     try {
@@ -1030,28 +1156,6 @@ export default function DashboardScreen({ navigation }) {
     }
   };
 
-  const uniqueReminders = useMemo(() => {
-    return reminders
-      .sort((a, b) => {
-        const dateA = new Date(
-          `${a.next_due_date}T${a.reminder_time || "00:00"}`
-        );
-        const dateB = new Date(
-          `${b.next_due_date}T${b.reminder_time || "00:00"}`
-        );
-        return dateA - dateB;
-      })
-      .filter(
-        (rem, idx, arr) =>
-          arr.findIndex(
-            (r) =>
-              r.title === rem.title &&
-              r.next_due_date === rem.next_due_date &&
-              r.reminder_time === rem.reminder_time
-          ) === idx
-      );
-  }, [reminders]);
-
   const handleLogout = async () => {
     try {
       setShowLogoutAlert(false);
@@ -1061,55 +1165,47 @@ export default function DashboardScreen({ navigation }) {
     }
   };
 
-  const overallMonthlyBudgetProgress = useMemo(() => {
-    const totalBudget = parseFloat(profile?.monthly_budget) || 0;
-    const spent = monthlyExpenses;
-    return {
-      total: totalBudget,
-      spent: spent,
-      isSet: totalBudget > 0,
+  // All useEffect hooks should be declared together after other hooks
+  useEffect(() => {
+    let isMounted = true;
+    if (session?.user) {
+      initializeData();
+      if (route.params?.showOnboarding) {
+        setShowOnboarding(true);
+        navigation.setParams({ showOnboarding: undefined });
+        return;
+      }
+    }
+    return () => {
+      isMounted = false;
     };
-  }, [profile, monthlyExpenses]);
+  }, [session, route.params?.showOnboarding]);
 
-  const renderExpenseItem = useCallback(
-    ({ item }) => (
-      <TouchableOpacity
-        style={[styles.expenseItem, { backgroundColor: theme.colors.surface }]}
-        onLongPress={() => handleDelete(item)}
-        activeOpacity={0.7}
-      >
-        <View style={styles.expenseInfo}>
-          <Text
-            style={[styles.expenseTitle, { color: theme.colors.textSecondary }]}
-          >
-            {item.title || "Untitled"}
-          </Text>
-          <Text
-            style={[styles.expenseDate, { color: theme.colors.textSecondary }]}
-          >
-            {item.date ? new Date(item.date).toLocaleDateString() : "No date"}
-          </Text>
-          {item.category && (
-            <Text
-              style={[
-                styles.expenseCategory,
-                { color: theme.colors.textSecondary },
-              ]}
-            >
-              {EXPENSE_CATEGORIES.find((cat) => cat.name === item.category)
-                ?.icon || "📝"}{" "}
-              {item.category}
-            </Text>
-          )}
-        </View>
-        <Text style={[styles.expenseAmount, { color: theme.colors.primary }]}>
-          ₹{(parseFloat(item.amount) || 0).toFixed(2)}
-        </Text>
-      </TouchableOpacity>
-    ),
-    [handleDelete, theme]
+  useEffect(() => {
+    global.targetRefs = {};
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (session?.user) {
+        initializeData();
+      }
+    }, [session])
   );
 
+  useFocusEffect(
+    useCallback(() => {
+      if (
+        navigation.getState().routes[navigation.getState().index].params
+          ?.showOnboarding
+      ) {
+        setShowOnboarding(true);
+        navigation.setParams({ showOnboarding: undefined });
+      }
+    }, [navigation])
+  );
+
+  // Early return should come after all hooks
   if (loading || !session?.user) {
     return (
       <View
@@ -1136,36 +1232,7 @@ export default function DashboardScreen({ navigation }) {
     .filter((exp) => exp.date === todayString)
     .reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0);
 
-  const handleOnboardingStepChange = (stepId) => {
-    if (
-      stepId === "budget" &&
-      scrollViewRef.current &&
-      global.targetRefs["budget-section"]
-    ) {
-      global.targetRefs["budget-section"].measure(
-        (x, y, width, height, pageX, pageY) => {
-          const offset =
-            pageY - Dimensions.get("window").height / 2 + height / 2;
-          scrollViewRef.current.scrollTo({
-            y: Math.max(offset, 0),
-            animated: true,
-          });
-        }
-      );
-    }
-    if (
-      stepId === "recent" &&
-      scrollViewRef.current &&
-      global.targetRefs["recent-section"]
-    ) {
-      global.targetRefs["recent-section"].measure(
-        (x, y, width, height, pageX, pageY) => {
-          scrollViewRef.current.scrollTo({ y: pageY - 80, animated: true });
-        }
-      );
-    }
-  };
-
+  // Rest of your JSX remains the same...
   return (
     <>
       <ScrollView
@@ -1374,7 +1441,10 @@ export default function DashboardScreen({ navigation }) {
           )}
         </View>
         {/* --- Recent Income Section --- */}
-        <View style={styles.recentSectioni}>
+        <View
+          style={styles.recentSectioni}
+          ref={(ref) => setTargetRef("recent-income-section", ref)}
+        >
           <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
               Recent Income
@@ -1482,7 +1552,10 @@ export default function DashboardScreen({ navigation }) {
           )}
         </View>
         {/* --- Recent Investments Section --- */}
-        <View style={styles.recentSection}>
+        <View
+          style={styles.recentSection}
+          ref={(ref) => setTargetRef("investments-section", ref)}
+        >
           <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
               Recent Investments

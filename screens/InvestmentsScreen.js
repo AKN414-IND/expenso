@@ -176,6 +176,11 @@ export default function InvestmentsScreen({ navigation }) {
   const deleteInvestment = async (id) => {
     const { error } = await supabase.from("investments").delete().eq("id", id);
     if (!error) {
+      await supabase.from("expenses").delete().match({
+        user_id: session.user.id,
+        category: "Investments",
+        investment_id: id,
+      });
       setInvestments((prev) => prev.filter((inv) => inv.id !== id));
       showSuccessAlert("Investment deleted successfully!");
     } else showErrorAlert("Failed to delete. Try again.");
@@ -205,12 +210,7 @@ export default function InvestmentsScreen({ navigation }) {
         {
           backgroundColor: theme.colors.surface,
           borderColor: theme.colors.borderLight,
-          marginBottom: index === filteredInvestments.length - 1 ? 28 : 16,
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 6 },
-          shadowOpacity: 0.13,
-          shadowRadius: 12,
-          elevation: 3,
+          marginBottom: index === filteredInvestments.length - 1 ? 20 : 14,
         },
       ]}
     >
@@ -250,12 +250,7 @@ export default function InvestmentsScreen({ navigation }) {
           </View>
         </View>
         <View style={styles.cardAmount}>
-          <Text
-            style={[
-              styles.amountText,
-              { color: theme.colors.primary, fontSize: 22 },
-            ]}
-          >
+          <Text style={[styles.amountText, { color: theme.colors.primary }]}>
             ₹{parseFloat(investment.amount).toLocaleString()}
           </Text>
         </View>
@@ -708,23 +703,6 @@ export default function InvestmentsScreen({ navigation }) {
           </View>
         }
       />
-      <TouchableOpacity
-        style={[styles.fab, { backgroundColor: theme.colors.primary }]}
-        activeOpacity={0.85}
-        onPress={() => {
-          setEditingInvestment({
-            id: null,
-            title: "",
-            amount: "",
-            type: "Stocks",
-            date: new Date().toISOString().slice(0, 10),
-            description: "",
-          });
-          setShowEditModal(true);
-        }}
-      >
-        <Plus color="#fff" size={28} />
-      </TouchableOpacity>
       <FilterModal />
       <Alert {...alertProps} />
       <Modal visible={showEditModal} animationType="slide" transparent={false}>
@@ -740,12 +718,6 @@ export default function InvestmentsScreen({ navigation }) {
               {
                 backgroundColor: theme.colors.surface,
                 borderBottomColor: theme.colors.border,
-                borderBottomWidth: 1,
-                elevation: 5,
-                shadowColor: "#000",
-                shadowOffset: { width: 0, height: 1 },
-                shadowOpacity: 0.1,
-                shadowRadius: 2,
               },
             ]}
           >
@@ -944,7 +916,21 @@ export default function InvestmentsScreen({ navigation }) {
                       updated_at: new Date().toISOString(),
                     })
                     .eq("id", editingInvestment.id);
+
                   if (!error) {
+                    await supabase
+                      .from("expenses")
+                      .update({
+                        title: editingInvestment.title,
+                        amount: editingInvestment.amount,
+                        date: editingInvestment.date,
+                        description: `Investment: ${editingInvestment.type}`,
+                      })
+                      .match({
+                        user_id: session.user.id,
+                        category: "Investments",
+                        investment_id: editingInvestment.id,
+                      });
                     setShowEditModal(false);
                     fetchInvestments();
                     showSuccessAlert("Investment updated successfully!");
@@ -952,17 +938,33 @@ export default function InvestmentsScreen({ navigation }) {
                     showErrorAlert("Failed to update. Please try again.");
                   }
                 } else {
-                  const { error } = await supabase.from("investments").insert([
-                    {
-                      user_id: session.user.id,
-                      title: editingInvestment.title,
-                      amount: editingInvestment.amount,
-                      type: editingInvestment.type,
-                      date: editingInvestment.date,
-                      description: editingInvestment.description,
-                    },
-                  ]);
-                  if (!error) {
+                  const { data, error } = await supabase
+                    .from("investments")
+                    .insert([
+                      {
+                        user_id: session.user.id,
+                        title: editingInvestment.title,
+                        amount: editingInvestment.amount,
+                        type: editingInvestment.type,
+                        date: editingInvestment.date,
+                        description: editingInvestment.description,
+                      },
+                    ])
+                    .select();
+
+                  if (!error && data && data[0]) {
+                    const investment = data[0];
+                    await supabase.from("expenses").insert([
+                      {
+                        user_id: session.user.id,
+                        title: investment.title,
+                        amount: investment.amount,
+                        category: "Investments",
+                        date: investment.date,
+                        description: `Investment: ${investment.type}`,
+                        investment_id: investment.id,
+                      },
+                    ]);
                     setShowEditModal(false);
                     fetchInvestments();
                     showSuccessAlert("Investment added successfully!");
@@ -1055,18 +1057,14 @@ const styles = StyleSheet.create({
   },
   activeFilterText: { fontSize: 12, fontWeight: "600", marginRight: 4 },
   removeFilterText: { fontSize: 12, fontWeight: "700" },
-  listContainer: { paddingHorizontal: 20, paddingTop: 18, paddingBottom: 100 },
+  listContainer: { paddingHorizontal: 20, paddingTop: 10 },
   investmentCard: {
-    borderRadius: 22,
-    padding: 18,
+    borderRadius: 16,
+    padding: 16,
     borderWidth: 1,
-    elevation: 3,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.13,
-    shadowRadius: 12,
+    elevation: 2,
   },
-  cardHeader: { flexDirection: "row", alignItems: "center" },
+  cardHeader: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
   cardIcon: {
     width: 48,
     height: 48,
@@ -1075,26 +1073,20 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginRight: 12,
   },
-  cardEmoji: { fontSize: 24 },
+  cardEmoji: { fontSize: 20 },
   cardInfo: { flex: 1, marginRight: 12 },
   cardTitle: { fontSize: 16, fontWeight: "700", marginBottom: 4 },
   cardType: { fontSize: 14, marginBottom: 4 },
   cardDate: { flexDirection: "row", alignItems: "center" },
   cardDateText: { fontSize: 12, marginLeft: 4 },
   cardAmount: { alignItems: "flex-end" },
-  amountText: { fontSize: 22, fontWeight: "700" },
-  cardDescription: {
-    fontSize: 14,
-    marginTop: 8,
-    marginBottom: 4,
-    lineHeight: 20,
-  },
+  amountText: { fontSize: 18, fontWeight: "700" },
+  cardDescription: { fontSize: 14, marginBottom: 12, lineHeight: 20 },
   cardActions: {
     flexDirection: "row",
+    justifyContent: "space-between",
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: "#e5e7eb",
-    marginTop: 8,
   },
   actionButton: {
     flexDirection: "row",
@@ -1106,44 +1098,35 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
     justifyContent: "center",
   },
+  viewButtonText: { fontWeight: "600", fontSize: 14, marginLeft: 4 },
   editButtonText: { fontWeight: "600", fontSize: 14, marginLeft: 4 },
   deleteButtonText: { fontWeight: "600", fontSize: 14, marginLeft: 4 },
   emptyState: {
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 90,
+    paddingVertical: 60,
     paddingHorizontal: 40,
-    opacity: 0.95,
   },
   emptyStateTitle: {
-    fontSize: 22,
-    fontWeight: "800",
-    marginTop: 18,
-    marginBottom: 7,
-    letterSpacing: 0.2,
+    fontSize: 20,
+    fontWeight: "700",
+    marginTop: 16,
+    marginBottom: 8,
   },
   emptyStateText: {
     fontSize: 16,
     textAlign: "center",
     lineHeight: 24,
-    marginBottom: 28,
-    color: "#94a3b8",
+    marginBottom: 24,
   },
   addExpenseButton: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 30,
-    paddingVertical: 15,
-    borderRadius: 14,
-    backgroundColor: "#06b6d4",
-    elevation: 2,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
   },
-  addExpenseButtonText: {
-    fontWeight: "800",
-    fontSize: 17,
-    marginLeft: 8,
-    color: "#fff",
-  },
+  addExpenseButtonText: { fontWeight: "700", fontSize: 16, marginLeft: 8 },
   filterOverlay: {
     position: "absolute",
     top: 0,
@@ -1215,12 +1198,11 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
   modalInput: {
-    borderRadius: 20,
-    padding: 18,
-    fontSize: 17,
+    borderRadius: 16,
+    padding: 16,
+    fontSize: 16,
     borderWidth: 1,
     fontWeight: "500",
-    marginBottom: 3,
   },
   modalTextArea: { height: 100, textAlignVertical: "top" },
   categoryEditScroll: { flexDirection: "row", paddingVertical: 8, gap: 12 },
@@ -1241,8 +1223,6 @@ const styles = StyleSheet.create({
     padding: 20,
     gap: 16,
     borderTopWidth: 1,
-    borderTopColor: "#ececec",
-    backgroundColor: "#fff",
   },
   modalButton: {
     flex: 1,
@@ -1259,21 +1239,5 @@ const styles = StyleSheet.create({
     shadowColor: "transparent",
     elevation: 0,
     borderWidth: 1,
-  },
-  fab: {
-    position: "absolute",
-    bottom: 30,
-    right: 26,
-    backgroundColor: "#06b6d4",
-    width: 62,
-    height: 62,
-    borderRadius: 31,
-    alignItems: "center",
-    justifyContent: "center",
-    elevation: 8,
-    shadowColor: "#06b6d4",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 16,
   },
 });
