@@ -115,24 +115,39 @@ export default function PaymentReminderScreen({ navigation }) {
     } catch (error) {}
   };
 
-  const handleNotificationResponse = (response) => {
-    const { screen, params, reminderId } =
-      response.notification.request.content.data || {};
+  const handleNotificationResponse = async (response) => {
+    const { screen, params, reminderId } = response.notification.request.content.data || {};
     const actionIdentifier = response.actionIdentifier;
+  
     if (actionIdentifier === "mark_paid") {
-      markReminderAsPaid(reminderId);
-    } else if (
-      actionIdentifier === "urgent_pay" ||
-      actionIdentifier === "view_details"
-    ) {
+      await markReminderAsPaid(reminderId);
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: "✅ Marked as Paid!",
+          body: "Your payment reminder has been marked as paid. Great job! 🎉",
+          sound: "default"
+        },
+        trigger: null,
+      });
+      fetchReminders(); 
+    } else if (actionIdentifier === "urgent_pay" || actionIdentifier === "view_details") {
       navigation.navigate("PaymentReminder", params);
     } else if (actionIdentifier === "snooze") {
-      snoozeReminder(reminderId);
+      await snoozeReminder(reminderId);
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: "😴 Snoozed!",
+          body: "We’ll remind you again in 1 hour. Don’t forget to pay! ⏰",
+          sound: "default"
+        },
+        trigger: null,
+      });
+      fetchReminders();
     } else if (screen) {
       navigation.navigate(screen, params);
     }
   };
-
+  
   const scheduleNotification = async (reminder) => {
     return await scheduleReminderNotification(reminder, form.reminder_time);
   };
@@ -143,17 +158,10 @@ export default function PaymentReminderScreen({ navigation }) {
         .from("payment_reminders")
         .update({ is_active: false })
         .eq("id", reminderId);
-      fetchReminders();
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: "✅ Payment Marked as Paid",
-          body: "Reminder has been marked as completed.",
-        },
-        trigger: null,
-      });
+      await fetchReminders(); 
     } catch (error) {}
   };
-
+  
   const snoozeReminder = async (reminderId) => {
     try {
       const reminder = reminders.find((r) => r.id === reminderId);
@@ -165,12 +173,14 @@ export default function PaymentReminderScreen({ navigation }) {
             title: "💰 Payment Reminder (Snoozed)",
             body: `${reminder.title} - Don't forget to pay!`,
             data: { reminderId: reminder.id, type: "snoozed" },
+            sound: "default"
           },
           trigger: snoozeTime,
         });
       }
     } catch (error) {}
   };
+  
 
   const fetchReminders = async () => {
     try {

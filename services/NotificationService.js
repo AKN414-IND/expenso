@@ -6,48 +6,54 @@ import { supabase } from "../lib/supabase";
 const NOTIFICATION_CATEGORIES = {
   PAYMENT_DUE: "payment_due",
   PAYMENT_OVERDUE: "payment_overdue",
-  REMINDER: "reminder"
+  REMINDER: "reminder",
 };
 
 Notifications.setNotificationHandler({
   handleNotification: async (notification) => {
     const { type } = notification.request.content.data || {};
-    
+
     return {
       shouldShowAlert: true,
       shouldPlaySound: true,
       shouldSetBadge: true,
-      priority: type === "overdue" ? "high" : "normal"
+      priority: type === "overdue" ? "high" : "normal",
     };
   },
 });
 
 const setupNotificationCategories = async () => {
-  await Notifications.setNotificationCategoryAsync(NOTIFICATION_CATEGORIES.PAYMENT_DUE, [
-    {
-      identifier: 'mark_paid',
-      buttonTitle: 'Mark as Paid',
-      options: { opensAppToForeground: false }
-    },
-    {
-      identifier: 'view_details',
-      buttonTitle: 'View Details',
-      options: { opensAppToForeground: true }
-    }
-  ]);
+  await Notifications.setNotificationCategoryAsync(
+    NOTIFICATION_CATEGORIES.PAYMENT_DUE,
+    [
+      {
+        identifier: "mark_paid",
+        buttonTitle: "Mark as Paid",
+        options: { opensAppToForeground: false },
+      },
+      {
+        identifier: "view_details",
+        buttonTitle: "View Details",
+        options: { opensAppToForeground: true },
+      },
+    ]
+  );
 
-  await Notifications.setNotificationCategoryAsync(NOTIFICATION_CATEGORIES.PAYMENT_OVERDUE, [
-    {
-      identifier: 'urgent_pay',
-      buttonTitle: 'Pay Now',
-      options: { opensAppToForeground: true }
-    },
-    {
-      identifier: 'snooze',
-      buttonTitle: 'Remind Later',
-      options: { opensAppToForeground: false }
-    }
-  ]);
+  await Notifications.setNotificationCategoryAsync(
+    NOTIFICATION_CATEGORIES.PAYMENT_OVERDUE,
+    [
+      {
+        identifier: "urgent_pay",
+        buttonTitle: "Pay Now",
+        options: { opensAppToForeground: true },
+      },
+      {
+        identifier: "snooze",
+        buttonTitle: "Remind Later",
+        options: { opensAppToForeground: false },
+      },
+    ]
+  );
 };
 
 const scheduleNotification = async (reminder, customTime = null) => {
@@ -58,7 +64,9 @@ const scheduleNotification = async (reminder, customTime = null) => {
     }
 
     if (reminder.notification_id) {
-      await Notifications.cancelScheduledNotificationAsync(reminder.notification_id);
+      await Notifications.cancelScheduledNotificationAsync(
+        reminder.notification_id
+      );
     }
 
     const triggerDate = new Date(reminder.next_due_date);
@@ -71,23 +79,27 @@ const scheduleNotification = async (reminder, customTime = null) => {
     }
 
     const isOverdue = new Date(reminder.next_due_date) < new Date();
-    const categoryIdentifier = isOverdue ? NOTIFICATION_CATEGORIES.PAYMENT_OVERDUE : NOTIFICATION_CATEGORIES.PAYMENT_DUE;
+    const categoryIdentifier = isOverdue
+      ? NOTIFICATION_CATEGORIES.PAYMENT_OVERDUE
+      : NOTIFICATION_CATEGORIES.PAYMENT_DUE;
 
     const notificationId = await Notifications.scheduleNotificationAsync({
       content: {
-        title: isOverdue ? "⚠️ Overdue Payment" : "💰 Payment Reminder",
-        body: `${reminder.title} ${isOverdue ? 'is overdue' : 'is due today'}!${
-          reminder.amount ? ` Amount: ₹${reminder.amount}` : ""
-        }`,
+        title: "⚠️ Overdue Payment Reminder",
+        body: `${reminder.title} was due ${daysPast} day(s) ago. Amount: ₹${
+          reminder.amount || "Not specified"
+        } 🚨`,
+        sound: "default",
+
         data: {
           reminderId: reminder.id,
           type: isOverdue ? "overdue" : "due_today",
           screen: "PaymentReminder",
-          params: { reminderId: reminder.id }
+          params: { reminderId: reminder.id },
         },
         categoryIdentifier,
-        sound: 'default',
-        badge: 1
+        sound: "default",
+        badge: 1,
       },
       trigger: triggerDate,
     });
@@ -101,28 +113,35 @@ const scheduleNotification = async (reminder, customTime = null) => {
 
 const scheduleMultipleNotifications = async (reminders) => {
   const results = [];
-  
+
   for (const reminder of reminders) {
     try {
       const notificationId = await scheduleNotification(reminder);
       results.push({ reminderId: reminder.id, notificationId, success: true });
     } catch (error) {
-      results.push({ reminderId: reminder.id, error: error.message, success: false });
+      results.push({
+        reminderId: reminder.id,
+        error: error.message,
+        success: false,
+      });
     }
   }
-  
+
   return results;
 };
 
 const cleanupNotifications = async (userReminders = []) => {
   try {
-    const scheduledNotifications = await Notifications.getAllScheduledNotificationsAsync();
-    const activeReminderIds = userReminders.map(r => r.id.toString());
-    
+    const scheduledNotifications =
+      await Notifications.getAllScheduledNotificationsAsync();
+    const activeReminderIds = userReminders.map((r) => r.id.toString());
+
     for (const notification of scheduledNotifications) {
       const { reminderId } = notification.content.data || {};
       if (reminderId && !activeReminderIds.includes(reminderId.toString())) {
-        await Notifications.cancelScheduledNotificationAsync(notification.identifier);
+        await Notifications.cancelScheduledNotificationAsync(
+          notification.identifier
+        );
       }
     }
   } catch (error) {
@@ -135,7 +154,7 @@ const BACKGROUND_FETCH_TASK = "background-fetch-reminders";
 TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
   try {
     console.log("Background task: Checking for overdue reminders");
-    
+
     const session = await getStoredSession();
     if (!session?.user?.id) {
       return BackgroundFetch.BackgroundFetchResult.NoData;
@@ -167,7 +186,9 @@ TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
 
 const getStoredSession = async () => {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
     return session;
   } catch (error) {
     console.error("Error getting stored session:", error);
@@ -191,13 +212,13 @@ const sendOverdueNotification = async (reminder) => {
           reminderId: reminder.id,
           type: "overdue",
           screen: "PaymentReminder",
-          params: { reminderId: reminder.id }
+          params: { reminderId: reminder.id },
         },
         categoryIdentifier: NOTIFICATION_CATEGORIES.PAYMENT_OVERDUE,
-        sound: 'default',
-        badge: 1
+        sound: "default",
+        badge: 1,
       },
-      trigger: null, 
+      trigger: null,
     });
   } catch (error) {
     console.error("Error sending overdue notification:", error);
@@ -206,8 +227,9 @@ const sendOverdueNotification = async (reminder) => {
 
 const requestNotificationPermissions = async () => {
   try {
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    
+    const { status: existingStatus } =
+      await Notifications.getPermissionsAsync();
+
     if (existingStatus !== "granted") {
       const { status } = await Notifications.requestPermissionsAsync({
         ios: {
@@ -219,7 +241,7 @@ const requestNotificationPermissions = async () => {
       });
       return status;
     }
-    
+
     return existingStatus;
   } catch (error) {
     console.error("Error requesting notification permissions:", error);
@@ -234,5 +256,5 @@ export {
   cleanupNotifications,
   requestNotificationPermissions,
   BACKGROUND_FETCH_TASK,
-  NOTIFICATION_CATEGORIES
+  NOTIFICATION_CATEGORIES,
 };
