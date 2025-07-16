@@ -14,6 +14,7 @@ const EXPENSE_CATEGORIES = [
   { name: "Groceries", icon: "🛒", color: "#00D2D3" },
   { name: "Other", icon: "📝", color: "#747D8C" },
 ];
+
 const TransactionItem = ({
   item,
   type = "expense", 
@@ -24,6 +25,7 @@ const TransactionItem = ({
   let amountColor = theme.colors.primary;
   let leftBorderColor = "transparent";
   let icon = "📝";
+  let iconBgColor = "#747D8C";
   let title = item.title || "";
   let category = item.category || "";
   let date =
@@ -36,6 +38,7 @@ const TransactionItem = ({
     amountColor = theme.colors.success;
     leftBorderColor = theme.colors.success;
     icon = "💵";
+    iconBgColor = theme.colors.success;
     title = item.source || "Other Income";
     description = item.frequency === "one-time" ? "One-time" : item.frequency || "Recurring";
     if (item.is_recurring) description += " • 🔄";
@@ -43,14 +46,30 @@ const TransactionItem = ({
     amountColor = theme.colors.success;
     leftBorderColor = theme.colors.success;
     icon = "📈";
+    iconBgColor = theme.colors.success;
     title = item.title || "Investment";
     description = item.type || "N/A";
   } else if (type === "expense") {
     const catObj = EXPENSE_CATEGORIES.find((c) => c.name === item.category);
     icon = catObj?.icon || "📝";
+    iconBgColor = catObj?.color || "#747D8C";
     title = item.title || "Untitled";
     description = category;
   }
+
+  const formatAmount = (amount) => {
+    const num = parseFloat(amount) || 0;
+    return num.toLocaleString('en-IN', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+  };
+
+  const getAmountPrefix = () => {
+    if (type === "income") return "+";
+    if (type === "investment") return "";
+    return "-";
+  };
 
   return (
     <TouchableOpacity
@@ -60,29 +79,67 @@ const TransactionItem = ({
           backgroundColor: theme.colors.surface,
           borderLeftWidth: leftBorderColor !== "transparent" ? 4 : 0,
           borderLeftColor: leftBorderColor,
+          shadowColor: theme.colors.textPrimary,
         },
       ]}
       onLongPress={onLongPress}
       onPress={onPress}
       activeOpacity={onPress || onLongPress ? 0.7 : 1}
     >
-      <View style={styles.info}>
-        <Text style={[styles.title, { color: theme.colors.textSecondary }]}>
-          {title}
-        </Text>
-        <Text style={[styles.date, { color: theme.colors.textSecondary }]}>
-          {date}
-        </Text>
-        {!!description && (
-          <Text style={[styles.desc, { color: theme.colors.textTertiary }]}>
-            {icon} {description}
-          </Text>
-        )}
+      {/* Icon Section */}
+      <View style={[styles.iconContainer, { backgroundColor: iconBgColor + '15' }]}>
+        <Text style={styles.iconText}>{icon}</Text>
       </View>
-      <Text style={[styles.amount, { color: amountColor }]}>
-        {type === "income" ? "+" : ""}
-        ₹{(parseFloat(item.amount) || 0).toFixed(2)}
-      </Text>
+
+      {/* Content Section */}
+      <View style={styles.contentContainer}>
+        <View style={styles.mainInfo}>
+          <Text style={[styles.title, { color: theme.colors.textPrimary }]} numberOfLines={1}>
+            {title}
+          </Text>
+          <Text style={[styles.amount, { color: amountColor }]}>
+            {getAmountPrefix()}₹{formatAmount(item.amount)}
+          </Text>
+        </View>
+        
+        <View style={styles.subInfo}>
+          <View style={styles.leftSubInfo}>
+            {!!description && (
+              <Text style={[styles.category, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+                {description}
+              </Text>
+            )}
+            <Text style={[styles.date, { color: theme.colors.textTertiary }]}>
+              {date}
+            </Text>
+          </View>
+          
+          {/* Status indicator */}
+          {type === "income" && item.is_recurring && (
+            <View style={[styles.statusBadge, { backgroundColor: theme.colors.success + '20' }]}>
+              <Text style={[styles.statusText, { color: theme.colors.success }]}>
+                Recurring
+              </Text>
+            </View>
+          )}
+          
+          {type === "expense" && (
+            <View style={styles.typeIndicator}>
+              <Text style={[styles.typeText, { color: theme.colors.textTertiary }]}>
+                Expense
+              </Text>
+            </View>
+          )}
+          
+          {type === "investment" && (
+            <View style={[styles.statusBadge, { backgroundColor: theme.colors.success + '20' }]}>
+              <Text style={[styles.statusText, { color: theme.colors.success }]}>
+                Investment
+              </Text>
+            </View>
+          )}
+        </View>
+      </View>
     </TouchableOpacity>
   );
 };
@@ -90,36 +147,86 @@ const TransactionItem = ({
 const styles = StyleSheet.create({
   item: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    padding: 12,
-    borderRadius: 10,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: "rgba(51, 65, 85, 0.1)",
-    elevation: 1,
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 10,
+    
   },
-  info: { flex: 1 },
+  iconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  iconText: {
+    fontSize: 20,
+  },
+  contentContainer: {
+    flex: 1,
+    justifyContent: "space-between",
+  },
+  mainInfo: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 6,
+  },
   title: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "600",
-    marginBottom: 4,
-  },
-  date: {
-    fontSize: 12,
-    fontWeight: "500",
-    marginBottom: 2,
-    opacity: 0.7,
-  },
-  desc: {
-    fontSize: 12,
-    fontWeight: "500",
-    opacity: 0.6,
+    flex: 1,
+    marginRight: 8,
+    lineHeight: 20,
   },
   amount: {
     fontSize: 16,
     fontWeight: "700",
-    letterSpacing: -0.2,
+    letterSpacing: -0.3,
+    textAlign: "right",
+  },
+  subInfo: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  leftSubInfo: {
+    flex: 1,
+  },
+  category: {
+    fontSize: 13,
+    fontWeight: "500",
+    marginBottom: 2,
+    opacity: 0.8,
+  },
+  date: {
+    fontSize: 12,
+    fontWeight: "400",
+    opacity: 0.6,
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginLeft: 8,
+  },
+  statusText: {
+    fontSize: 10,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  typeIndicator: {
+    marginLeft: 8,
+  },
+  typeText: {
+    fontSize: 10,
+    fontWeight: "500",
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
+    opacity: 0.5,
   },
 });
 

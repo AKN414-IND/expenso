@@ -1,9 +1,9 @@
 import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity, StatusBar } from "react-native";
 import { useTheme } from "../context/ThemeContext";
-import { ArrowLeft, Lock } from "lucide-react-native";
+import { ArrowLeft, Bell } from "lucide-react-native";
 
-export default function SecurityScreen({ navigation }) {
+export default function NotificationsScreen({ navigation }) {
   const { theme } = useTheme();
 
   return (
@@ -18,13 +18,13 @@ export default function SecurityScreen({ navigation }) {
           <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
             <ArrowLeft color="white" size={24} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Privacy & Security</Text>
+          <Text style={styles.headerTitle}>Notifications</Text>
         </View>
         <View style={styles.content}>
-          <Lock color={theme.colors.primary} size={60} style={{ alignSelf: "center", marginBottom: 24 }} />
-          <Text style={[styles.title, { color: theme.colors.text }]}>Privacy & Security</Text>
+          <Bell color={theme.colors.primary} size={60} style={{ alignSelf: "center", marginBottom: 24 }} />
+          <Text style={[styles.title, { color: theme.colors.text }]}>Notifications Center</Text>
           <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
-          Your privacy and data security settings will be available here soon. (Coming soon!)
+            Manage your push, email, and in-app notification preferences here. (Coming soon!)
           </Text>
         </View>
       </View>

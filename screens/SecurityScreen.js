@@ -18,13 +18,13 @@ export default function SecurityScreen({ navigation }) {
           <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
             <ArrowLeft color="white" size={24} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Privacy & Security</Text>
+          <Text style={styles.headerTitle}>Security</Text>
         </View>
         <View style={styles.content}>
           <Lock color={theme.colors.primary} size={60} style={{ alignSelf: "center", marginBottom: 24 }} />
-          <Text style={[styles.title, { color: theme.colors.text }]}>Privacy & Security</Text>
+          <Text style={[styles.title, { color: theme.colors.text }]}>Account Security</Text>
           <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
-          Your privacy and data security settings will be available here soon. (Coming soon!)
+            Manage your password, two-factor authentication, and security settings here. (Coming soon!)
           </Text>
         </View>
       </View>

@@ -607,6 +607,7 @@ const OnboardingOverlay = ({ isVisible, onComplete, onStepChange }) => {
 };
 
 const Avatar = ({ name, email, size = 50, style, onPress, nativeID }) => {
+  const { theme } = useTheme();
   const getInitials = useCallback((name, email) => {
     if (name && name.trim()) {
       return name
@@ -623,23 +624,26 @@ const Avatar = ({ name, email, size = 50, style, onPress, nativeID }) => {
     return "U";
   }, []);
 
-  const getAvatarColor = useCallback((text) => {
-    const colors = [
-      "#FF6B6B",
-      "#4ECDC4",
-      "#45B7D1",
-      "#96CEB4",
-      "#FECA57",
-      "#FF9FF3",
-      "#54A0FF",
-      "#5F27CD",
-    ];
-    let hash = 0;
-    for (let i = 0; i < text.length; i++) {
-      hash = text.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    return colors[Math.abs(hash) % colors.length];
-  }, []);
+  const getAvatarColor = useCallback(
+    (text) => {
+      const colors = [
+        theme.colors.primary,
+        theme.colors.success,
+        theme.colors.warning,
+        theme.colors.error,
+        theme.colors.textSecondary,
+        theme.colors.textTertiary,
+        theme.colors.primaryDark,
+        theme.colors.buttonSecondary,
+      ];
+      let hash = 0;
+      for (let i = 0; i < text.length; i++) {
+        hash = text.charCodeAt(i) + ((hash << 5) - hash);
+      }
+      return colors[Math.abs(hash) % colors.length];
+    },
+    [theme]
+  );
 
   const initials = useMemo(
     () => getInitials(name, email),
@@ -663,7 +667,7 @@ const Avatar = ({ name, email, size = 50, style, onPress, nativeID }) => {
           alignItems: "center",
           justifyContent: "center",
           borderWidth: 2,
-          borderColor: "white",
+          borderColor: theme.colors.surface,
           elevation: 4,
         },
         style,
@@ -671,7 +675,7 @@ const Avatar = ({ name, email, size = 50, style, onPress, nativeID }) => {
     >
       <Text
         style={{
-          color: "white",
+          color: theme.colors.surface,
           fontSize: size * 0.4,
           fontWeight: "bold",
           letterSpacing: 1,
@@ -691,7 +695,10 @@ const BudgetBar = ({ label, spent, budget, color, icon, theme }) => {
     <View
       style={[
         styles.budgetBarContainer,
-        { backgroundColor: theme.colors.surface },
+        {
+          backgroundColor: theme.colors.surface,
+          borderColor: theme.colors.border,
+        },
       ]}
     >
       <View style={styles.budgetBarHeader}>
@@ -713,7 +720,7 @@ const BudgetBar = ({ label, spent, budget, color, icon, theme }) => {
       <View
         style={[
           styles.budgetBarTrack,
-          { backgroundColor: theme.colors.border },
+          { backgroundColor: theme.colors.borderLight },
         ]}
       >
         <View
@@ -1150,9 +1157,16 @@ export default function DashboardScreen({ navigation }) {
   // Early return should come after all hooks
   if (loading || !session?.user) {
     return (
-      <View style={styles.loadingContainer}>
+      <View
+        style={[
+          styles.loadingContainer,
+          { backgroundColor: theme.colors.background },
+        ]}
+      >
         <ActivityIndicator size="large" color={theme.colors.primary} />
-        <Text style={styles.loadingText}>Loading your dashboard...</Text>
+        <Text style={[styles.loadingText, { color: theme.colors.text }]}>
+          Loading your dashboard...
+        </Text>
       </View>
     );
   }
@@ -1167,15 +1181,29 @@ export default function DashboardScreen({ navigation }) {
   return (
     <>
       <ScrollView
-        style={styles.container}
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[theme.colors.primary]}
+            tintColor={theme.colors.primary}
+            progressBackgroundColor={theme.colors.surface}
+          />
         }
         showsVerticalScrollIndicator={false}
       >
         {/* --- Header Section --- */}
         <View
-          style={[styles.header, { backgroundColor: theme.colors.surface }]}
+          style={[
+            styles.header,
+            {
+              backgroundColor: theme.colors.surface,
+              borderBottomLeftRadius: Math.max(screenWidth * 0.06, 15),
+              borderBottomRightRadius: Math.max(screenWidth * 0.06, 15),
+              
+            },
+          ]}
         >
           <View style={styles.headerContent}>
             <Text style={[styles.welcomeText, { color: theme.colors.text }]}>
@@ -1210,7 +1238,10 @@ export default function DashboardScreen({ navigation }) {
               style={[
                 styles.statCard,
                 styles.statCardMargin,
-                { backgroundColor: theme.colors.surface },
+                {
+                  backgroundColor: theme.colors.surface,
+                  borderColor: theme.colors.border,
+                },
               ]}
             >
               <Text style={[styles.statValue, { color: theme.colors.primary }]}>
@@ -1228,7 +1259,10 @@ export default function DashboardScreen({ navigation }) {
             <View
               style={[
                 styles.statCard,
-                { backgroundColor: theme.colors.surface },
+                {
+                  backgroundColor: theme.colors.surface,
+                  borderColor: theme.colors.border,
+                },
               ]}
             >
               <Text style={[styles.statValue, { color: theme.colors.primary }]}>
@@ -1244,7 +1278,6 @@ export default function DashboardScreen({ navigation }) {
               </Text>
             </View>
           </View>
-
           {expenses.length > 0 && (
             <View
               style={styles.chartsContainer}
@@ -1254,21 +1287,19 @@ export default function DashboardScreen({ navigation }) {
             </View>
           )}
         </View>
-        {/* --- Reminders Section --- */}
-        {uniqueReminders.length > 0 && (
+{/* Reminders Section */}
+{uniqueReminders.length > 0 && (
           <View
             style={styles.remindersSection2}
             ref={(ref) => setTargetRef("reminders-section", ref)}
           >
-            <View style={styles.sectionHeader2}>
-              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-                Payment Reminders
-              </Text>
+            <View style={styles.sectionHeader}>
+              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Payment Reminders</Text>
               <TouchableOpacity
                 onPress={() => navigation.navigate("PaymentReminder")}
               >
                 <Text
-                  style={[styles.seeAllText, { color: theme.colors.primary }]}
+                  style={[styles.seeAllText, { color: theme.colors.textSecondary }]}
                 >
                   View All
                 </Text>
@@ -1290,27 +1321,24 @@ export default function DashboardScreen({ navigation }) {
             />
           </View>
         )}
-        {/* --- Budgets Section --- */}
+
+        {/* Budgets Section */}
         <View
           style={styles.budgetSection}
           ref={(ref) => setTargetRef("budget-section", ref)}
         >
           <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-              Budget Progress
-            </Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Budget Progress</Text>
             <TouchableOpacity
               onPress={() => navigation.navigate("BudgetScreen")}
             >
               <Text
-                style={[styles.seeAllText, { color: theme.colors.primary }]}
+                style={[styles.seeAllText, { color: theme.colors.textSecondary }]}
               >
                 Manage Budgets
               </Text>
             </TouchableOpacity>
           </View>
-
-          {/* Overall Monthly Budget */}
           {overallMonthlyBudgetProgress.isSet ? (
             <BudgetBar
               label="Monthly Budget"
@@ -1324,7 +1352,10 @@ export default function DashboardScreen({ navigation }) {
             <View
               style={[
                 styles.emptyBudgetState,
-                { backgroundColor: theme.colors.surface, marginBottom: 12 },
+                {
+                  backgroundColor: theme.colors.surface,
+                  borderColor: theme.colors.border,
+                },
               ]}
             >
               <Text
@@ -1345,8 +1376,7 @@ export default function DashboardScreen({ navigation }) {
               </Text>
             </View>
           )}
-
-          {/* Category Specific Budgets */}
+          {/* Category Budgets */}
           {budgets.length > 0 && (
             <>
               {budgetProgress
@@ -1370,14 +1400,15 @@ export default function DashboardScreen({ navigation }) {
             </>
           )}
         </View>
-        {/* --- Recent Income Section --- */}
+
+        {/* Recent Income Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Recent Income</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Recent Income</Text>
             <TouchableOpacity
               onPress={() => navigation.navigate("IncomeManagement")}
             >
-              <Text style={styles.seeAllText}>See All</Text>
+              <Text style={[styles.seeAllText, { color: theme.colors.textSecondary }]}>See All</Text>
             </TouchableOpacity>
           </View>
           {incomes.length > 0 ? (
@@ -1391,18 +1422,18 @@ export default function DashboardScreen({ navigation }) {
               showsVerticalScrollIndicator={false}
             />
           ) : (
-            <Text style={styles.emptyStateText}>No income yet</Text>
+            <Text style={[styles.emptyStateText, { color: theme.colors.textSecondary }]}>No income yet</Text>
           )}
         </View>
 
-        {/* --- Recent Expenses Section --- */}
+        {/* Recent Expenses Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Recent Expenses</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Recent Expenses</Text>
             <TouchableOpacity
               onPress={() => navigation.navigate("AllExpenses")}
             >
-              <Text style={styles.seeAllText}>See All</Text>
+              <Text style={[styles.seeAllText, { color: theme.colors.textSecondary }]}>See All</Text>
             </TouchableOpacity>
           </View>
           {recentExpenses.length > 0 ? (
@@ -1416,18 +1447,18 @@ export default function DashboardScreen({ navigation }) {
               showsVerticalScrollIndicator={false}
             />
           ) : (
-            <Text style={styles.emptyStateText}>No expenses yet</Text>
+            <Text style={[styles.emptyStateText, { color: theme.colors.textSecondary }]}>No expenses yet</Text>
           )}
         </View>
 
-        {/* --- Recent Investments Section --- */}
+        {/* Recent Investments Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Recent Investments</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Recent Investments</Text>
             <TouchableOpacity
               onPress={() => navigation.navigate("InvestmentsScreen")}
             >
-              <Text style={styles.seeAllText}>See All</Text>
+              <Text style={[styles.seeAllText, { color: theme.colors.textSecondary }]}>See All</Text>
             </TouchableOpacity>
           </View>
           {investments.length > 0 ? (
@@ -1441,25 +1472,16 @@ export default function DashboardScreen({ navigation }) {
               showsVerticalScrollIndicator={false}
             />
           ) : (
-            <Text style={styles.emptyStateText}>No investments yet</Text>
+            <Text style={[styles.emptyStateText, { color: theme.colors.textSecondary }]}>No investments yet</Text>
           )}
         </View>
       </ScrollView>
 
-      {/* --- Floating Taskbar --- */}
-      <FloatingTaskbar
-        theme={theme}
-        navigation={navigation}
-        setTargetRef={() => {}} // If you use onboarding/targets, pass the real handler here!
-      />
+      {/* Floating Taskbar and OnboardingOverlay remain unchanged */}
+      <FloatingTaskbar theme={theme} navigation={navigation} setTargetRef={() => {}} />
+      <OnboardingOverlay isVisible={showOnboarding} onComplete={completeOnboarding} onStepChange={handleOnboardingStepChange} />
 
-      <OnboardingOverlay
-        isVisible={showOnboarding}
-        onComplete={completeOnboarding}
-        onStepChange={handleOnboardingStepChange}
-      />
-
-      {/* --- Alerts --- */}
+      {/* Alerts */}
       <Alert
         open={showDeleteAlert}
         onConfirm={async () => {
@@ -1478,11 +1500,11 @@ export default function DashboardScreen({ navigation }) {
         confirmText="Delete"
         cancelText="Cancel"
         icon={<Trash2 color="#fff" size={40} />}
-        iconBg="#ef4444"
-        confirmColor="#ef4444"
-        confirmTextColor="#fff"
-        cancelColor="#f1f5f9"
-        cancelTextColor="#334155"
+        iconBg={theme.colors.error}
+        confirmColor={theme.colors.error}
+        confirmTextColor={theme.colors.surface}
+        cancelColor={theme.colors.surface}
+        cancelTextColor={theme.colors.textTertiary}
       />
       <Alert
         open={showLogoutAlert}
@@ -1493,11 +1515,11 @@ export default function DashboardScreen({ navigation }) {
         confirmText="Logout"
         cancelText="Cancel"
         icon={<LogOut color="#fff" size={40} />}
-        iconBg="#ef4444"
-        confirmColor="#ef4444"
-        confirmTextColor="#fff"
-        cancelColor="#f1f5f9"
-        cancelTextColor="#334155"
+        iconBg={theme.colors.error}
+        confirmColor={theme.colors.error}
+        confirmTextColor={theme.colors.surface}
+        cancelColor={theme.colors.surface}
+        cancelTextColor={theme.colors.textTertiary}
       />
     </>
   );
@@ -1507,7 +1529,6 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F9FBFC" },
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
   loadingText: { marginTop: 16, fontSize: 16, fontWeight: "500" },
-  section: { paddingHorizontal: 16, marginTop: 18 },
 
   header: {
     flexDirection: "row",
@@ -1539,34 +1560,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: Math.max(screenWidth * 0.025, 8),
   },
-  notificationButton: {
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
-    width: Math.max(screenWidth * 0.1, 36),
-    height: Math.max(screenWidth * 0.1, 36),
-    borderRadius: Math.max(screenWidth * 0.05, 18),
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: Math.max(screenWidth * 0.02, 6),
-  },
-  notificationIcon: {
-    fontSize: Math.max(screenWidth * 0.05, 18),
-    color: "#fff",
-  },
-  logoutButton: {
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
-    paddingHorizontal: Math.max(screenWidth * 0.04, 12),
-    paddingVertical: Math.max(screenHeight * 0.01, 8),
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.3)",
-  },
-  logoutButtonText: {
-    color: "#fff",
-    fontSize: Math.max(Math.min(screenWidth * 0.032, 14), 10),
-    fontWeight: "600",
-    letterSpacing: 0.2,
-  },
-  statisticsContainer: { flexDirection: "column", gap: 1 },
+
+  statisticsContainer: { flexDirection: "column", gap: 1  ,marginBottom: 10},
   statsContainer: {
     flexDirection: "row",
     paddingHorizontal: Math.max(screenWidth * 0.04, 12),
@@ -1589,7 +1584,6 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: Math.max(Math.min(screenWidth * 0.04, 18), 13),
     fontWeight: "900",
-    color: "#06b6d4",
     marginBottom: 8,
     letterSpacing: -0.3,
     textAlign: "center",
@@ -1604,43 +1598,20 @@ const styles = StyleSheet.create({
     marginHorizontal: Math.max(screenWidth * 0.035, 10),
     marginVertical: Math.max(screenWidth * 0.02, 8),
   },
-  chartCard: {
-    borderRadius: Math.max(screenWidth * 0.06, 16),
-    padding: Math.max(screenWidth * 0.035, 12),
-    borderWidth: 2,
-    borderColor: "rgba(6, 182, 212, 0.1)",
-    justifyContent: "center",
-    elevation: 2,
+
+  remindersSection2: {
+    paddingHorizontal: Math.max(screenWidth * 0.04, 12),
   },
-  chartRow: {
-    flexDirection: screenWidth < 400 ? "column" : "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  chartSide: { flex: 1, alignItems: "center", justifyContent: "center" },
-  legendSide: {
-    flex: 1,
-    justifyContent: "center",
-    marginTop: screenWidth < 400 ? 20 : 0,
-  },
-  chartLegendGrid: { flexDirection: "column", justifyContent: "center" },
-  legendGridItem: {
+
+  sectionHeader: {
     flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: Math.max(screenWidth * 0.025, 8),
+    marginBottom: Math.max(screenWidth * 0.04, 12),
   },
-  legendColor: {
-    width: Math.max(screenWidth * 0.04, 14),
-    height: Math.max(screenWidth * 0.04, 14),
-    borderRadius: Math.max(screenWidth * 0.02, 7),
-    marginRight: Math.max(screenWidth * 0.025, 8),
-  },
-  legendText: {
-    fontSize: Math.max(Math.min(screenWidth * 0.032, 13), 10),
-    color: "#334155",
-    fontWeight: "600",
-    flex: 1,
-  },
+  sectionTitle: { fontSize: 20, fontWeight: "700" },
+  seeAllText: { fontSize: 14, color: "#06b6d4", fontWeight: "600" },
+
   budgetSection: {
     paddingHorizontal: Math.max(screenWidth * 0.04, 12),
   },
@@ -1666,7 +1637,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: Math.max(Math.min(screenWidth * 0.04, 16), 12),
     fontWeight: "600",
-    color: "#334155",
   },
   budgetBarAmount: {
     fontSize: Math.max(Math.min(screenWidth * 0.035, 15), 10),
@@ -1683,41 +1653,13 @@ const styles = StyleSheet.create({
   budgetBarFill: { height: "100%", borderRadius: 4 },
   budgetBarOverage: {
     fontSize: Math.max(Math.min(screenWidth * 0.03, 13), 9),
-    color: "#facc15",
     fontWeight: "600",
     marginTop: 4,
   },
   budgetBarPercent: {
     fontSize: Math.max(Math.min(screenWidth * 0.03, 13), 9),
-    color: "#334155",
     fontWeight: "500",
   },
-  subSectionTitle: {
-    fontSize: Math.max(Math.min(screenWidth * 0.04, 16), 12),
-    fontWeight: "600",
-    color: "#334155",
-    marginTop: 16,
-    marginBottom: 8,
-    paddingHorizontal: 4,
-  },
-  remindersSection2: {
-    paddingHorizontal: Math.max(screenWidth * 0.04, 12),
-    marginTop: Math.max(screenWidth * 0.06, 16),
-  },
-  sectionHeader2: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: Math.max(screenWidth * 0.025, 8),
-  },
-  sectionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 6,
-  },
-  sectionTitle: { fontSize: 18, fontWeight: "700" },
-  seeAllText: { fontSize: 14, color: "#06b6d4", fontWeight: "600" },
 
   emptyBudgetState: {
     backgroundColor: "#fff",
@@ -1727,6 +1669,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(51, 65, 85, 0.1)",
     elevation: 1,
+    marginBottom: 12,
   },
   emptyStateText: {
     color: "#888",
@@ -1740,15 +1683,10 @@ const styles = StyleSheet.create({
     textAlign: "center",
     opacity: 0.7,
   },
-  recentSection: {
-    paddingHorizontal: Math.max(screenWidth * 0.04, 12),
-    marginTop: Math.max(screenWidth * 0.05, 14),
-    marginBottom: Math.max(screenWidth * 0.22, 80),
-  },
-  recentSectioni: {
-    paddingHorizontal: Math.max(screenWidth * 0.04, 12),
-    marginTop: Math.max(screenWidth * 0.05, 14),
-  },
+
+  section: { paddingHorizontal: 16, marginTop: 18 },
+
+  // ----- Expense/Income/Investment List -----
   expenseItem: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -1765,254 +1703,22 @@ const styles = StyleSheet.create({
   expenseTitle: {
     fontSize: Math.max(Math.min(screenWidth * 0.04, 16), 10),
     fontWeight: "600",
-    color: "#334155",
     marginBottom: 4,
   },
   expenseDate: {
     fontSize: Math.max(Math.min(screenWidth * 0.03, 12), 8),
-    color: "#334155",
     fontWeight: "500",
     marginBottom: 2,
     opacity: 0.7,
   },
   expenseCategory: {
     fontSize: Math.max(Math.min(screenWidth * 0.03, 12), 8),
-    color: "#334155",
     fontWeight: "500",
     opacity: 0.6,
   },
   expenseAmount: {
     fontSize: Math.max(Math.min(screenWidth * 0.04, 16), 11),
     fontWeight: "700",
-    color: "#06b6d4",
     letterSpacing: -0.2,
-  },
-  emptyState: {
-    backgroundColor: "#fff",
-    borderRadius: Math.max(screenWidth * 0.04, 14),
-    padding: Math.max(screenWidth * 0.07, 18),
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "rgba(51, 65, 85, 0.1)",
-    elevation: 1,
-  },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    paddingHorizontal: Math.max(screenWidth * 0.04, 12),
-  },
-  modalContent: {
-    backgroundColor: "#fff",
-    borderRadius: Math.max(screenWidth * 0.05, 16),
-    padding: Math.max(screenWidth * 0.07, 18),
-    width: "100%",
-    maxWidth: Math.max(screenWidth * 0.95, 320),
-    elevation: 10,
-  },
-  modalTitle: {
-    fontSize: Math.max(Math.min(screenWidth * 0.05, 22), 13),
-    fontWeight: "700",
-    color: "#334155",
-    marginBottom: 20,
-    textAlign: "center",
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: "rgba(51, 65, 85, 0.2)",
-    borderRadius: Math.max(screenWidth * 0.03, 9),
-    padding: Math.max(screenWidth * 0.035, 12),
-    fontSize: Math.max(Math.min(screenWidth * 0.04, 16), 10),
-    marginBottom: 16,
-    backgroundColor: "#f5f7fa",
-    color: "#334155",
-  },
-  modalButtons: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 12,
-    marginTop: 8,
-  },
-  modalButton: {
-    flex: 1,
-    paddingVertical: Math.max(screenWidth * 0.04, 14),
-    borderRadius: Math.max(screenWidth * 0.03, 9),
-    alignItems: "center",
-  },
-  cancelButton: {
-    backgroundColor: "#f5f7fa",
-    borderWidth: 1,
-    borderColor: "rgba(51, 65, 85, 0.2)",
-  },
-  saveButton: { backgroundColor: "#06b6d4" },
-  cancelButtonText: {
-    color: "#334155",
-    fontSize: Math.max(Math.min(screenWidth * 0.04, 16), 10),
-    fontWeight: "600",
-  },
-  saveButtonText: {
-    color: "#fff",
-    fontSize: Math.max(Math.min(screenWidth * 0.04, 16), 10),
-    fontWeight: "600",
-  },
-  taskbarContainer: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: "transparent",
-    paddingHorizontal: Math.max(screenWidth * 0.03, 8),
-    paddingBottom: Math.max(screenWidth * 0.06, 20),
-  },
-  taskbar: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    backgroundColor: "#fff",
-    borderRadius: Math.max(screenWidth * 0.07, 24),
-    paddingHorizontal: Math.max(screenWidth * 0.04, 14),
-    paddingVertical: Math.max(screenWidth * 0.022, 8),
-    elevation: 10,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(51, 65, 85, 0.1)",
-  },
-  actionButton: {
-    alignItems: "center",
-    paddingVertical: Math.max(screenWidth * 0.012, 6),
-    paddingHorizontal: Math.max(screenWidth * 0.025, 8),
-    borderRadius: Math.max(screenWidth * 0.04, 15),
-    backgroundColor: "transparent",
-  },
-  actionIcon: {
-    fontSize: Math.max(Math.min(screenWidth * 0.045, 19), 12),
-    marginBottom: 4,
-  },
-  addButton: {
-    backgroundColor: "#06b6d4",
-    width: Math.max(Math.min(screenWidth * 0.14, 56), 38),
-    height: Math.max(Math.min(screenWidth * 0.14, 56), 38),
-    borderRadius: Math.max(Math.min(screenWidth * 0.07, 28), 19),
-    justifyContent: "center",
-    alignItems: "center",
-    elevation: 8,
-    shadowColor: "#06b6d4",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-  },
-  addIcon: {
-    fontSize: Math.max(Math.min(screenWidth * 0.07, 28), 18),
-    color: "#fff",
-    fontWeight: "300",
-    lineHeight: 32,
-  },
-  onboardingOverlay: {
-    flex: 1,
-    backgroundColor: "transparent",
-  },
-  overlayBackground: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  highlightCircle: {
-    position: "absolute",
-    backgroundColor: "transparent",
-    borderRadius: 15,
-    borderWidth: 3,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 10,
-    elevation: 5,
-  },
-  tooltip: {
-    position: "absolute",
-    borderRadius: Math.max(screenWidth * 0.05, 14),
-    padding: Math.max(screenWidth * 0.04, 12),
-    maxWidth: screenWidth - Math.max(screenWidth * 0.08, 40),
-    minWidth: Math.max(screenWidth * 0.6, 200),
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 15,
-  },
-  progressContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: Math.max(screenWidth * 0.035, 12),
-  },
-  progressBar: {
-    flex: 1,
-    height: Math.max(screenWidth * 0.012, 4),
-    borderRadius: 2,
-    overflow: "hidden",
-    marginRight: 12,
-  },
-  progressFill: {
-    height: "100%",
-    borderRadius: 2,
-  },
-  progressText: {
-    fontSize: Math.max(Math.min(screenWidth * 0.03, 13), 9),
-    fontWeight: "500",
-  },
-  skipButton: {
-    position: "absolute",
-    top: 15,
-    right: 15,
-    width: Math.max(screenWidth * 0.08, 28),
-    height: Math.max(screenWidth * 0.08, 28),
-    borderRadius: Math.max(screenWidth * 0.04, 14),
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 2,
-  },
-  tooltipTitle: {
-    fontSize: Math.max(Math.min(screenWidth * 0.048, 19), 13),
-    fontWeight: "700",
-    marginBottom: 12,
-    lineHeight: 24,
-  },
-  tooltipDescription: {
-    fontSize: Math.max(Math.min(screenWidth * 0.035, 14), 10),
-    lineHeight: 20,
-    marginBottom: 20,
-  },
-  tooltipButtons: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  previousButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: Math.max(screenWidth * 0.045, 13),
-    paddingVertical: Math.max(screenWidth * 0.028, 10),
-    borderRadius: Math.max(screenWidth * 0.03, 11),
-    borderWidth: 1,
-  },
-  previousButtonText: {
-    fontSize: Math.max(Math.min(screenWidth * 0.035, 14), 10),
-    fontWeight: "600",
-    marginLeft: 8,
-  },
-  nextButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: Math.max(screenWidth * 0.065, 19),
-    paddingVertical: Math.max(screenWidth * 0.035, 11),
-    borderRadius: Math.max(screenWidth * 0.03, 11),
-    flex: 1,
-    marginLeft: 12,
-    justifyContent: "center",
-  },
-  nextButtonText: {
-    fontSize: Math.max(Math.min(screenWidth * 0.035, 14), 10),
-    fontWeight: "600",
-    marginRight: 8,
   },
 });
