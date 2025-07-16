@@ -32,7 +32,8 @@ import ReminderCard from "../components/ReminderCard";
 import { useFocusEffect } from "@react-navigation/native";
 import { useRoute, useNavigation } from "@react-navigation/native";
 import CalendarHeatmap from "../components/Heatmap";
-
+import FloatingTaskbar from "../components/FloatingTaskbar";
+import TransactionItem from "../components/TransactionItem";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const screenWidth = Dimensions.get("window").width;
@@ -248,7 +249,6 @@ const OnboardingOverlay = ({ isVisible, onComplete, onStepChange }) => {
       }).start();
     }
   }, [isVisible]);
-  
 
   useEffect(() => {
     if (isVisible && tooltipMeasured) measureTargetElement();
@@ -261,7 +261,7 @@ const OnboardingOverlay = ({ isVisible, onComplete, onStepChange }) => {
       setTargetLayout(null);
       return;
     }
-  
+
     // Add a longer delay for better reliability
     setTimeout(() => {
       try {
@@ -745,7 +745,7 @@ export default function DashboardScreen({ navigation }) {
   const { session } = useAuth();
   const { theme } = useTheme();
   const nav = useNavigation();
-  
+
   // All refs should be declared early
   const targetRefs = useRef({});
   const scrollViewRef = useRef(null);
@@ -777,7 +777,7 @@ export default function DashboardScreen({ navigation }) {
 
   const handleOnboardingStepChange = useCallback((stepId) => {
     const step = ONBOARDING_STEPS.find((s) => s.id === stepId);
-    
+
     if (!step) return;
 
     // If no target, don't scroll
@@ -786,7 +786,7 @@ export default function DashboardScreen({ navigation }) {
     // Wait a bit for any animations to complete
     setTimeout(() => {
       const targetRef = global.targetRefs?.[step.targetId];
-      
+
       if (!targetRef || !scrollViewRef.current) return;
 
       try {
@@ -794,10 +794,10 @@ export default function DashboardScreen({ navigation }) {
           if (width <= 0 || height <= 0) return;
 
           const windowHeight = Dimensions.get("window").height;
-          
+
           // Calculate optimal scroll position based on step position
           let targetScrollY;
-          
+
           switch (step.position) {
             case "top":
               // For top tooltips, scroll so element is in lower half
@@ -877,82 +877,24 @@ export default function DashboardScreen({ navigation }) {
 
   const renderExpenseItem = useCallback(
     ({ item }) => (
-      <TouchableOpacity
-        style={[styles.expenseItem, { backgroundColor: theme.colors.surface }]}
+      <TransactionItem
+        item={item}
+        type="expense"
+        theme={theme}
         onLongPress={() => handleDelete(item)}
-        activeOpacity={0.7}
-      >
-        <View style={styles.expenseInfo}>
-          <Text
-            style={[styles.expenseTitle, { color: theme.colors.textSecondary }]}
-          >
-            {item.title || "Untitled"}
-          </Text>
-          <Text
-            style={[styles.expenseDate, { color: theme.colors.textSecondary }]}
-          >
-            {item.date ? new Date(item.date).toLocaleDateString() : "No date"}
-          </Text>
-          {item.category && (
-            <Text
-              style={[
-                styles.expenseCategory,
-                { color: theme.colors.textSecondary },
-              ]}
-            >
-              {EXPENSE_CATEGORIES.find((cat) => cat.name === item.category)
-                ?.icon || "📝"}{" "}
-              {item.category}
-            </Text>
-          )}
-        </View>
-        <Text style={[styles.expenseAmount, { color: theme.colors.primary }]}>
-          ₹{(parseFloat(item.amount) || 0).toFixed(2)}
-        </Text>
-      </TouchableOpacity>
+      />
     ),
     [handleDelete, theme]
   );
 
   const renderIncomeItem = useCallback(
+    ({ item }) => <TransactionItem item={item} type="income" theme={theme} />,
+    [theme]
+  );
+
+  const renderInvestmentItem = useCallback(
     ({ item }) => (
-      <View
-        style={[
-          styles.expenseItem,
-          {
-            backgroundColor: theme.colors.surface,
-            borderLeftWidth: 4,
-            borderLeftColor: theme.colors.success,
-          },
-        ]}
-      >
-        <View style={styles.expenseInfo}>
-          <Text
-            style={[styles.expenseTitle, { color: theme.colors.textSecondary }]}
-          >
-            {item.source || "Other Income"}
-          </Text>
-          <Text
-            style={[styles.expenseDate, { color: theme.colors.textSecondary }]}
-          >
-            {item.date ? new Date(item.date).toLocaleDateString() : "No date"}
-          </Text>
-          <Text
-            style={[
-              styles.expenseCategory,
-              { color: theme.colors.textSecondary },
-            ]}
-          >
-            {item.frequency === "one-time"
-              ? "One-time"
-              : item.frequency || "Recurring"}
-            {item.is_recurring ? " • 🔄" : ""}
-          </Text>
-        </View>
-        <Text style={[styles.expenseAmount, { color: theme.colors.success }]}>
-          +₹{(parseFloat(item.amount) || 0).toFixed(2)}
-        </Text>
-      </View>
+      <TransactionItem item={item} type="investment" theme={theme} />
     ),
     [theme]
   );
@@ -1208,36 +1150,24 @@ export default function DashboardScreen({ navigation }) {
   // Early return should come after all hooks
   if (loading || !session?.user) {
     return (
-      <View
-        style={[
-          styles.loadingContainer,
-          { backgroundColor: theme.colors.background },
-        ]}
-      >
+      <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={theme.colors.primary} />
-        <Text
-          style={[styles.loadingText, { color: theme.colors.textSecondary }]}
-        >
-          Loading your dashboard...
-        </Text>
+        <Text style={styles.loadingText}>Loading your dashboard...</Text>
       </View>
     );
   }
 
   const recentExpenses = expenses.slice(0, 5);
-
   const today = new Date();
   const todayString = today.toISOString().split("T")[0];
   const todaysTotal = expenses
     .filter((exp) => exp.date === todayString)
     .reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0);
 
-  // Rest of your JSX remains the same...
   return (
     <>
       <ScrollView
-        style={[styles.container, { backgroundColor: theme.colors.background }]}
-        ref={scrollViewRef}
+        style={styles.container}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
@@ -1441,22 +1371,13 @@ export default function DashboardScreen({ navigation }) {
           )}
         </View>
         {/* --- Recent Income Section --- */}
-        <View
-          style={styles.recentSectioni}
-          ref={(ref) => setTargetRef("recent-income-section", ref)}
-        >
+        <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-              Recent Income
-            </Text>
+            <Text style={styles.sectionTitle}>Recent Income</Text>
             <TouchableOpacity
               onPress={() => navigation.navigate("IncomeManagement")}
             >
-              <Text
-                style={[styles.seeAllText, { color: theme.colors.primary }]}
-              >
-                See All
-              </Text>
+              <Text style={styles.seeAllText}>See All</Text>
             </TouchableOpacity>
           </View>
           {incomes.length > 0 ? (
@@ -1470,49 +1391,18 @@ export default function DashboardScreen({ navigation }) {
               showsVerticalScrollIndicator={false}
             />
           ) : (
-            <View
-              style={[
-                styles.emptyState,
-                { backgroundColor: theme.colors.surface },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.emptyStateText,
-                  { color: theme.colors.textSecondary },
-                ]}
-              >
-                No income yet
-              </Text>
-              <Text
-                style={[
-                  styles.emptyStateSubtext,
-                  { color: theme.colors.textTertiary },
-                ]}
-              >
-                Add your first income to get started!
-              </Text>
-            </View>
+            <Text style={styles.emptyStateText}>No income yet</Text>
           )}
         </View>
 
         {/* --- Recent Expenses Section --- */}
-        <View
-          style={styles.recentSectioni}
-          ref={(ref) => setTargetRef("recent-section", ref)}
-        >
+        <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-              Recent Expenses
-            </Text>
+            <Text style={styles.sectionTitle}>Recent Expenses</Text>
             <TouchableOpacity
               onPress={() => navigation.navigate("AllExpenses")}
             >
-              <Text
-                style={[styles.seeAllText, { color: theme.colors.primary }]}
-              >
-                See All
-              </Text>
+              <Text style={styles.seeAllText}>See All</Text>
             </TouchableOpacity>
           </View>
           {recentExpenses.length > 0 ? (
@@ -1526,102 +1416,24 @@ export default function DashboardScreen({ navigation }) {
               showsVerticalScrollIndicator={false}
             />
           ) : (
-            <View
-              style={[
-                styles.emptyState,
-                { backgroundColor: theme.colors.surface },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.emptyStateText,
-                  { color: theme.colors.textSecondary },
-                ]}
-              >
-                No expenses yet
-              </Text>
-              <Text
-                style={[
-                  styles.emptyStateSubtext,
-                  { color: theme.colors.textTertiary },
-                ]}
-              >
-                Add your first expense to get started!
-              </Text>
-            </View>
+            <Text style={styles.emptyStateText}>No expenses yet</Text>
           )}
         </View>
+
         {/* --- Recent Investments Section --- */}
-        <View
-          style={styles.recentSection}
-          ref={(ref) => setTargetRef("investments-section", ref)}
-        >
+        <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-              Recent Investments
-            </Text>
+            <Text style={styles.sectionTitle}>Recent Investments</Text>
             <TouchableOpacity
-              onPress={() => navigation.navigate("InvestmentsScreen")} // change as needed
+              onPress={() => navigation.navigate("InvestmentsScreen")}
             >
-              <Text
-                style={[styles.seeAllText, { color: theme.colors.primary }]}
-              >
-                See All
-              </Text>
+              <Text style={styles.seeAllText}>See All</Text>
             </TouchableOpacity>
           </View>
           {investments.length > 0 ? (
             <FlatList
               data={investments.slice(0, 5)}
-              renderItem={({ item }) => (
-                <View
-                  style={[
-                    styles.expenseItem,
-                    {
-                      backgroundColor: theme.colors.surface,
-                      borderLeftWidth: 4,
-                      borderLeftColor: theme.colors.success,
-                    },
-                  ]}
-                >
-                  <View style={styles.expenseInfo}>
-                    <Text
-                      style={[
-                        styles.expenseTitle,
-                        { color: theme.colors.textSecondary },
-                      ]}
-                    >
-                      {item.title || "Investment"}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.expenseDate,
-                        { color: theme.colors.textSecondary },
-                      ]}
-                    >
-                      {item.date
-                        ? new Date(item.date).toLocaleDateString()
-                        : "No date"}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.expenseCategory,
-                        { color: theme.colors.textSecondary },
-                      ]}
-                    >
-                      {item.type || "N/A"}
-                    </Text>
-                  </View>
-                  <Text
-                    style={[
-                      styles.expenseAmount,
-                      { color: theme.colors.success },
-                    ]}
-                  >
-                    ₹{(parseFloat(item.amount) || 0).toFixed(2)}
-                  </Text>
-                </View>
-              )}
+              renderItem={renderInvestmentItem}
               keyExtractor={(item) =>
                 item.id?.toString() || Math.random().toString()
               }
@@ -1629,97 +1441,17 @@ export default function DashboardScreen({ navigation }) {
               showsVerticalScrollIndicator={false}
             />
           ) : (
-            <View
-              style={[
-                styles.emptyState,
-                { backgroundColor: theme.colors.surface },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.emptyStateText,
-                  { color: theme.colors.textSecondary },
-                ]}
-              >
-                No investments yet
-              </Text>
-              <Text
-                style={[
-                  styles.emptyStateSubtext,
-                  { color: theme.colors.textTertiary },
-                ]}
-              >
-                Add your first investment to get started!
-              </Text>
-            </View>
+            <Text style={styles.emptyStateText}>No investments yet</Text>
           )}
         </View>
       </ScrollView>
 
       {/* --- Floating Taskbar --- */}
-      <View style={styles.taskbarContainer}>
-        <View
-          style={[styles.taskbar, { backgroundColor: theme.colors.surface }]}
-          ref={(ref) => setTargetRef("taskbar", ref)}
-        >
-          <TouchableOpacity
-            style={[
-              styles.actionButton,
-              { backgroundColor: theme.colors.buttonSecondary },
-            ]}
-            onPress={() => navigation.navigate("BudgetScreen")}
-            activeOpacity={0.7}
-            ref={(ref) => setTargetRef("budget-btn", ref)}
-          >
-            <Text style={styles.actionIcon}>💰</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.actionButton,
-              { backgroundColor: theme.colors.buttonSecondary },
-            ]}
-            onPress={() => navigation.navigate("PaymentReminder")}
-            activeOpacity={0.7}
-            ref={(ref) => setTargetRef("reminders-btn", ref)}
-          >
-            <Text style={styles.actionIcon}>🔔</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.addButton,
-              { backgroundColor: theme.colors.primary },
-            ]}
-            onPress={() => navigation.navigate("AddExpense")}
-            activeOpacity={0.8}
-            ref={(ref) => setTargetRef("add-button", ref)}
-          >
-            <Text style={styles.addIcon}>+</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.actionButton,
-              { backgroundColor: theme.colors.buttonSecondary },
-            ]}
-            onPress={() => navigation.navigate("AllExpenses")}
-            activeOpacity={0.7}
-            ref={(ref) => setTargetRef("expenses-btn", ref)}
-          >
-            <Text style={styles.actionIcon}>📊</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.actionButton,
-              { backgroundColor: theme.colors.buttonSecondary },
-            ]}
-            onPress={() => navigation.navigate("SmartInsights")}
-            activeOpacity={0.7}
-            ref={(ref) => setTargetRef("insights-btn", ref)}
-          >
-            <Text style={styles.actionIcon}>🧠</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+      <FloatingTaskbar
+        theme={theme}
+        navigation={navigation}
+        setTargetRef={() => {}} // If you use onboarding/targets, pass the real handler here!
+      />
 
       <OnboardingOverlay
         isVisible={showOnboarding}
@@ -1772,19 +1504,11 @@ export default function DashboardScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  loadingText: {
-    marginTop: screenHeight * 0.02,
-    fontSize: Math.max(Math.min(screenWidth * 0.04, 18), 12),
-    fontWeight: "500",
-  },
+  container: { flex: 1, backgroundColor: "#F9FBFC" },
+  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
+  loadingText: { marginTop: 16, fontSize: 16, fontWeight: "500" },
+  section: { paddingHorizontal: 16, marginTop: 18 },
+
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -1990,19 +1714,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: Math.max(screenWidth * 0.025, 8),
+    marginBottom: 6,
   },
-  sectionTitle: {
-    fontSize: Math.max(Math.min(screenWidth * 0.055, 23), 14),
-    fontWeight: "700",
-    color: "#334155",
-    letterSpacing: -0.3,
-  },
-  seeAllText: {
-    fontSize: Math.max(Math.min(screenWidth * 0.04, 16), 11),
-    color: "#06b6d4",
-    fontWeight: "600",
-  },
+  sectionTitle: { fontSize: 18, fontWeight: "700" },
+  seeAllText: { fontSize: 14, color: "#06b6d4", fontWeight: "600" },
+
   emptyBudgetState: {
     backgroundColor: "#fff",
     borderRadius: Math.max(screenWidth * 0.04, 14),
@@ -2013,10 +1729,10 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   emptyStateText: {
-    fontSize: Math.max(Math.min(screenWidth * 0.045, 18), 11),
-    fontWeight: "600",
-    color: "#334155",
-    marginBottom: 8,
+    color: "#888",
+    marginTop: 12,
+    textAlign: "center",
+    fontSize: 14,
   },
   emptyStateSubtext: {
     fontSize: Math.max(Math.min(screenWidth * 0.035, 14), 9),
