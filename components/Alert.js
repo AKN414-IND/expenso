@@ -31,7 +31,7 @@ const Alert = ({
       animationType="fade"
       onRequestClose={onCancel}
     >
-      <View style={[styles.overlay, { backgroundColor: theme.colors.overlay }]} >
+      <View style={[styles.overlay]} >
         <View style={[
           styles.container,
           {

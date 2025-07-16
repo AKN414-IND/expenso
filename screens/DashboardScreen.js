@@ -39,7 +39,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 const screenWidth = Dimensions.get("window").width;
 const screenHeight = Dimensions.get("window").height;
 
-global.targetRefs = {};
 
 const EXPENSE_CATEGORIES = [
   { name: "Food & Dining", icon: "🍽️", color: "#FF6B6B" },
@@ -66,27 +65,24 @@ const CHART_COLORS = [
 const ONBOARDING_STEPS = [
   {
     id: "welcome",
-    title: "Welcome to ExpenseTracker! 🎉",
-    description:
-      "Let's take a quick tour to help you get started with managing your finances effectively.",
+    title: "Welcome to Expenso Your Financial Hub! 🎉",
+    description: "Let's take a quick tour to see how you can master your money.",
     targetId: null,
     position: "center",
-    icon: "🎉",
+    icon: "🚀",
   },
   {
     id: "profile",
     title: "Your Profile",
-    description:
-      "Tap your avatar to view and edit your profile and preferences.",
+    description: "Tap your avatar to manage your account details, preferences, and app theme.",
     targetId: "profile-avatar",
     position: "bottom",
     icon: "👤",
   },
   {
     id: "quick-stats",
-    title: "Quick Stats",
-    description:
-      "These cards show your current month's total and today's expenses at a glance.",
+    title: "At-a-Glance Stats",
+    description: "Instantly see your total spending for the current month and today.",
     targetId: "stats-container",
     position: "bottom",
     icon: "📊",
@@ -94,117 +90,106 @@ const ONBOARDING_STEPS = [
   {
     id: "heatmap",
     title: "Spending Heatmap",
-    description:
-      "See your daily spending pattern for the month. Tap any day for a breakdown.",
+    description: "Visualize your daily spending habits. Darker squares mean more spending!",
     targetId: "chart-container",
     position: "bottom",
     icon: "🔥",
   },
   {
     id: "reminders",
-    title: "Payment Reminders",
-    description:
-      "Set up reminders for bills, subscriptions, and recurring payments so you never miss one.",
+    title: "Never Miss a Bill",
+    description: "Set up and view reminders for bills and subscriptions so you always pay on time.",
     targetId: "reminders-section",
     position: "top",
     icon: "🔔",
   },
   {
     id: "budget",
-    title: "Budget Tracking",
-    description:
-      "Monitor your spending against your budgets. The progress bars help you stay within your limits.",
+    title: "Stay on Budget",
+    description: "Monitor your spending against your budgets. The progress bars help you stay in control.",
     targetId: "budget-section",
     position: "top",
     icon: "💰",
   },
   {
     id: "recent-income",
-    title: "Recent Income",
-    description:
-      "View your latest income entries here. Tap to see more details or manage them.",
+    title: "Track Your Income",
+    description: "View your latest income entries here. Tap 'See All' to manage them.",
     targetId: "recent-income-section",
-    position: "bottom",
+    position: "top",
     icon: "💵",
   },
   {
     id: "recent",
     title: "Recent Expenses",
-    description:
-      "Here are your latest expenses. Long-press any item to delete or edit it.",
+    description: "Your latest expenses appear here. Long-press an item to edit or delete it.",
     targetId: "recent-section",
     position: "top",
     icon: "📝",
   },
   {
     id: "investments",
-    title: "Recent Investments",
-    description:
-      "Track your stocks, crypto, and mutual fund investments. Tap for the detailed investments page.",
+    title: "Watch Your Investments",
+    description: "Keep an eye on your stocks, crypto, and other investments.",
     targetId: "investments-section",
-    position: "bottom",
+    position: "top",
     icon: "📈",
   },
   {
     id: "taskbar",
     title: "Quick Actions",
-    description:
-      "This floating taskbar lets you quickly access budgets, reminders, add new expense, view all expenses, or get insights.",
+    description: "This floating taskbar gives you one-tap access to key features.",
     targetId: "taskbar",
     position: "top",
-    icon: "⚡",
+    icon: "⚡️",
   },
   {
     id: "add-expense",
-    title: "Add New Expense",
-    description:
-      "The plus button is your main tool. Tap it to record a new expense instantly.",
+    title: "Add a Transaction",
+    description: "The plus button is your go-to for logging a new expense, income, or investment.",
     targetId: "add-button",
     position: "top",
     icon: "➕",
   },
   {
     id: "budget-btn",
-    title: "Budget Management",
-    description:
-      "Create and manage your budgets for different categories here.",
+    title: "Manage Budgets",
+    description: "Tap here to create and manage your budgets for different spending categories.",
     targetId: "budget-btn",
     position: "top",
     icon: "💰",
   },
   {
     id: "reminders-btn",
-    title: "Payment Reminders",
-    description: "Set up reminders for bills and recurring payments here.",
+    title: "Set Reminders",
+    description: "Use this to create new reminders for your recurring bills and payments.",
     targetId: "reminders-btn",
     position: "top",
     icon: "🔔",
   },
   {
     id: "expenses-btn",
-    title: "All Expenses",
-    description: "View and analyze all your expenses with powerful filters.",
+    title: "View All Expenses",
+    description: "Dive deep into your spending history with powerful sorting and filtering tools.",
     targetId: "expenses-btn",
     position: "top",
     icon: "📊",
   },
   {
     id: "insights-btn",
-    title: "Smart Insights",
-    description:
-      "Get AI-powered insights and personalized recommendations for your spending.",
+    title: "Get Smart Insights",
+    description: "Discover AI-powered analysis and personalized tips to improve your financial health.",
     targetId: "insights-btn",
     position: "top",
     icon: "🧠",
   },
   {
     id: "complete",
-    title: "You're All Set! 🚀",
-    description:
-      "Start by adding your first expense, income, or investment. Happy tracking!",
+    title: "You're All Set! ✅",
+    description: "You're ready to take charge of your finances. Start by adding your first transaction!",
     targetId: null,
     position: "center",
-    icon: "🚀",
+    icon: "🎯",
   },
 ];
 
@@ -225,7 +210,12 @@ const setOnboardingCompleted = async () => {
   } catch {}
 };
 
-const OnboardingOverlay = ({ isVisible, onComplete, onStepChange }) => {
+const OnboardingOverlay = ({
+  isVisible,
+  onComplete,
+  targetRefs,
+  scrollViewRef,
+}) => {
   const { theme } = useTheme();
   const [currentStep, setCurrentStep] = useState(0);
   const [overlayOpacity] = useState(new Animated.Value(0));
@@ -250,60 +240,42 @@ const OnboardingOverlay = ({ isVisible, onComplete, onStepChange }) => {
     }
   }, [isVisible]);
 
-  useEffect(() => {
-    if (isVisible && tooltipMeasured) measureTargetElement();
-    // eslint-disable-next-line
-  }, [currentStep, isVisible, tooltipMeasured]);
-
-  const measureTargetElement = useCallback(() => {
+  const measureAndScrollToTarget = useCallback(() => {
     const step = ONBOARDING_STEPS[currentStep];
     if (!step.targetId) {
       setTargetLayout(null);
       return;
     }
-
-    // Add a longer delay for better reliability
+    // Use a timeout to ensure the target element has been rendered and is measurable
     setTimeout(() => {
-      try {
-        const targetRef = global.targetRefs?.[step.targetId];
-        if (targetRef && targetRef.measure) {
-          targetRef.measure((x, y, width, height, pageX, pageY) => {
-            if (width > 0 && height > 0) {
-              setTargetLayout({
-                x: pageX,
-                y: pageY,
-                width,
-                height,
+      const targetRef = targetRefs?.[step.targetId];
+      if (targetRef && typeof targetRef.measure === 'function') {
+        targetRef.measure((x, y, width, height, pageX, pageY) => {
+          if (width > 0 && height > 0) {
+            setTargetLayout({ x: pageX, y: pageY, width, height });
+            if (scrollViewRef?.current?.scrollTo) {
+              // Scroll the target element into a comfortable view
+              let targetScrollY = Math.max(pageY - screenHeight / 2.5, 0);
+              scrollViewRef.current.scrollTo({
+                y: targetScrollY,
+                animated: true,
               });
-            } else {
-              // Retry once if measurements are invalid
-              setTimeout(() => {
-                targetRef.measure((x2, y2, width2, height2, pageX2, pageY2) => {
-                  if (width2 > 0 && height2 > 0) {
-                    setTargetLayout({
-                      x: pageX2,
-                      y: pageY2,
-                      width: width2,
-                      height: height2,
-                    });
-                  }
-                });
-              }, 100);
             }
-          });
-        }
-      } catch (error) {
-        console.warn("Error measuring target element:", error);
-        setTargetLayout(null);
+          }
+        });
       }
-    }, 400); // Increased delay for better reliability
-  }, [currentStep]);
+    }, 300);
+  }, [currentStep, targetRefs, scrollViewRef]);
+
+  useEffect(() => {
+    if (isVisible) {
+      measureAndScrollToTarget();
+    }
+  }, [isVisible, currentStep, measureAndScrollToTarget]);
 
   const handleNext = () => {
     if (currentStep < ONBOARDING_STEPS.length - 1) {
-      const nextStepIndex = currentStep + 1;
-      setCurrentStep(nextStepIndex);
-      if (onStepChange) onStepChange(ONBOARDING_STEPS[nextStepIndex].id);
+      setCurrentStep(currentStep + 1);
     } else {
       handleComplete();
     }
@@ -385,7 +357,6 @@ const OnboardingOverlay = ({ isVisible, onComplete, onStepChange }) => {
   if (!isVisible) return null;
 
   const step = ONBOARDING_STEPS[currentStep];
-  const progress = ((currentStep + 1) / ONBOARDING_STEPS.length) * 100;
   const tooltipPosition = getTooltipPosition();
   const highlightPosition = getHighlightPosition();
 
@@ -401,7 +372,7 @@ const OnboardingOverlay = ({ isVisible, onComplete, onStepChange }) => {
           {
             flex: 1,
             opacity: overlayOpacity,
-            backgroundColor: "rgba(15, 23, 42, 0.72)", // Nice dark glassmorphism
+            backgroundColor: "rgba(15, 23, 42, 0.72)",
           },
         ]}
       >
@@ -454,7 +425,6 @@ const OnboardingOverlay = ({ isVisible, onComplete, onStepChange }) => {
             setTooltipMeasured(true);
           }}
         >
-          {/* Skip button */}
           <TouchableOpacity
             style={{
               position: "absolute",
@@ -474,12 +444,10 @@ const OnboardingOverlay = ({ isVisible, onComplete, onStepChange }) => {
             <X size={20} color={theme.colors.textTertiary} />
           </TouchableOpacity>
 
-          {/* Icon/Illustration */}
           <Text style={{ fontSize: 38, marginBottom: 6 }}>
             {step.icon || "🎓"}
           </Text>
 
-          {/* Step title */}
           <Text
             style={{
               fontSize: 20,
@@ -492,7 +460,6 @@ const OnboardingOverlay = ({ isVisible, onComplete, onStepChange }) => {
             {step.title}
           </Text>
 
-          {/* Description */}
           <Text
             style={{
               fontSize: 15,
@@ -505,7 +472,6 @@ const OnboardingOverlay = ({ isVisible, onComplete, onStepChange }) => {
             {step.description}
           </Text>
 
-          {/* Progress Stepper Dots */}
           <View
             style={{
               flexDirection: "row",
@@ -527,13 +493,11 @@ const OnboardingOverlay = ({ isVisible, onComplete, onStepChange }) => {
                       ? theme.colors.primary
                       : theme.colors.border,
                   marginHorizontal: 2,
-                  transition: "all 0.22s",
                 }}
               />
             ))}
           </View>
 
-          {/* Navigation Buttons */}
           <View
             style={{
               flexDirection: "row",
@@ -753,11 +717,9 @@ export default function DashboardScreen({ navigation }) {
   const { theme } = useTheme();
   const nav = useNavigation();
 
-  // All refs should be declared early
   const targetRefs = useRef({});
   const scrollViewRef = useRef(null);
 
-  // All useState hooks should be declared together at the top
   const [expenses, setExpenses] = useState([]);
   const [budgets, setBudgets] = useState([]);
   const [profile, setProfile] = useState(null);
@@ -772,69 +734,10 @@ export default function DashboardScreen({ navigation }) {
   const [investments, setInvestments] = useState([]);
   const [showOnboarding, setShowOnboarding] = useState(false);
 
-  // All useCallback hooks should be declared together
   const setTargetRef = useCallback((id, ref) => {
     if (ref && id) {
-      if (!global.targetRefs) {
-        global.targetRefs = {};
-      }
-      global.targetRefs[id] = ref;
+      targetRefs.current[id] = ref;
     }
-  }, []);
-
-  const handleOnboardingStepChange = useCallback((stepId) => {
-    const step = ONBOARDING_STEPS.find((s) => s.id === stepId);
-
-    if (!step) return;
-
-    // If no target, don't scroll
-    if (!step.targetId) return;
-
-    // Wait a bit for any animations to complete
-    setTimeout(() => {
-      const targetRef = global.targetRefs?.[step.targetId];
-
-      if (!targetRef || !scrollViewRef.current) return;
-
-      try {
-        targetRef.measure((x, y, width, height, pageX, pageY) => {
-          if (width <= 0 || height <= 0) return;
-
-          const windowHeight = Dimensions.get("window").height;
-
-          // Calculate optimal scroll position based on step position
-          let targetScrollY;
-
-          switch (step.position) {
-            case "top":
-              // For top tooltips, scroll so element is in lower half
-              targetScrollY = pageY - windowHeight * 0.7;
-              break;
-            case "bottom":
-              // For bottom tooltips, scroll so element is in upper half
-              targetScrollY = pageY - windowHeight * 0.3;
-              break;
-            case "center":
-              // For center tooltips, center the element
-              targetScrollY = pageY - windowHeight * 0.5 + height * 0.5;
-              break;
-            default:
-              targetScrollY = pageY - windowHeight * 0.5;
-          }
-
-          // Add some padding and ensure we don't scroll beyond bounds
-          const scrollPadding = 50;
-          targetScrollY = Math.max(0, targetScrollY - scrollPadding);
-
-          scrollViewRef.current.scrollTo({
-            y: targetScrollY,
-            animated: true,
-          });
-        });
-      } catch (error) {
-        console.warn("Error measuring target element:", error);
-      }
-    }, 300);
   }, []);
 
   const calculateStatistics = useCallback((expenseData) => {
@@ -906,7 +809,6 @@ export default function DashboardScreen({ navigation }) {
     [theme]
   );
 
-  // All useMemo hooks should be declared together
   const getPieChartData = useMemo(() => {
     const categoryMap = {};
     expenses.forEach((item) => {
@@ -980,7 +882,6 @@ export default function DashboardScreen({ navigation }) {
     };
   }, [profile, monthlyExpenses]);
 
-  // Function declarations (not hooks)
   const fetchInvestments = async () => {
     try {
       const { data, error } = await supabase
@@ -1114,7 +1015,6 @@ export default function DashboardScreen({ navigation }) {
     }
   };
 
-  // All useEffect hooks should be declared together after other hooks
   useEffect(() => {
     let isMounted = true;
     if (session?.user) {
@@ -1129,10 +1029,6 @@ export default function DashboardScreen({ navigation }) {
       isMounted = false;
     };
   }, [session, route.params?.showOnboarding]);
-
-  useEffect(() => {
-    global.targetRefs = {};
-  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -1154,7 +1050,6 @@ export default function DashboardScreen({ navigation }) {
     }, [navigation])
   );
 
-  // Early return should come after all hooks
   if (loading || !session?.user) {
     return (
       <View
@@ -1181,6 +1076,7 @@ export default function DashboardScreen({ navigation }) {
   return (
     <>
       <ScrollView
+        ref={scrollViewRef}
         style={[styles.container, { backgroundColor: theme.colors.background }]}
         refreshControl={
           <RefreshControl
@@ -1193,7 +1089,6 @@ export default function DashboardScreen({ navigation }) {
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* --- Header Section --- */}
         <View
           style={[
             styles.header,
@@ -1201,7 +1096,6 @@ export default function DashboardScreen({ navigation }) {
               backgroundColor: theme.colors.surface,
               borderBottomLeftRadius: Math.max(screenWidth * 0.06, 15),
               borderBottomRightRadius: Math.max(screenWidth * 0.06, 15),
-              
             },
           ]}
         >
@@ -1228,7 +1122,6 @@ export default function DashboardScreen({ navigation }) {
             />
           </View>
         </View>
-        {/* --- Statistics Section --- */}
         <View style={styles.statisticsContainer}>
           <View
             style={styles.statsContainer}
@@ -1287,19 +1180,23 @@ export default function DashboardScreen({ navigation }) {
             </View>
           )}
         </View>
-{/* Reminders Section */}
-{uniqueReminders.length > 0 && (
+        {uniqueReminders.length > 0 && (
           <View
             style={styles.remindersSection2}
             ref={(ref) => setTargetRef("reminders-section", ref)}
           >
             <View style={styles.sectionHeader}>
-              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Payment Reminders</Text>
+              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+                Payment Reminders
+              </Text>
               <TouchableOpacity
                 onPress={() => navigation.navigate("PaymentReminder")}
               >
                 <Text
-                  style={[styles.seeAllText, { color: theme.colors.textSecondary }]}
+                  style={[
+                    styles.seeAllText,
+                    { color: theme.colors.textSecondary },
+                  ]}
                 >
                   View All
                 </Text>
@@ -1322,18 +1219,22 @@ export default function DashboardScreen({ navigation }) {
           </View>
         )}
 
-        {/* Budgets Section */}
         <View
           style={styles.budgetSection}
           ref={(ref) => setTargetRef("budget-section", ref)}
         >
           <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Budget Progress</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+              Budget Progress
+            </Text>
             <TouchableOpacity
               onPress={() => navigation.navigate("BudgetScreen")}
             >
               <Text
-                style={[styles.seeAllText, { color: theme.colors.textSecondary }]}
+                style={[
+                  styles.seeAllText,
+                  { color: theme.colors.textSecondary },
+                ]}
               >
                 Manage Budgets
               </Text>
@@ -1376,7 +1277,6 @@ export default function DashboardScreen({ navigation }) {
               </Text>
             </View>
           )}
-          {/* Category Budgets */}
           {budgets.length > 0 && (
             <>
               {budgetProgress
@@ -1401,14 +1301,22 @@ export default function DashboardScreen({ navigation }) {
           )}
         </View>
 
-        {/* Recent Income Section */}
-        <View style={styles.section}>
+        <View style={styles.section} ref={(ref) => setTargetRef("recent-income-section", ref)}>
           <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Recent Income</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+              Recent Income
+            </Text>
             <TouchableOpacity
               onPress={() => navigation.navigate("IncomeManagement")}
             >
-              <Text style={[styles.seeAllText, { color: theme.colors.textSecondary }]}>See All</Text>
+              <Text
+                style={[
+                  styles.seeAllText,
+                  { color: theme.colors.textSecondary },
+                ]}
+              >
+                See All
+              </Text>
             </TouchableOpacity>
           </View>
           {incomes.length > 0 ? (
@@ -1422,18 +1330,33 @@ export default function DashboardScreen({ navigation }) {
               showsVerticalScrollIndicator={false}
             />
           ) : (
-            <Text style={[styles.emptyStateText, { color: theme.colors.textSecondary }]}>No income yet</Text>
+            <Text
+              style={[
+                styles.emptyStateText,
+                { color: theme.colors.textSecondary },
+              ]}
+            >
+              No income yet
+            </Text>
           )}
         </View>
 
-        {/* Recent Expenses Section */}
-        <View style={styles.section}>
+        <View style={styles.section} ref={(ref) => setTargetRef("recent-section", ref)}>
           <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Recent Expenses</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+              Recent Expenses
+            </Text>
             <TouchableOpacity
               onPress={() => navigation.navigate("AllExpenses")}
             >
-              <Text style={[styles.seeAllText, { color: theme.colors.textSecondary }]}>See All</Text>
+              <Text
+                style={[
+                  styles.seeAllText,
+                  { color: theme.colors.textSecondary },
+                ]}
+              >
+                See All
+              </Text>
             </TouchableOpacity>
           </View>
           {recentExpenses.length > 0 ? (
@@ -1447,18 +1370,33 @@ export default function DashboardScreen({ navigation }) {
               showsVerticalScrollIndicator={false}
             />
           ) : (
-            <Text style={[styles.emptyStateText, { color: theme.colors.textSecondary }]}>No expenses yet</Text>
+            <Text
+              style={[
+                styles.emptyStateText,
+                { color: theme.colors.textSecondary },
+              ]}
+            >
+              No expenses yet
+            </Text>
           )}
         </View>
 
-        {/* Recent Investments Section */}
-        <View style={styles.section}>
+        <View style={styles.section} ref={(ref) => setTargetRef("investments-section", ref)}>
           <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Recent Investments</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+              Recent Investments
+            </Text>
             <TouchableOpacity
               onPress={() => navigation.navigate("InvestmentsScreen")}
             >
-              <Text style={[styles.seeAllText, { color: theme.colors.textSecondary }]}>See All</Text>
+              <Text
+                style={[
+                  styles.seeAllText,
+                  { color: theme.colors.textSecondary },
+                ]}
+              >
+                See All
+              </Text>
             </TouchableOpacity>
           </View>
           {investments.length > 0 ? (
@@ -1472,16 +1410,30 @@ export default function DashboardScreen({ navigation }) {
               showsVerticalScrollIndicator={false}
             />
           ) : (
-            <Text style={[styles.emptyStateText, { color: theme.colors.textSecondary }]}>No investments yet</Text>
+            <Text
+              style={[
+                styles.emptyStateText,
+                { color: theme.colors.textSecondary },
+              ]}
+            >
+              No investments yet
+            </Text>
           )}
         </View>
       </ScrollView>
 
-      {/* Floating Taskbar and OnboardingOverlay remain unchanged */}
-      <FloatingTaskbar theme={theme} navigation={navigation} setTargetRef={() => {}} />
-      <OnboardingOverlay isVisible={showOnboarding} onComplete={completeOnboarding} onStepChange={handleOnboardingStepChange} />
+      <FloatingTaskbar
+        theme={theme}
+        navigation={navigation}
+        setTargetRef={setTargetRef}
+      />
+      <OnboardingOverlay
+        isVisible={showOnboarding}
+        onComplete={completeOnboarding}
+        targetRefs={targetRefs.current}
+        scrollViewRef={scrollViewRef}
+      />
 
-      {/* Alerts */}
       <Alert
         open={showDeleteAlert}
         onConfirm={async () => {
@@ -1561,7 +1513,7 @@ const styles = StyleSheet.create({
     gap: Math.max(screenWidth * 0.025, 8),
   },
 
-  statisticsContainer: { flexDirection: "column", gap: 1  ,marginBottom: 10},
+  statisticsContainer: { flexDirection: "column", gap: 1, marginBottom: 10 },
   statsContainer: {
     flexDirection: "row",
     paddingHorizontal: Math.max(screenWidth * 0.04, 12),
@@ -1686,7 +1638,6 @@ const styles = StyleSheet.create({
 
   section: { paddingHorizontal: 16, marginTop: 18 },
 
-  // ----- Expense/Income/Investment List -----
   expenseItem: {
     flexDirection: "row",
     justifyContent: "space-between",
