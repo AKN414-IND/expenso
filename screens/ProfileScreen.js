@@ -11,7 +11,10 @@ import {
   Platform,
   Alert,
   Image,
+  Dimensions,
+  StatusBar,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
@@ -28,8 +31,22 @@ import {
   HelpCircle,
   LogOut,
   ArrowLeft,
+  TrendingUp,
+  Wallet,
+  Target,
+  Award,
+  Bell,
+  Moon,
+  Sun,
+  ChevronRight,
+  Eye,
+  Lock,
+  CreditCard,
+  Smartphone,
 } from "lucide-react-native";
 import { Linking } from "react-native";
+
+const { width, height } = Dimensions.get("window");
 
 const Avatar = ({ name, email, size = 80, style }) => {
   const getInitials = (name, email) => {
@@ -50,14 +67,14 @@ const Avatar = ({ name, email, size = 80, style }) => {
 
   const getAvatarColor = (text) => {
     const colors = [
-      "#FF6B6B",
-      "#4ECDC4",
-      "#45B7D1",
-      "#96CEB4",
-      "#FECA57",
-      "#FF9FF3",
-      "#54A0FF",
-      "#5F27CD",
+      "#667eea",
+      "#764ba2",
+      "#f093fb",
+      "#f5576c",
+      "#4facfe",
+      "#43e97b",
+      "#fa709a",
+      "#fee140",
     ];
     let hash = 0;
     for (let i = 0; i < text.length; i++) {
@@ -79,11 +96,13 @@ const Avatar = ({ name, email, size = 80, style }) => {
           backgroundColor,
           alignItems: "center",
           justifyContent: "center",
-          elevation: 4,
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.1,
-          shadowRadius: 4,
+          elevation: 8,
+          shadowColor: backgroundColor,
+          shadowOffset: { width: 0, height: 8 },
+          shadowOpacity: 0.3,
+          shadowRadius: 16,
+          borderWidth: 4,
+          borderColor: "rgba(255, 255, 255, 0.2)",
         },
         style,
       ]}
@@ -91,9 +110,9 @@ const Avatar = ({ name, email, size = 80, style }) => {
       <Text
         style={{
           color: "white",
-          fontSize: size * 0.4,
-          fontWeight: "bold",
-          letterSpacing: 1,
+          fontSize: size * 0.35,
+          fontWeight: "700",
+          letterSpacing: 1.5,
         }}
       >
         {initials}
@@ -101,6 +120,52 @@ const Avatar = ({ name, email, size = 80, style }) => {
     </View>
   );
 };
+
+const StatCard = ({ icon, label, value, color, theme }) => (
+  <View style={[styles.statCard, { backgroundColor: theme.colors.surface }]}>
+    <View style={[styles.statIconContainer, { backgroundColor: color + "20" }]}>
+      {icon}
+    </View>
+    <View style={styles.statContent}>
+      <Text style={[styles.statLabel, { color: theme.colors.textTertiary }]}>
+        {label}
+      </Text>
+      <Text style={[styles.statValue, { color: theme.colors.text }]}>
+        {value}
+      </Text>
+    </View>
+  </View>
+);
+
+const SettingsItem = ({ icon, title, subtitle, onPress, theme, showChevron = true, isDestructive = false }) => (
+  <TouchableOpacity
+    style={[styles.settingsItem, { backgroundColor: theme.colors.surface }]}
+    onPress={onPress}
+    activeOpacity={0.7}
+  >
+    <View style={styles.settingsItemContent}>
+      <View style={[styles.settingsIconContainer, { backgroundColor: isDestructive ? "#FEF2F2" : theme.colors.primary + "15" }]}>
+        {React.cloneElement(icon, { 
+          color: isDestructive ? "#EF4444" : theme.colors.primary, 
+          size: 20 
+        })}
+      </View>
+      <View style={styles.settingsTextContainer}>
+        <Text style={[styles.settingsTitle, { color: isDestructive ? "#EF4444" : theme.colors.text }]}>
+          {title}
+        </Text>
+        {subtitle && (
+          <Text style={[styles.settingsSubtitle, { color: theme.colors.textTertiary }]}>
+            {subtitle}
+          </Text>
+        )}
+      </View>
+    </View>
+    {showChevron && (
+      <ChevronRight color={theme.colors.textTertiary} size={20} />
+    )}
+  </TouchableOpacity>
+);
 
 export default function ProfileScreen({ navigation }) {
   const { session } = useAuth();
@@ -113,6 +178,7 @@ export default function ProfileScreen({ navigation }) {
     username: "",
     monthly_income: "",
     total_investments: "",
+    monthly_budget: "",
   });
 
   useEffect(() => {
@@ -213,47 +279,45 @@ export default function ProfileScreen({ navigation }) {
   };
 
   const handleLogout = () => {
-    Alert.alert("Logout", "Are you sure you want to logout?", [
-      {
-        text: "Cancel",
-        style: "cancel",
-      },
-      {
-        text: "Logout",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await supabase.auth.signOut();
-          } catch (error) {
-            console.error("Logout error:", error);
-          }
+    Alert.alert(
+      "Sign Out",
+      "Are you sure you want to sign out of your account?",
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
         },
-      },
-    ]);
+        {
+          text: "Sign Out",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await supabase.auth.signOut();
+            } catch (error) {
+              console.error("Logout error:", error);
+            }
+          },
+        },
+      ]
+    );
   };
 
   if (loading) {
     return (
-      <View
-        style={[
-          styles.loadingContainer,
-          { backgroundColor: theme.colors.background },
-        ]}
-      >
-        <Text
-          style={[styles.loadingText, { color: theme.colors.textSecondary }]}
-        >
-          Loading profile...
-        </Text>
+      <View style={[styles.loadingContainer, { backgroundColor: theme.colors.background }]}>
+        <View style={styles.loadingContent}>
+          <View style={[styles.loadingSpinner, { borderColor: theme.colors.primary + "30", borderTopColor: theme.colors.primary }]} />
+          <Text style={[styles.loadingText, { color: theme.colors.textSecondary }]}>
+            Loading your profile...
+          </Text>
+        </View>
       </View>
     );
   }
 
   const userEmail = session?.user?.email || "";
   const userName = profile?.full_name || "";
-  const joinDate = new Date(
-    session?.user?.created_at || Date.now()
-  ).toLocaleDateString("en-US", {
+  const joinDate = new Date(session?.user?.created_at || Date.now()).toLocaleDateString("en-US", {
     year: "numeric",
     month: "long",
     day: "numeric",
@@ -261,585 +325,337 @@ export default function ProfileScreen({ navigation }) {
 
   return (
     <>
-      <ScrollView
-        style={[styles.container, { backgroundColor: theme.colors.background }]}
-      >
-        {/* Header */}
-        <View
-          style={[styles.header, { backgroundColor: theme.colors.surface }]}
+      <StatusBar barStyle={theme.dark ? "light-content" : "dark-content"} backgroundColor={theme.colors.background} />
+      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+        {/* Header with Gradient */}
+        <LinearGradient
+          colors={[theme.colors.primary, theme.colors.primary + "DD"]}
+          style={styles.headerGradient}
         >
-          <TouchableOpacity
-            style={[
-              styles.backButton,
-              { backgroundColor: theme.colors.buttonSecondary },
-            ]}
-            onPress={() => navigation.goBack()}
-          >
-            <ArrowLeft color={theme.colors.text} size={24} />
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: theme.colors.text }]}>
-            Profile
-          </Text>
-          <TouchableOpacity
-            style={[
-              styles.editButton,
-              { backgroundColor: theme.colors.buttonSecondary },
-            ]}
-            onPress={() => setEditModalVisible(true)}
-          >
-            <Edit3 color={theme.colors.primary} size={24} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Profile Section */}
-        <View
-          style={[
-            styles.profileSection,
-            { backgroundColor: theme.colors.surface },
-          ]}
-        >
-          <View style={styles.avatarContainer}>
-            <Avatar name={userName} email={userEmail} size={120} />
+          <View style={styles.headerContent}>
             <TouchableOpacity
-              style={[
-                styles.cameraButton,
-                { backgroundColor: theme.colors.primary },
-              ]}
+              style={styles.backButton}
+              onPress={() => navigation.goBack()}
             >
-              <Camera color="white" size={20} />
+              <ArrowLeft color="white" size={24} />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Profile</Text>
+            <TouchableOpacity
+              style={styles.editHeaderButton}
+              onPress={() => setEditModalVisible(true)}
+            >
+              <Edit3 color="white" size={20} />
             </TouchableOpacity>
           </View>
+        </LinearGradient>
 
-          <Text style={[styles.userName, { color: theme.colors.text }]}>
-            {userName || "User"}
-          </Text>
-          <Text
-            style={[styles.userEmail, { color: theme.colors.textSecondary }]}
-          >
-            {userEmail}
-          </Text>
-          <Text style={[styles.joinDate, { color: theme.colors.textTertiary }]}>
-            Member since {joinDate}
-          </Text>
-        </View>
-
-        {/* Profile Info Cards */}
-        <View style={styles.infoSection}>
-          <View
-            style={[styles.infoCard, { backgroundColor: theme.colors.surface }]}
-          >
-            <View style={styles.infoRow}>
-              <View style={styles.iconContainer}>
-                <User color={theme.colors.primary} size={20} />
-              </View>
-              <View style={styles.infoContent}>
-                <Text
-                  style={[
-                    styles.infoLabel,
-                    { color: theme.colors.textTertiary },
-                  ]}
-                >
-                  Full Name
-                </Text>
-                <Text
-                  style={[
-                    styles.infoValue,
-                    { color: theme.colors.textSecondary },
-                  ]}
-                >
-                  {userName || "Not set"}
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          <View
-            style={[styles.infoCard, { backgroundColor: theme.colors.surface }]}
-          >
-            <View style={styles.infoRow}>
-              <View style={styles.iconContainer}>
-                <Mail color={theme.colors.primary} size={20} />
-              </View>
-              <View style={styles.infoContent}>
-                <Text
-                  style={[
-                    styles.infoLabel,
-                    { color: theme.colors.textTertiary },
-                  ]}
-                >
-                  Email
-                </Text>
-                <Text
-                  style={[
-                    styles.infoValue,
-                    { color: theme.colors.textSecondary },
-                  ]}
-                >
-                  {userEmail}
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          <View
-            style={[styles.infoCard, { backgroundColor: theme.colors.surface }]}
-          >
-            <View style={styles.infoRow}>
-              <View style={styles.iconContainer}>
-                <Calendar color={theme.colors.primary} size={20} />
-              </View>
-              <View style={styles.infoContent}>
-                <Text
-                  style={[
-                    styles.infoLabel,
-                    { color: theme.colors.textTertiary },
-                  ]}
-                >
-                  Username
-                </Text>
-                <Text
-                  style={[
-                    styles.infoValue,
-                    { color: theme.colors.textSecondary },
-                  ]}
-                >
-                  {profile?.username || "Not set"}
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          <View
-            style={[styles.infoCard, { backgroundColor: theme.colors.surface }]}
-          >
-            <View style={styles.infoRow}>
-              <View style={styles.iconContainer}>
-                <Text style={{ fontSize: 18, color: theme.colors.primary }}>
-                  💰
-                </Text>
-              </View>
-              <View style={styles.infoContent}>
-                <Text
-                  style={[
-                    styles.infoLabel,
-                    { color: theme.colors.textTertiary },
-                  ]}
-                >
-                  Monthly Income
-                </Text>
-                <Text
-                  style={[
-                    styles.infoValue,
-                    { color: theme.colors.textSecondary },
-                  ]}
-                >
-                  {profile?.monthly_income
-                    ? `₹${profile.monthly_income}`
-                    : "Not set"}
-                </Text>
-              </View>
-            </View>
-          </View>
-          <View
-            style={[styles.infoCard, { backgroundColor: theme.colors.surface }]}
-          >
-            <View style={styles.infoRow}>
-              <View style={styles.iconContainer}>
-                <Text style={{ fontSize: 18, color: theme.colors.primary }}>
-                  📈
-                </Text>
-              </View>
-              <View style={styles.infoContent}>
-                <Text
-                  style={[
-                    styles.infoLabel,
-                    { color: theme.colors.textTertiary },
-                  ]}
-                >
-                  Total Investments
-                </Text>
-                <Text
-                  style={[
-                    styles.infoValue,
-                    { color: theme.colors.textSecondary },
-                  ]}
-                >
-                  {profile?.total_investments
-                    ? `₹${profile.total_investments}`
-                    : "Not set"}
-                </Text>
-              </View>
-            </View>
-          </View>
-          <View
-            style={[styles.infoCard, { backgroundColor: theme.colors.surface }]}
-          >
-            <View style={styles.infoRow}>
-              <View style={styles.iconContainer}>
-                <Text style={{ fontSize: 18, color: theme.colors.primary }}>
-                  💰
-                </Text>
-              </View>
-              <View style={styles.infoContent}>
-                <Text
-                  style={[
-                    styles.infoLabel,
-                    { color: theme.colors.textTertiary },
-                  ]}
-                >
-                  Total Budget
-                </Text>
-                <Text
-                  style={[
-                    styles.infoValue,
-                    { color: theme.colors.textSecondary },
-                  ]}
-                >
-                  {profile?.monthly_budget
-                    ? `₹${profile.monthly_budget}`
-                    : "Not set"}
-                </Text>
-              </View>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.settingsSection}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-            Settings
-          </Text>
-
-          {/* App Settings */}
-          <TouchableOpacity
-            style={[
-              styles.settingItem,
-              { backgroundColor: theme.colors.surface },
-            ]}
-            onPress={() => navigation.navigate("AppSettings")}
-          >
-            <View style={styles.settingRow}>
-              <View style={styles.settingIconContainer}>
-                <Settings color={theme.colors.textTertiary} size={20} />
-              </View>
-              <Text
-                style={[
-                  styles.settingText,
-                  { color: theme.colors.textSecondary },
-                ]}
-              >
-                App Settings
-              </Text>
-            </View>
-          </TouchableOpacity>
-
-          {/* Privacy & Security */}
-          <TouchableOpacity
-            style={[
-              styles.settingItem,
-              { backgroundColor: theme.colors.surface },
-            ]}
-            onPress={() => navigation.navigate("PrivacySecurity")}
-          >
-            <View style={styles.settingRow}>
-              <View style={styles.settingIconContainer}>
-                <Shield color={theme.colors.textTertiary} size={20} />
-              </View>
-              <Text
-                style={[
-                  styles.settingText,
-                  { color: theme.colors.textSecondary },
-                ]}
-              >
-                Privacy & Security
-              </Text>
-            </View>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.settingItem,
-              { backgroundColor: theme.colors.surface },
-            ]}
-            onPress={() =>
-              navigation.navigate("Dashboard", { showOnboarding: true })
-            }
-          >
-            <View style={styles.settingRow}>
-              <View style={styles.settingIconContainer}>
-                <Text style={{ fontSize: 20 }}>🎓</Text>
-              </View>
-              <Text
-                style={[
-                  styles.settingText,
-                  { color: theme.colors.textSecondary },
-                ]}
-              >
-                Start App Tutorial
-              </Text>
-            </View>
-          </TouchableOpacity>
-
-          {/* Help & Support */}
-          <TouchableOpacity
-            style={[
-              styles.settingItem,
-              { backgroundColor: theme.colors.surface },
-            ]}
-            onPress={() =>
-              Linking.openURL(
-                "https://wa.me/918075648949?text=Hi%2C%20I%20need%20help%20with%20Expense%20Tracker"
-              )
-            }
-          >
-            <View style={styles.settingRow}>
-              <View style={styles.settingIconContainer}>
-                <HelpCircle color={theme.colors.textTertiary} size={20} />
-              </View>
-              <Text
-                style={[
-                  styles.settingText,
-                  { color: theme.colors.textSecondary },
-                ]}
-              >
-                Help & Support (will be by what's app)
-              </Text>
-            </View>
-          </TouchableOpacity>
-
-          {/* Logout */}
-          <TouchableOpacity
-            style={[
-              styles.settingItem,
-              styles.logoutItem,
-              { backgroundColor: theme.colors.surface },
-            ]}
-            onPress={handleLogout}
-          >
-            <View style={styles.settingRow}>
-              <View style={styles.settingIconContainer}>
-                <LogOut color={theme.colors.error} size={20} />
-              </View>
-              <Text
-                style={[
-                  styles.settingText,
-                  styles.logoutText,
-                  { color: theme.colors.error },
-                ]}
-              >
-                Logout
-              </Text>
-            </View>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-
-      {/* Edit Profile Modal */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={editModalVisible}
-        onRequestClose={() => setEditModalVisible(false)}
-      >
-        <KeyboardAvoidingView
-          style={[
-            styles.modalOverlay,
-            { backgroundColor: theme.colors.overlay },
-          ]}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        <ScrollView 
+          style={styles.scrollContainer}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
         >
-          <View
-            style={[
-              styles.modalContent,
-              { backgroundColor: theme.colors.surface },
-            ]}
-          >
-            <View
-              style={[
-                styles.modalHeader,
-                { borderBottomColor: theme.colors.border },
-              ]}
-            >
-              <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
-                Edit Profile
+          {/* Profile Header Section */}
+          <View style={[styles.profileHeader, { backgroundColor: theme.colors.surface }]}>
+            <View style={styles.profileAvatarSection}>
+              <Avatar name={userName} email={userEmail} size={100} />
+              <TouchableOpacity style={styles.cameraButton}>
+                <Camera color="white" size={18} />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.profileInfo}>
+              <Text style={[styles.profileName, { color: theme.colors.text }]}>
+                {userName || "Welcome!"}
               </Text>
-              <TouchableOpacity
-                onPress={() => setEditModalVisible(false)}
-                style={styles.closeButton}
-              >
-                <X color={theme.colors.textTertiary} size={24} />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.modalBody}>
-              <View style={styles.inputGroup}>
-                <Text
-                  style={[
-                    styles.inputLabel,
-                    { color: theme.colors.textSecondary },
-                  ]}
-                >
-                  Full Name
+              <Text style={[styles.profileEmail, { color: theme.colors.textSecondary }]}>
+                {userEmail}
+              </Text>
+              <View style={styles.memberBadge}>
+                <Award color={theme.colors.primary} size={14} />
+                <Text style={[styles.memberText, { color: theme.colors.primary }]}>
+                  Member since {joinDate.split(",")[1]}
                 </Text>
-                <TextInput
-                  style={[
-                    styles.input,
-                    {
-                      backgroundColor: theme.colors.buttonSecondary,
-                      color: theme.colors.text,
-                      borderColor: theme.colors.border,
-                    },
-                  ]}
-                  placeholder="Enter your full name"
-                  placeholderTextColor={theme.colors.textTertiary}
-                  value={editForm.full_name}
-                  onChangeText={(text) =>
-                    setEditForm({ ...editForm, full_name: text })
-                  }
-                />
               </View>
-
-              <View style={styles.inputGroup}>
-                <Text
-                  style={[
-                    styles.inputLabel,
-                    { color: theme.colors.textSecondary },
-                  ]}
-                >
-                  Username
-                </Text>
-                <TextInput
-                  style={[
-                    styles.input,
-                    {
-                      backgroundColor: theme.colors.buttonSecondary,
-                      color: theme.colors.text,
-                      borderColor: theme.colors.border,
-                    },
-                  ]}
-                  placeholder="Enter your username"
-                  placeholderTextColor={theme.colors.textTertiary}
-                  value={editForm.username}
-                  onChangeText={(text) =>
-                    setEditForm({ ...editForm, username: text })
-                  }
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text
-                  style={[
-                    styles.inputLabel,
-                    { color: theme.colors.textSecondary },
-                  ]}
-                >
-                  Monthly Income (₹)
-                </Text>
-                <TextInput
-                  style={[
-                    styles.input,
-                    {
-                      backgroundColor: theme.colors.buttonSecondary,
-                      color: theme.colors.text,
-                      borderColor: theme.colors.border,
-                    },
-                  ]}
-                  placeholder="Enter your monthly income"
-                  placeholderTextColor={theme.colors.textTertiary}
-                  value={editForm.monthly_income}
-                  keyboardType="numeric"
-                  onChangeText={(text) =>
-                    setEditForm({ ...editForm, monthly_income: text })
-                  }
-                />
-              </View>
-              <View style={styles.inputGroup}>
-                <Text
-                  style={[
-                    styles.inputLabel,
-                    { color: theme.colors.textSecondary },
-                  ]}
-                >
-                  Total Investments (₹)
-                </Text>
-                <TextInput
-                  style={[
-                    styles.input,
-                    {
-                      backgroundColor: theme.colors.buttonSecondary,
-                      color: theme.colors.text,
-                      borderColor: theme.colors.border,
-                    },
-                  ]}
-                  placeholder="Enter your total investments"
-                  placeholderTextColor={theme.colors.textTertiary}
-                  value={editForm.total_investments}
-                  keyboardType="numeric"
-                  onChangeText={(text) =>
-                    setEditForm({ ...editForm, total_investments: text })
-                  }
-                />
-              </View>
-              <View style={styles.inputGroup}>
-                <Text
-                  style={[
-                    styles.inputLabel,
-                    { color: theme.colors.textSecondary },
-                  ]}
-                >
-                  Monthly Budget (₹)
-                </Text>
-                <TextInput
-                  style={[
-                    styles.input,
-                    {
-                      backgroundColor: theme.colors.buttonSecondary,
-                      color: theme.colors.text,
-                      borderColor: theme.colors.border,
-                    },
-                  ]}
-                  placeholder="Enter your monthly budget"
-                  placeholderTextColor={theme.colors.textTertiary}
-                  value={editForm.monthly_budget}
-                  keyboardType="numeric"
-                  onChangeText={(text) =>
-                    setEditForm({ ...editForm, monthly_budget: text })
-                  }
-                />
-              </View>
-            </View>
-
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[
-                  styles.modalButton,
-                  styles.cancelButton,
-                  { backgroundColor: theme.colors.buttonSecondary },
-                ]}
-                onPress={() => setEditModalVisible(false)}
-              >
-                <Text
-                  style={[
-                    styles.cancelButtonText,
-                    { color: theme.colors.textSecondary },
-                  ]}
-                >
-                  Cancel
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.modalButton,
-                  styles.saveButton,
-                  { backgroundColor: theme.colors.primary },
-                ]}
-                onPress={updateProfile}
-              >
-                <Save color="white" size={16} style={{ marginRight: 8 }} />
-                <Text style={styles.saveButtonText}>Save Changes</Text>
-              </TouchableOpacity>
             </View>
           </View>
-        </KeyboardAvoidingView>
-      </Modal>
+
+          {/* Stats Section */}
+          <View style={styles.statsSection}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+              Financial Overview
+            </Text>
+            <View style={styles.statsGrid}>
+              <StatCard
+                icon={<Wallet color="#10B981" size={24} />}
+                label="Monthly Income"
+                value={profile?.monthly_income ? `₹${profile.monthly_income.toLocaleString()}` : "Not set"}
+                color="#10B981"
+                theme={theme}
+              />
+              <StatCard
+                icon={<TrendingUp color="#3B82F6" size={24} />}
+                label="Total Investments"
+                value={profile?.total_investments ? `₹${profile.total_investments.toLocaleString()}` : "Not set"}
+                color="#3B82F6"
+                theme={theme}
+              />
+              <StatCard
+                icon={<Target color="#F59E0B" size={24} />}
+                label="Monthly Budget"
+                value={profile?.monthly_budget ? `₹${profile.monthly_budget.toLocaleString()}` : "Not set"}
+                color="#F59E0B"
+                theme={theme}
+              />
+            </View>
+          </View>
+
+          {/* Account Settings Section */}
+          <View style={styles.settingsSection}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+              Account Settings
+            </Text>
+            <View style={styles.settingsGroup}>
+              <SettingsItem
+                icon={<User />}
+                title="Personal Information"
+                subtitle="Update your profile details"
+                onPress={() => setEditModalVisible(true)}
+                theme={theme}
+              />
+              <SettingsItem
+                icon={<Bell />}
+                title="Notifications"
+                subtitle="Manage your notification preferences"
+                onPress={() => navigation.navigate("Notifications")}
+                theme={theme}
+              />
+              <SettingsItem
+                icon={<Eye />}
+                title="Privacy Settings"
+                subtitle="Control your data and privacy"
+                onPress={() => navigation.navigate("PrivacySecurity")}
+                theme={theme}
+              />
+            </View>
+          </View>
+
+          {/* App Settings Section */}
+          <View style={styles.settingsSection}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+              App Settings
+            </Text>
+            <View style={styles.settingsGroup}>
+              <SettingsItem
+                icon={<Settings />}
+                title="General Settings"
+                subtitle="App preferences and configurations"
+                onPress={() => navigation.navigate("AppSettings")}
+                theme={theme}
+              />
+              <SettingsItem
+                icon={<Smartphone />}
+                title="App Tutorial"
+                subtitle="Learn how to use the app"
+                onPress={() => navigation.navigate("Dashboard", { showOnboarding: true })}
+                theme={theme}
+              />
+              <SettingsItem
+                icon={<Shield />}
+                title="Security"
+                subtitle="Manage your account security"
+                onPress={() => navigation.navigate("Security")}
+                theme={theme}
+              />
+            </View>
+          </View>
+
+          {/* Support Section */}
+          <View style={styles.settingsSection}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+              Support
+            </Text>
+            <View style={styles.settingsGroup}>
+              <SettingsItem
+                icon={<HelpCircle />}
+                title="Help & Support"
+                subtitle="Get help via WhatsApp"
+                onPress={() =>
+                  Linking.openURL(
+                    "https://wa.me/918075648949?text=Hi%2C%20I%20need%20help%20with%20Expense%20Tracker"
+                  )
+                }
+                theme={theme}
+              />
+              <SettingsItem
+                icon={<LogOut />}
+                title="Sign Out"
+                subtitle="Sign out of your account"
+                onPress={handleLogout}
+                theme={theme}
+                isDestructive={true}
+              />
+            </View>
+          </View>
+        </ScrollView>
+
+        {/* Enhanced Edit Profile Modal */}
+        <Modal
+          animationType="slide"
+          transparent={true}
+          visible={editModalVisible}
+          onRequestClose={() => setEditModalVisible(false)}
+        >
+          <View style={[styles.modalOverlay, { backgroundColor: theme.colors.overlay }]}>
+            <KeyboardAvoidingView
+              style={styles.modalContainer}
+              behavior={Platform.OS === "ios" ? "padding" : "height"}
+            >
+              <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
+                {/* Modal Header */}
+                <View style={[styles.modalHeader, { borderBottomColor: theme.colors.border }]}>
+                  <View>
+                    <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
+                      Edit Profile
+                    </Text>
+                    <Text style={[styles.modalSubtitle, { color: theme.colors.textTertiary }]}>
+                      Update your personal information
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => setEditModalVisible(false)}
+                    style={[styles.closeButton, { backgroundColor: theme.colors.buttonSecondary }]}
+                  >
+                    <X color={theme.colors.textTertiary} size={20} />
+                  </TouchableOpacity>
+                </View>
+
+                <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+                  {/* Personal Information */}
+                  <View style={styles.modalSection}>
+                    <Text style={[styles.modalSectionTitle, { color: theme.colors.text }]}>
+                      Personal Information
+                    </Text>
+                    
+                    <View style={styles.inputGroup}>
+                      <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
+                        Full Name *
+                      </Text>
+                      <TextInput
+                        style={[styles.input, {
+                          backgroundColor: theme.colors.buttonSecondary,
+                          color: theme.colors.text,
+                          borderColor: theme.colors.border,
+                        }]}
+                        placeholder="Enter your full name"
+                        placeholderTextColor={theme.colors.textTertiary}
+                        value={editForm.full_name}
+                        onChangeText={(text) => setEditForm({ ...editForm, full_name: text })}
+                      />
+                    </View>
+
+                    <View style={styles.inputGroup}>
+                      <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
+                        Username
+                      </Text>
+                      <TextInput
+                        style={[styles.input, {
+                          backgroundColor: theme.colors.buttonSecondary,
+                          color: theme.colors.text,
+                          borderColor: theme.colors.border,
+                        }]}
+                        placeholder="Enter your username"
+                        placeholderTextColor={theme.colors.textTertiary}
+                        value={editForm.username}
+                        onChangeText={(text) => setEditForm({ ...editForm, username: text })}
+                      />
+                    </View>
+                  </View>
+
+                  {/* Financial Information */}
+                  <View style={styles.modalSection}>
+                    <Text style={[styles.modalSectionTitle, { color: theme.colors.text }]}>
+                      Financial Information
+                    </Text>
+                    
+                    <View style={styles.inputGroup}>
+                      <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
+                        Monthly Income (₹)
+                      </Text>
+                      <TextInput
+                        style={[styles.input, {
+                          backgroundColor: theme.colors.buttonSecondary,
+                          color: theme.colors.text,
+                          borderColor: theme.colors.border,
+                        }]}
+                        placeholder="Enter your monthly income"
+                        placeholderTextColor={theme.colors.textTertiary}
+                        value={editForm.monthly_income}
+                        keyboardType="numeric"
+                        onChangeText={(text) => setEditForm({ ...editForm, monthly_income: text })}
+                      />
+                    </View>
+
+                    <View style={styles.inputGroup}>
+                      <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
+                        Total Investments (₹)
+                      </Text>
+                      <TextInput
+                        style={[styles.input, {
+                          backgroundColor: theme.colors.buttonSecondary,
+                          color: theme.colors.text,
+                          borderColor: theme.colors.border,
+                        }]}
+                        placeholder="Enter your total investments"
+                        placeholderTextColor={theme.colors.textTertiary}
+                        value={editForm.total_investments}
+                        keyboardType="numeric"
+                        onChangeText={(text) => setEditForm({ ...editForm, total_investments: text })}
+                      />
+                    </View>
+
+                    <View style={styles.inputGroup}>
+                      <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
+                        Monthly Budget (₹)
+                      </Text>
+                      <TextInput
+                        style={[styles.input, {
+                          backgroundColor: theme.colors.buttonSecondary,
+                          color: theme.colors.text,
+                          borderColor: theme.colors.border,
+                        }]}
+                        placeholder="Enter your monthly budget"
+                        placeholderTextColor={theme.colors.textTertiary}
+                        value={editForm.monthly_budget}
+                        keyboardType="numeric"
+                        onChangeText={(text) => setEditForm({ ...editForm, monthly_budget: text })}
+                      />
+                    </View>
+                  </View>
+                </ScrollView>
+
+                {/* Modal Footer */}
+                <View style={[styles.modalFooter, { borderTopColor: theme.colors.border }]}>
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.cancelButton, { backgroundColor: theme.colors.buttonSecondary }]}
+                    onPress={() => setEditModalVisible(false)}
+                  >
+                    <Text style={[styles.cancelButtonText, { color: theme.colors.textSecondary }]}>
+                      Cancel
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.saveButton, { backgroundColor: theme.colors.primary }]}
+                    onPress={updateProfile}
+                  >
+                    <Save color="white" size={16} style={{ marginRight: 8 }} />
+                    <Text style={styles.saveButtonText}>Save Changes</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </KeyboardAvoidingView>
+          </View>
+        </Modal>
+      </View>
     </>
   );
 }
@@ -853,183 +669,254 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  loadingContent: {
+    alignItems: "center",
+  },
+  loadingSpinner: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 3,
+    borderStyle: "solid",
+    marginBottom: 16,
+  },
   loadingText: {
     fontSize: 16,
     fontWeight: "500",
   },
-  header: {
+  headerGradient: {
+    paddingTop: Platform.OS === "ios" ? 60 : 40,
+    paddingBottom: 20,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+  },
+  headerContent: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 20,
-    borderBottomWidth: 1,
   },
   backButton: {
-    padding: 8,
+    padding: 12,
     borderRadius: 12,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
   },
   headerTitle: {
     fontSize: 20,
     fontWeight: "700",
+    color: "white",
   },
-  editButton: {
-    padding: 8,
+  editHeaderButton: {
+    padding: 12,
     borderRadius: 12,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
   },
-  profileSection: {
+  scrollContainer: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 100,
+  },
+  profileHeader: {
+    marginTop: -20,
+    marginHorizontal: 20,
+    borderRadius: 20,
+    padding: 24,
     alignItems: "center",
-    paddingVertical: 40,
-    paddingHorizontal: 20,
-    marginBottom: 20,
+    elevation: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
   },
-  avatarContainer: {
+  profileAvatarSection: {
     position: "relative",
-    marginBottom: 20,
+    marginBottom: 16,
   },
   cameraButton: {
     position: "absolute",
     bottom: 0,
     right: 0,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#3B82F6",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 3,
     borderColor: "white",
+    elevation: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
   },
-  userName: {
+  profileInfo: {
+    alignItems: "center",
+  },
+  profileName: {
     fontSize: 24,
     fontWeight: "700",
-    marginBottom: 8,
-    textAlign: "center",
-  },
-  userEmail: {
-    fontSize: 16,
-    color: "#64748b",
-    marginBottom: 8,
-  },
-  joinDate: {
-    fontSize: 14,
-    color: "#94a3b8",
-    fontStyle: "italic",
-  },
-  infoSection: {
-    paddingHorizontal: 20,
-    marginBottom: 30,
-  },
-  infoCard: {
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 12,
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  infoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  iconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(6, 182, 212, 0.1)",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 16,
-  },
-  infoContent: {
-    flex: 1,
-  },
-  infoLabel: {
-    fontSize: 12,
-    color: "#94a3b8",
-    fontWeight: "500",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
     marginBottom: 4,
   },
-  infoValue: {
+  profileEmail: {
     fontSize: 16,
-    color: "#1e293b",
-    fontWeight: "600",
+    marginBottom: 12,
   },
-  settingsSection: {
+  memberBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: "rgba(59, 130, 246, 0.1)",
+    borderRadius: 20,
+  },
+  memberText: {
+    fontSize: 12,
+    fontWeight: "600",
+    marginLeft: 4,
+  },
+  statsSection: {
+    marginTop: 24,
     paddingHorizontal: 20,
-    marginBottom: 100,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#1e293b",
     marginBottom: 16,
-    paddingHorizontal: 4,
   },
-  settingItem: {
-    backgroundColor: "#fff",
+  statsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+  },
+  statCard: {
+    width: (width - 60) / 2,
+    padding: 16,
     borderRadius: 16,
-    padding: 20,
     marginBottom: 12,
     elevation: 2,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 2,
+    shadowRadius: 4,
   },
-  settingRow: {
+  statIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
+  },
+  statContent: {
+    flex: 1,
+  },
+  statLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    marginBottom: 4,
+  },
+  statValue: {
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  settingsSection: {
+    marginTop: 32,
+    paddingHorizontal: 20,
+  },
+  settingsGroup: {
+    borderRadius: 16,
+    overflow: "hidden",
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  settingsItem: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(0, 0, 0, 0.05)",
   },
-  settingIconContainer: {
+  settingsItemContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  settingsIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: 16,
   },
-  settingText: {
+  settingsTextContainer: {
+    flex: 1,
+  },
+  settingsTitle: {
     fontSize: 16,
-    color: "#1e293b",
-    fontWeight: "500",
+    fontWeight: "600",
+    marginBottom: 2,
   },
-  logoutItem: {
-    marginTop: 20,
-  },
-  logoutText: {
-    color: "#ef4444",
+  settingsSubtitle: {
+    fontSize: 14,
+    fontWeight: "400",
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(15, 23, 42, 0.7)",
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: "flex-end",
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: "flex-end",
   },
   modalContent: {
-    backgroundColor: "#fff",
-    borderRadius: 24,
-    width: "90%",
-    maxHeight: "80%",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: height * 0.9,
     elevation: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
   },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
+    alignItems: "flex-start",
     padding: 24,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(148, 163, 184, 0.1)",
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: "700",
-    color: "#1e293b",
+    marginBottom: 4,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    fontWeight: "500",
   },
   closeButton: {
-    padding: 4,
+    padding: 8,
+    borderRadius: 20,
   },
   modalBody: {
+    maxHeight: height * 0.6,
+  },
+  modalSection: {
     padding: 24,
+    paddingTop: 0,
+  },
+  modalSectionTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    marginBottom: 16,
   },
   inputGroup: {
     marginBottom: 20,
@@ -1037,48 +924,50 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#374151",
     marginBottom: 8,
   },
   input: {
-    backgroundColor: "#f8fafc",
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,
-    borderColor: "rgba(148, 163, 184, 0.2)",
     fontSize: 16,
-    color: "#1e293b",
+    fontWeight: "500",
   },
-  modalButtons: {
+  modalFooter: {
     flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     padding: 24,
-    paddingTop: 0,
+    borderTopWidth: 1,
+    gap: 12,
   },
   modalButton: {
     flex: 1,
-    padding: 16,
-    borderRadius: 12,
-    alignItems: "center",
     flexDirection: "row",
+    alignItems: "center",
     justifyContent: "center",
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   cancelButton: {
-    backgroundColor: "#f8fafc",
-    borderWidth: 1,
-    borderColor: "rgba(148, 163, 184, 0.3)",
-    marginRight: 12,
+    marginRight: 6,
   },
   saveButton: {
-    backgroundColor: "#06b6d4",
+    marginLeft: 6,
   },
   cancelButtonText: {
-    color: "#64748b",
-    fontWeight: "600",
     fontSize: 16,
+    fontWeight: "600",
   },
   saveButtonText: {
-    color: "white",
-    fontWeight: "600",
     fontSize: 16,
+    fontWeight: "600",
+    color: "white",
   },
 });
