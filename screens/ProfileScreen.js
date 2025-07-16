@@ -97,12 +97,7 @@ const Avatar = ({ name, email, size = 80, style }) => {
           alignItems: "center",
           justifyContent: "center",
           elevation: 8,
-          shadowColor: backgroundColor,
-          shadowOffset: { width: 0, height: 8 },
-          shadowOpacity: 0.3,
-          shadowRadius: 16,
-          borderWidth: 4,
-          borderColor: "rgba(255, 255, 255, 0.2)",
+          
         },
         style,
       ]}
@@ -358,9 +353,6 @@ export default function ProfileScreen({ navigation }) {
           <View style={[styles.profileHeader, { backgroundColor: theme.colors.surface }]}>
             <View style={styles.profileAvatarSection}>
               <Avatar name={userName} email={userEmail} size={100} />
-              <TouchableOpacity style={styles.cameraButton}>
-                <Camera color="white" size={18} />
-              </TouchableOpacity>
             </View>
             
             <View style={styles.profileInfo}>
@@ -732,24 +724,6 @@ const styles = StyleSheet.create({
   profileAvatarSection: {
     position: "relative",
     marginBottom: 16,
-  },
-  cameraButton: {
-    position: "absolute",
-    bottom: 0,
-    right: 0,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "#3B82F6",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 3,
-    borderColor: "white",
-    elevation: 4,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
   },
   profileInfo: {
     alignItems: "center",
