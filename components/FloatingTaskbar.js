@@ -17,6 +17,14 @@ const FloatingTaskbar = ({ theme, navigation, setTargetRef }) => (
       </TouchableOpacity>
       <TouchableOpacity
         style={[styles.actionButton, { backgroundColor: theme.colors.buttonSecondary }]}
+        onPress={() => navigation.navigate("InvestmentsScreen")}
+        activeOpacity={0.7}
+        ref={ref => setTargetRef("investment-btn", ref)}
+      >
+        <Text style={styles.actionIcon}>📈</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.actionButton, { backgroundColor: theme.colors.buttonSecondary }]}
         onPress={() => navigation.navigate("PaymentReminder")}
         activeOpacity={0.7}
         ref={ref => setTargetRef("reminders-btn", ref)}
