@@ -391,140 +391,165 @@ export default function AppSettingsScreen({ navigation }) {
     }
     setIsLoading(true);
 
+    const generateHtmlTable = (title, headers, data) => {
+      if (!data || data.length === 0) {
+        return `<h2>${title}</h2><p>No records found for the selected period.</p>`;
+      }
+      const headerRow = `<tr>${headers
+        .map((h) => `<th>${h}</th>`)
+        .join("")}</tr>`;
+      const bodyRows = data
+        .map((row) => {
+          const cells = headers
+            .map((header) => {
+              const key = header.toLowerCase().replace(/ /g, "_");
+              return `<td>${row[key] || ""}</td>`;
+            })
+            .join("");
+          return `<tr>${cells}</tr>`;
+        })
+        .join("");
+      return `<h2>${title} (${data.length})</h2><table><thead>${headerRow}</thead><tbody>${bodyRows}</tbody></table>`;
+    };
+
     try {
+      // --- 1. Fetch data for totals first ---
+      const { data: expensesData } = await supabase
+        .from("expenses")
+        .select("amount")
+        .eq("user_id", session.user.id)
+        .gte("date", dateRange.from)
+        .lte("date", dateRange.to);
+      const { data: incomesData } = await supabase
+        .from("side_incomes")
+        .select("amount")
+        .eq("user_id", session.user.id);
+      const { data: investmentsData } = await supabase
+        .from("investments")
+        .select("amount")
+        .eq("user_id", session.user.id);
+
+      // --- 2. Calculate Totals ---
+      const totalExpenses =
+        expensesData?.reduce((sum, item) => sum + Number(item.amount), 0) || 0;
+      const totalIncomes =
+        incomesData?.reduce((sum, item) => sum + Number(item.amount), 0) || 0;
+      const totalInvestments =
+        investmentsData?.reduce((sum, item) => sum + Number(item.amount), 0) ||
+        0;
+
+      // --- 3. Build HTML with Totals ---
       let htmlContent = `
         <html>
           <head>
-            <meta charset="utf-8" />
-            <title>Expenso App Settings Export</title>
+            <title>Expenso Data Export</title>
             <style>
-              body { font-family: sans-serif; padding: 18px; font-size: 15px; color: #262626; }
-              h1 { font-size: 26px; margin-bottom: 0; color: #009688; }
-              h2 { font-size: 19px; margin-top: 20px; color: #374151; }
+              body { font-family: sans-serif; padding: 18px; font-size: 15px; }
+              h1 { font-size: 26px; color: #009688; }
+              h2 { font-size: 19px; margin-top: 24px; color: #374151; }
               table { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
-              th, td { border: 1px solid #e5e7eb; padding: 6px 8px; }
+              th, td { border: 1px solid #e5e7eb; padding: 8px; text-align: left; }
               th { background: #f0fdf4; color: #059669; font-weight: 700; }
               tr:nth-child(even) { background: #f9fafb; }
-              .small { color: #64748b; font-size: 13px; margin-top: 0; }
+              .small { color: #64748b; font-size: 13px; }
+              .totals-summary { margin-top: 20px; padding: 15px; background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; }
+              .totals-summary p { margin: 5px 0; font-size: 16px; color: #374151; }
             </style>
           </head>
           <body>
             <h1>Expenso Data Export</h1>
             <p class="small">Period: ${dateRange.from} to ${dateRange.to}</p>
             <p class="small">Exported: ${new Date().toLocaleString()}</p>
-      `;
+            
+            <div class="totals-summary">
+                <p><b>Total Income:</b> ₹${totalIncomes.toFixed(2)}</p>
+                <p><b>Total Expenses (in period):</b> ₹${totalExpenses.toFixed(
+                  2
+                )}</p>
+                <p><b>Total Investments:</b> ₹${totalInvestments.toFixed(2)}</p>
+            </div>
+            `;
 
-      // Fetch and render each selected type
-      const fetchSection = async (section, label, query, renderRow) => {
-        const { data, error } = await query;
-        if (error || !data || data.length === 0)
-          return `<h2>${label}</h2><p>No records.</p>`;
-        const headers = Object.keys(data[0]);
-        return `
-          <h2>${label} (${data.length})</h2>
-          <table>
-            <tr>${headers.map((h) => `<th>${h}</th>`).join("")}</tr>
-            ${data
-              .map(
-                renderRow
-                  ? renderRow
-                  : (row) =>
-                      `<tr>${headers
-                        .map((key) => `<td>${row[key] || ""}</td>`)
-                        .join("")}</tr>`
-              )
-              .join("")}
-          </table>
-        `;
-      };
-
-      // Array of promises for the selected types
-      const sections = [];
-
-      if (exportOptions.expenses) {
-        const { data: expenses = [], error } = await supabase
-          .from("expenses")
-          .select("*")
-          .eq("user_id", session.user.id)
-          .gte("date", dateRange.from)
-          .lte("date", dateRange.to)
-          .order("date", { ascending: true });
-
-        const headers = expenses[0] ? Object.keys(expenses[0]) : [];
-
-        htmlContent += `
-    <h2>Expenses (${expenses.length})</h2>
-    ${buildPeriodSummaryTable(expenses, dateRange.from, dateRange.to)}
-    <h2>Detailed Expenses</h2>
-    <table>
-      <tr>${headers.map((h) => `<th>${h}</th>`).join("")}</tr>
-      ${expenses
-        .map(
-          (row) =>
-            `<tr>${headers
-              .map((k) => `<td>${row[k] ?? ""}</td>`)
-              .join("")}</tr>`
-        )
-        .join("")}
-    </table>
-  `;
-      }
-
-      if (exportOptions.budgets)
-        sections.push(
-          fetchSection(
-            "budgets",
-            "Budgets",
-            supabase.from("budgets").select("*").eq("user_id", session.user.id)
-          )
-        );
-      if (exportOptions.reminders)
-        sections.push(
-          fetchSection(
-            "reminders",
-            "Reminders",
+      const sectionsToExport = [
+        {
+          key: "expenses",
+          title: "Expenses",
+          headers: ["Date", "Title", "Category", "Amount"],
+          query: () =>
             supabase
-              .from("payment_reminders")
-              .select("*")
+              .from("expenses")
+              .select("date,title,category,amount")
               .eq("user_id", session.user.id)
-          )
-        );
-      if (exportOptions.incomes)
-        sections.push(
-          fetchSection(
-            "incomes",
-            "Income",
+              .gte("date", dateRange.from)
+              .lte("date", dateRange.to),
+        },
+        {
+          key: "budgets",
+          title: "Budgets",
+          headers: ["Category", "Amount", "Period"],
+          query: () =>
+            supabase
+              .from("budgets")
+              .select("category,amount,period")
+              .eq("user_id", session.user.id),
+        },
+        {
+          key: "incomes",
+          title: "Income",
+          headers: ["Source", "Amount", "Description", "Frequency", "Date"],
+          query: () =>
             supabase
               .from("side_incomes")
-              .select("*")
-              .eq("user_id", session.user.id)
-          )
-        );
-      if (exportOptions.investments)
-        sections.push(
-          fetchSection(
-            "investments",
-            "Investments",
+              .select("source,amount,description,frequency,date")
+              .eq("user_id", session.user.id),
+        },
+        {
+          key: "investments",
+          title: "Investments",
+          headers: ["Title", "Amount", "Type", "Date"],
+          query: () =>
             supabase
               .from("investments")
-              .select("*")
-              .eq("user_id", session.user.id)
-          )
-        );
+              .select("title,amount,type,date")
+              .eq("user_id", session.user.id),
+        },
+        {
+          key: "reminders",
+          title: "Reminders",
+          headers: [
+            "Title",
+            "Description",
+            "Amount",
+            "Category",
+            "Next Due Date",
+          ],
+          query: () =>
+            supabase
+              .from("payment_reminders")
+              .select("title,description,amount,category,next_due_date")
+              .eq("user_id", session.user.id),
+        },
+      ];
 
-      // Build final HTML
-      const sectionHtmls = await Promise.all(sections);
-      htmlContent += sectionHtmls.join("");
+      for (const section of sectionsToExport) {
+        if (exportOptions[section.key]) {
+          const { data, error } = await section.query();
+          if (error) throw error;
+          htmlContent += generateHtmlTable(
+            section.title,
+            section.headers,
+            data
+          );
+        }
+      }
 
       htmlContent += `</body></html>`;
 
-      // Print to PDF
       const { uri } = await Print.printToFileAsync({
         html: htmlContent,
         base64: false,
       });
 
-      // Check if sharing is available
       if (!(await Sharing.isAvailableAsync())) {
         setAlertProps({
           open: true,
@@ -535,10 +560,10 @@ export default function AppSettingsScreen({ navigation }) {
           showCancel: false,
           onConfirm: () => setAlertProps((a) => ({ ...a, open: false })),
         });
-        setIsLoading(false); // stop loader
+        setIsLoading(false);
         return;
       }
-      // Share
+
       await Sharing.shareAsync(uri, {
         mimeType: "application/pdf",
         dialogTitle: "Export App Settings (PDF)",
@@ -559,10 +584,11 @@ export default function AppSettingsScreen({ navigation }) {
         onCancel: null,
       });
     } catch (e) {
+      console.error("Export error:", e);
       setAlertProps({
         open: true,
         title: "Export Failed",
-        message: "Could not export data.",
+        message: "Could not export data. An error occurred.",
         confirmText: "OK",
         showCancel: false,
         icon: <FileText color="#fff" size={40} />,
@@ -572,10 +598,11 @@ export default function AppSettingsScreen({ navigation }) {
         onConfirm: () => setAlertProps((a) => ({ ...a, open: false })),
         onCancel: null,
       });
+    } finally {
+      setIsLoading(false);
     }
-
-    setIsLoading(false);
   };
+
   const Card = ({ icon, title, children, style }) => (
     <View
       style={[
