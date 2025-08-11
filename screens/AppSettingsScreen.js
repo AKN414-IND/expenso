@@ -314,6 +314,69 @@ export default function AppSettingsScreen({ navigation }) {
       onCancel: null,
     });
   };
+  const diffInDays = (from, to) => {
+    const d1 = new Date(from + "T00:00:00");
+    const d2 = new Date(to + "T00:00:00");
+    return Math.max(1, Math.ceil((d2 - d1) / 86400000) + 1);
+  };
+
+  const pickGranularity = (from, to) => {
+    const days = diffInDays(from, to);
+    if (days <= 31) return "day"; // show Daily
+    if (days <= 180) return "month"; // show Monthly
+    if (days <= 730) return "quarter"; // show Quarterly
+    return "year"; // show Yearly
+  };
+
+  const keyFor = (dateStr, gran) => {
+    const d = new Date(dateStr + "T00:00:00");
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const da = String(d.getDate()).padStart(2, "0");
+    if (gran === "day") return `${y}-${m}-${da}`;
+    if (gran === "month") return `${y}-${m}`;
+    if (gran === "quarter") return `${y}-Q${Math.floor(d.getMonth() / 3) + 1}`;
+    return String(y);
+  };
+
+  const buildPeriodSummaryTable = (expenses, from, to) => {
+    const gran = pickGranularity(from, to);
+    const totals = {};
+    const counts = {};
+    for (const e of expenses) {
+      if (!e.date || !e.amount) continue;
+      const k = keyFor(e.date, gran);
+      const amt = parseFloat(e.amount) || 0;
+      totals[k] = (totals[k] || 0) + amt;
+      counts[k] = (counts[k] || 0) + 1;
+    }
+    const rows = Object.keys(totals)
+      .sort()
+      .map(
+        (k) =>
+          `<tr><td>${k}</td><td>${counts[k]}</td><td>₹${totals[k].toFixed(
+            2
+          )}</td></tr>`
+      )
+      .join("");
+
+    const label =
+      gran === "day"
+        ? "Daily"
+        : gran === "month"
+        ? "Monthly"
+        : gran === "quarter"
+        ? "Quarterly"
+        : "Yearly";
+
+    return `
+      <h2>${label} Summary</h2>
+      <table>
+        <tr><th>Period</th><th>Transactions</th><th>Total Amount</th></tr>
+        ${rows || `<tr><td colspan="3">No data</td></tr>`}
+      </table>
+    `;
+  };
 
   const exportAppSettings = async () => {
     if (!dateRange.from || !dateRange.to) {
@@ -327,7 +390,7 @@ export default function AppSettingsScreen({ navigation }) {
       return;
     }
     setIsLoading(true);
-  
+
     try {
       let htmlContent = `
         <html>
@@ -350,38 +413,63 @@ export default function AppSettingsScreen({ navigation }) {
             <p class="small">Period: ${dateRange.from} to ${dateRange.to}</p>
             <p class="small">Exported: ${new Date().toLocaleString()}</p>
       `;
-  
+
       // Fetch and render each selected type
       const fetchSection = async (section, label, query, renderRow) => {
         const { data, error } = await query;
-        if (error || !data || data.length === 0) return `<h2>${label}</h2><p>No records.</p>`;
+        if (error || !data || data.length === 0)
+          return `<h2>${label}</h2><p>No records.</p>`;
         const headers = Object.keys(data[0]);
         return `
           <h2>${label} (${data.length})</h2>
           <table>
             <tr>${headers.map((h) => `<th>${h}</th>`).join("")}</tr>
-            ${data.map(renderRow ? renderRow : (row) =>
-              `<tr>${headers.map((key) => `<td>${row[key] || ""}</td>`).join("")}</tr>`
-            ).join("")}
+            ${data
+              .map(
+                renderRow
+                  ? renderRow
+                  : (row) =>
+                      `<tr>${headers
+                        .map((key) => `<td>${row[key] || ""}</td>`)
+                        .join("")}</tr>`
+              )
+              .join("")}
           </table>
         `;
       };
-  
+
       // Array of promises for the selected types
       const sections = [];
-      if (exportOptions.expenses)
-        sections.push(
-          fetchSection(
-            "expenses",
-            "Expenses",
-            supabase.from("expenses")
-              .select("*")
-              .eq("user_id", session.user.id)
-              .gte("date", dateRange.from)
-              .lte("date", dateRange.to)
-              .order("date", { ascending: true })
-          )
-        );
+
+      if (exportOptions.expenses) {
+        const { data: expenses = [], error } = await supabase
+          .from("expenses")
+          .select("*")
+          .eq("user_id", session.user.id)
+          .gte("date", dateRange.from)
+          .lte("date", dateRange.to)
+          .order("date", { ascending: true });
+
+        const headers = expenses[0] ? Object.keys(expenses[0]) : [];
+
+        htmlContent += `
+    <h2>Expenses (${expenses.length})</h2>
+    ${buildPeriodSummaryTable(expenses, dateRange.from, dateRange.to)}
+    <h2>Detailed Expenses</h2>
+    <table>
+      <tr>${headers.map((h) => `<th>${h}</th>`).join("")}</tr>
+      ${expenses
+        .map(
+          (row) =>
+            `<tr>${headers
+              .map((k) => `<td>${row[k] ?? ""}</td>`)
+              .join("")}</tr>`
+        )
+        .join("")}
+    </table>
+  `;
+      }
+
       if (exportOptions.budgets)
         sections.push(
           fetchSection(
@@ -395,7 +483,10 @@ export default function AppSettingsScreen({ navigation }) {
           fetchSection(
             "reminders",
             "Reminders",
-            supabase.from("payment_reminders").select("*").eq("user_id", session.user.id)
+            supabase
+              .from("payment_reminders")
+              .select("*")
+              .eq("user_id", session.user.id)
           )
         );
       if (exportOptions.incomes)
@@ -403,7 +494,10 @@ export default function AppSettingsScreen({ navigation }) {
           fetchSection(
             "incomes",
             "Income",
-            supabase.from("side_incomes").select("*").eq("user_id", session.user.id)
+            supabase
+              .from("side_incomes")
+              .select("*")
+              .eq("user_id", session.user.id)
           )
         );
       if (exportOptions.investments)
@@ -411,35 +505,58 @@ export default function AppSettingsScreen({ navigation }) {
           fetchSection(
             "investments",
             "Investments",
-            supabase.from("investments").select("*").eq("user_id", session.user.id)
+            supabase
+              .from("investments")
+              .select("*")
+              .eq("user_id", session.user.id)
           )
         );
-  
+
       // Build final HTML
       const sectionHtmls = await Promise.all(sections);
       htmlContent += sectionHtmls.join("");
-  
+
       htmlContent += `</body></html>`;
-  
+
       // Print to PDF
       const { uri } = await Print.printToFileAsync({
         html: htmlContent,
         base64: false,
       });
-  
+
+      // Check if sharing is available
+      if (!(await Sharing.isAvailableAsync())) {
+        setAlertProps({
+          open: true,
+          title: "Sharing Not Available",
+          message:
+            "The PDF was saved locally, but this device cannot open the share sheet.",
+          confirmText: "OK",
+          showCancel: false,
+          onConfirm: () => setAlertProps((a) => ({ ...a, open: false })),
+        });
+        setIsLoading(false); // stop loader
+        return;
+      }
       // Share
       await Sharing.shareAsync(uri, {
         mimeType: "application/pdf",
         dialogTitle: "Export App Settings (PDF)",
         UTI: "com.adobe.pdf",
       });
-  
+
       setAlertProps({
         open: true,
         title: "Export Successful",
         message: "Your selected data was exported as PDF.",
         confirmText: "OK",
         showCancel: false,
+        icon: <FileText color="#fff" size={40} />,
+        iconBg: "#06b6d4",
+        confirmColor: "#06b6d4",
+        confirmTextColor: "#fff",
+        onConfirm: () => setAlertProps((a) => ({ ...a, open: false })),
+        onCancel: null,
       });
     } catch (e) {
       setAlertProps({
@@ -448,9 +565,15 @@ export default function AppSettingsScreen({ navigation }) {
         message: "Could not export data.",
         confirmText: "OK",
         showCancel: false,
+        icon: <FileText color="#fff" size={40} />,
+        iconBg: "#ef4444",
+        confirmColor: "#ef4444",
+        confirmTextColor: "#fff",
+        onConfirm: () => setAlertProps((a) => ({ ...a, open: false })),
+        onCancel: null,
       });
     }
-  
+
     setIsLoading(false);
   };
   const Card = ({ icon, title, children, style }) => (
@@ -919,9 +1042,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 12,
     paddingHorizontal: 20,
-    
+
     marginTop: 12,
-    width: '100%',
+    width: "100%",
     alignSelf: "flex",
     flexDirection: "row",
     elevation: 2,
@@ -942,7 +1065,7 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     alignItems: "center",
     marginTop: 10,
-    width: '100%',
+    width: "100%",
     alignSelf: "center",
   },
   deleteButtonText: {
