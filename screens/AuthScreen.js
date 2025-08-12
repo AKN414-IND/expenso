@@ -16,7 +16,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import * as SecureStore from "expo-secure-store";
 import { supabase } from "../lib/supabase";
-import Toast from 'react-native-toast-message';
+import Toast from "react-native-toast-message";
 import { useTheme } from "../context/ThemeContext";
 
 const { width, height } = Dimensions.get("window");
@@ -78,10 +78,10 @@ export default function AuthScreen({ navigation }) {
   const validateForm = () => {
     if (!email || !password) {
       Toast.show({
-        type: 'error',
-        text1: 'Missing Fields',
-        text2: 'Please fill in all required fields.',
-        position: 'top',
+        type: "error",
+        text1: "Missing Fields",
+        text2: "Please fill in all required fields.",
+        position: "top",
         visibilityTime: 4000,
       });
       return false;
@@ -90,10 +90,10 @@ export default function AuthScreen({ navigation }) {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       Toast.show({
-        type: 'error',
-        text1: 'Invalid Email',
-        text2: 'Please enter a valid email address.',
-        position: 'top',
+        type: "error",
+        text1: "Invalid Email",
+        text2: "Please enter a valid email address.",
+        position: "top",
         visibilityTime: 4000,
       });
       return false;
@@ -101,10 +101,10 @@ export default function AuthScreen({ navigation }) {
 
     if (password.length < 6) {
       Toast.show({
-        type: 'error',
-        text1: 'Weak Password',
-        text2: 'Password must be at least 6 characters long.',
-        position: 'top',
+        type: "error",
+        text1: "Weak Password",
+        text2: "Password must be at least 6 characters long.",
+        position: "top",
         visibilityTime: 4000,
       });
       return false;
@@ -112,10 +112,10 @@ export default function AuthScreen({ navigation }) {
 
     if (isSignup && password !== confirmPassword) {
       Toast.show({
-        type: 'error',
-        text1: 'Password Mismatch',
-        text2: 'Passwords do not match.',
-        position: 'top',
+        type: "error",
+        text1: "Password Mismatch",
+        text2: "Passwords do not match.",
+        position: "top",
         visibilityTime: 4000,
       });
       return false;
@@ -134,18 +134,19 @@ export default function AuthScreen({ navigation }) {
         result = await supabase.auth.signUp({ email, password });
         if (result.error) {
           Toast.show({
-            type: 'error',
-            text1: 'Signup Error',
+            type: "error",
+            text1: "Signup Error",
             text2: result.error.message,
-            position: 'top',
+            position: "top",
             visibilityTime: 5000,
           });
         } else if (!result.data.session) {
           Toast.show({
-            type: 'info',
-            text1: 'Check Your Email',
-            text2: 'We sent you a verification link. Please verify your email before logging in.',
-            position: 'top',
+            type: "info",
+            text1: "Check Your Email",
+            text2:
+              "We sent you a verification link. Please verify your email before logging in.",
+            position: "top",
             visibilityTime: 6000,
           });
           setIsSignup(false);
@@ -154,29 +155,29 @@ export default function AuthScreen({ navigation }) {
         result = await supabase.auth.signInWithPassword({ email, password });
         if (result.error) {
           Toast.show({
-            type: 'error',
-            text1: 'Login Error!',
+            type: "error",
+            text1: "Login Error!",
             text2: result.error.message,
-            position: 'top',
+            position: "top",
             visibilityTime: 5000,
           });
         } else {
           await saveCredentials();
           Toast.show({
-            type: 'success',
-            text1: '🎉 Welcome Back!',
-            text2: 'Login successful',
-            position: 'top',
+            type: "success",
+            text1: "🎉 Welcome Back!",
+            text2: "Login successful",
+            position: "top",
             visibilityTime: 3000,
           });
         }
       }
     } catch (error) {
       Toast.show({
-        type: 'error',
-        text1: 'Error',
+        type: "error",
+        text1: "Error",
         text2: error.message,
-        position: 'top',
+        position: "top",
         visibilityTime: 5000,
       });
     } finally {
@@ -204,14 +205,15 @@ export default function AuthScreen({ navigation }) {
 
   return (
     <KeyboardAvoidingView
-      style={[
-        styles.container,
-        { backgroundColor: theme.colors.background },
-      ]}
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <StatusBar
-        barStyle={theme.name === "dark" || theme.name === "neon" ? "light-content" : "dark-content"}
+        barStyle={
+          theme.name === "dark" || theme.name === "neon"
+            ? "light-content"
+            : "dark-content"
+        }
       />
       <ScrollView
         contentContainerStyle={styles.scrollContent}
@@ -220,30 +222,49 @@ export default function AuthScreen({ navigation }) {
       >
         <Animated.View>
           <View style={styles.header}>
-            <Text style={[styles.appName, { color: theme.colors.primary }]}>EXPENSO</Text>
-            <Text style={[styles.tagline, { color: theme.colors.textSecondary }]}>
+            <Text style={[styles.appName, { color: theme.colors.primary }]}>
+              EXPENSO
+            </Text>
+            <Text
+              style={[styles.tagline, { color: theme.colors.textSecondary }]}
+            >
               Expense Management Made Simply Smart
             </Text>
           </View>
 
-          <View style={[styles.formContainer, {
-            backgroundColor: theme.colors.surface,
-            borderColor: theme.colors.border,
-          }]}>
+          <View
+            style={[
+              styles.formContainer,
+              {
+                backgroundColor: theme.colors.surface,
+                borderColor: theme.colors.border,
+              },
+            ]}
+          >
             <Text style={[styles.formTitle, { color: theme.colors.text }]}>
               {isSignup ? "Create Account" : "Welcome Back"}
             </Text>
-            <Text style={[styles.formSubtitle, { color: theme.colors.textTertiary }]}>
+            <Text
+              style={[
+                styles.formSubtitle,
+                { color: theme.colors.textTertiary },
+              ]}
+            >
               {isSignup
                 ? "Sign up to start tracking your expenses"
                 : "Sign in to continue managing your finances"}
             </Text>
 
             {/* Email Input */}
-            <View style={[styles.inputContainer, {
-              backgroundColor: theme.colors.card,
-              borderColor: theme.colors.borderLight,
-            }]}>
+            <View
+              style={[
+                styles.inputContainer,
+                {
+                  backgroundColor: theme.colors.card,
+                  borderColor: theme.colors.borderLight,
+                },
+              ]}
+            >
               <Ionicons
                 name="mail"
                 size={20}
@@ -262,10 +283,15 @@ export default function AuthScreen({ navigation }) {
             </View>
 
             {/* Password Input */}
-            <View style={[styles.inputContainer, {
-              backgroundColor: theme.colors.card,
-              borderColor: theme.colors.borderLight,
-            }]}>
+            <View
+              style={[
+                styles.inputContainer,
+                {
+                  backgroundColor: theme.colors.card,
+                  borderColor: theme.colors.borderLight,
+                },
+              ]}
+            >
               <Ionicons
                 name="lock-closed"
                 size={20}
@@ -294,10 +320,15 @@ export default function AuthScreen({ navigation }) {
 
             {/* Confirm Password (Signup only) */}
             {isSignup && (
-              <View style={[styles.inputContainer, {
-                backgroundColor: theme.colors.card,
-                borderColor: theme.colors.borderLight,
-              }]}>
+              <View
+                style={[
+                  styles.inputContainer,
+                  {
+                    backgroundColor: theme.colors.card,
+                    borderColor: theme.colors.borderLight,
+                  },
+                ]}
+              >
                 <Ionicons
                   name="lock-closed"
                   size={20}
@@ -337,7 +368,12 @@ export default function AuthScreen({ navigation }) {
                     size={20}
                     color={theme.colors.primary}
                   />
-                  <Text style={[styles.rememberText, { color: theme.colors.textTertiary }]}>
+                  <Text
+                    style={[
+                      styles.rememberText,
+                      { color: theme.colors.textTertiary },
+                    ]}
+                  >
                     Remember me
                   </Text>
                 </TouchableOpacity>
@@ -345,7 +381,9 @@ export default function AuthScreen({ navigation }) {
                 <TouchableOpacity
                   onPress={() => navigation.navigate("ForgotPassword")}
                 >
-                  <Text style={[styles.forgotText, { color: theme.colors.primary }]}>
+                  <Text
+                    style={[styles.forgotText, { color: theme.colors.primary }]}
+                  >
                     Forgot Password?
                   </Text>
                 </TouchableOpacity>
@@ -385,13 +423,20 @@ export default function AuthScreen({ navigation }) {
 
             {/* Switch Mode */}
             <View style={styles.switchContainer}>
-              <Text style={[styles.switchText, { color: theme.colors.textTertiary }]}>
+              <Text
+                style={[
+                  styles.switchText,
+                  { color: theme.colors.textTertiary },
+                ]}
+              >
                 {isSignup
                   ? "Already have an account?"
                   : "Don't have an account?"}
               </Text>
               <TouchableOpacity onPress={switchMode}>
-                <Text style={[styles.switchButton, { color: theme.colors.primary }]}>
+                <Text
+                  style={[styles.switchButton, { color: theme.colors.primary }]}
+                >
                   {isSignup ? "Sign In" : "Sign Up"}
                 </Text>
               </TouchableOpacity>

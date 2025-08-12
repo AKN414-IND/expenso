@@ -20,7 +20,6 @@ import AppSettingsScreen from "./screens/AppSettingsScreen";
 import PrivacySecurityScreen from "./screens/PrivacySecurityScreen";
 import PaymentReminderScreen from "./screens/PaymentReminderScreen";
 import SmartInsightsScreen from "./screens/SmartInsightsScreen";
-import IncomeManagement from "./screens/IncomeManagement.js";
 import InvestmentsScreen from "./screens/InvestmentsScreen.js";
 import NotificationsScreen from "./screens/NotificationsScreen";
 import SecurityScreen from "./screens/SecurityScreen";
@@ -82,10 +81,7 @@ export default function AppNavigator() {
               name="SmartInsights"
               component={SmartInsightsScreen}
             />
-            <Stack.Screen
-              name="IncomeManagement"
-              component={IncomeManagement}
-            />
+            
             <Stack.Screen
               name="InvestmentsScreen"
               component={InvestmentsScreen}

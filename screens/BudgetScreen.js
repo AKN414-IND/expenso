@@ -547,7 +547,10 @@ export default function BudgetScreen({ navigation }) {
             </View>
           </ScrollView>
           <TouchableOpacity
-            style={[styles.monthlyBudgetBox, { borderColor: theme.colors.primary }]}
+            style={[
+              styles.monthlyBudgetBox,
+              { borderColor: theme.colors.primary },
+            ]}
             onPress={openMonthlyBudgetModal}
             activeOpacity={0.7}
           >
@@ -566,7 +569,10 @@ export default function BudgetScreen({ navigation }) {
                   { color: theme.colors.primary },
                 ]}
               >
-                ₹{profile?.monthly_budget ? formatNumber(profile.monthly_budget) : "Set"}
+                ₹
+                {profile?.monthly_budget
+                  ? formatNumber(profile.monthly_budget)
+                  : "Set"}
               </Text>
               <Pencil
                 size={18}

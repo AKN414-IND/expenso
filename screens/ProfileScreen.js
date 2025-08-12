@@ -45,6 +45,7 @@ import {
   Smartphone,
 } from "lucide-react-native";
 import { Linking } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const { width, height } = Dimensions.get("window");
 
@@ -97,7 +98,6 @@ const Avatar = ({ name, email, size = 80, style }) => {
           alignItems: "center",
           justifyContent: "center",
           elevation: 8,
-          
         },
         style,
       ]}
@@ -132,25 +132,52 @@ const StatCard = ({ icon, label, value, color, theme }) => (
   </View>
 );
 
-const SettingsItem = ({ icon, title, subtitle, onPress, theme, showChevron = true, isDestructive = false }) => (
+const SettingsItem = ({
+  icon,
+  title,
+  subtitle,
+  onPress,
+  theme,
+  showChevron = true,
+  isDestructive = false,
+}) => (
   <TouchableOpacity
     style={[styles.settingsItem, { backgroundColor: theme.colors.surface }]}
     onPress={onPress}
     activeOpacity={0.7}
   >
     <View style={styles.settingsItemContent}>
-      <View style={[styles.settingsIconContainer, { backgroundColor: isDestructive ? "#FEF2F2" : theme.colors.primary + "15" }]}>
-        {React.cloneElement(icon, { 
-          color: isDestructive ? "#EF4444" : theme.colors.primary, 
-          size: 20 
+      <View
+        style={[
+          styles.settingsIconContainer,
+          {
+            backgroundColor: isDestructive
+              ? "#FEF2F2"
+              : theme.colors.primary + "15",
+          },
+        ]}
+      >
+        {React.cloneElement(icon, {
+          color: isDestructive ? "#EF4444" : theme.colors.primary,
+          size: 20,
         })}
       </View>
       <View style={styles.settingsTextContainer}>
-        <Text style={[styles.settingsTitle, { color: isDestructive ? "#EF4444" : theme.colors.text }]}>
+        <Text
+          style={[
+            styles.settingsTitle,
+            { color: isDestructive ? "#EF4444" : theme.colors.text },
+          ]}
+        >
           {title}
         </Text>
         {subtitle && (
-          <Text style={[styles.settingsSubtitle, { color: theme.colors.textTertiary }]}>
+          <Text
+            style={[
+              styles.settingsSubtitle,
+              { color: theme.colors.textTertiary },
+            ]}
+          >
             {subtitle}
           </Text>
         )}
@@ -299,10 +326,25 @@ export default function ProfileScreen({ navigation }) {
 
   if (loading) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: theme.colors.background }]}>
+      <View
+        style={[
+          styles.loadingContainer,
+          { backgroundColor: theme.colors.background },
+        ]}
+      >
         <View style={styles.loadingContent}>
-          <View style={[styles.loadingSpinner, { borderColor: theme.colors.primary + "30", borderTopColor: theme.colors.primary }]} />
-          <Text style={[styles.loadingText, { color: theme.colors.textSecondary }]}>
+          <View
+            style={[
+              styles.loadingSpinner,
+              {
+                borderColor: theme.colors.primary + "30",
+                borderTopColor: theme.colors.primary,
+              },
+            ]}
+          />
+          <Text
+            style={[styles.loadingText, { color: theme.colors.textSecondary }]}
+          >
             Loading your profile...
           </Text>
         </View>
@@ -312,7 +354,9 @@ export default function ProfileScreen({ navigation }) {
 
   const userEmail = session?.user?.email || "";
   const userName = profile?.full_name || "";
-  const joinDate = new Date(session?.user?.created_at || Date.now()).toLocaleDateString("en-US", {
+  const joinDate = new Date(
+    session?.user?.created_at || Date.now()
+  ).toLocaleDateString("en-US", {
     year: "numeric",
     month: "long",
     day: "numeric",
@@ -320,8 +364,13 @@ export default function ProfileScreen({ navigation }) {
 
   return (
     <>
-      <StatusBar barStyle={theme.dark ? "light-content" : "dark-content"} backgroundColor={theme.colors.background} />
-      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <StatusBar
+        barStyle={theme.dark ? "light-content" : "dark-content"}
+        backgroundColor={theme.colors.background}
+      />
+      <View
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
+      >
         {/* Header with Gradient */}
         <LinearGradient
           colors={[theme.colors.primary, theme.colors.primary + "DD"]}
@@ -344,27 +393,39 @@ export default function ProfileScreen({ navigation }) {
           </View>
         </LinearGradient>
 
-        <ScrollView 
+        <ScrollView
           style={styles.scrollContainer}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >
           {/* Profile Header Section */}
-          <View style={[styles.profileHeader, { backgroundColor: theme.colors.surface }]}>
+          <View
+            style={[
+              styles.profileHeader,
+              { backgroundColor: theme.colors.surface },
+            ]}
+          >
             <View style={styles.profileAvatarSection}>
               <Avatar name={userName} email={userEmail} size={100} />
             </View>
-            
+
             <View style={styles.profileInfo}>
               <Text style={[styles.profileName, { color: theme.colors.text }]}>
                 {userName || "Welcome!"}
               </Text>
-              <Text style={[styles.profileEmail, { color: theme.colors.textSecondary }]}>
+              <Text
+                style={[
+                  styles.profileEmail,
+                  { color: theme.colors.textSecondary },
+                ]}
+              >
                 {userEmail}
               </Text>
               <View style={styles.memberBadge}>
                 <Award color={theme.colors.primary} size={14} />
-                <Text style={[styles.memberText, { color: theme.colors.primary }]}>
+                <Text
+                  style={[styles.memberText, { color: theme.colors.primary }]}
+                >
                   Member since {joinDate.split(",")[1]}
                 </Text>
               </View>
@@ -380,21 +441,33 @@ export default function ProfileScreen({ navigation }) {
               <StatCard
                 icon={<Wallet color="#10B981" size={24} />}
                 label="Monthly Income"
-                value={profile?.monthly_income ? `₹${profile.monthly_income.toLocaleString()}` : "Not set"}
+                value={
+                  profile?.monthly_income
+                    ? `₹${profile.monthly_income.toLocaleString()}`
+                    : "Not set"
+                }
                 color="#10B981"
                 theme={theme}
               />
               <StatCard
                 icon={<TrendingUp color="#3B82F6" size={24} />}
                 label="Total Investments"
-                value={profile?.total_investments ? `₹${profile.total_investments.toLocaleString()}` : "Not set"}
+                value={
+                  profile?.total_investments
+                    ? `₹${profile.total_investments.toLocaleString()}`
+                    : "Not set"
+                }
                 color="#3B82F6"
                 theme={theme}
               />
               <StatCard
                 icon={<Target color="#F59E0B" size={24} />}
                 label="Monthly Budget"
-                value={profile?.monthly_budget ? `₹${profile.monthly_budget.toLocaleString()}` : "Not set"}
+                value={
+                  profile?.monthly_budget
+                    ? `₹${profile.monthly_budget.toLocaleString()}`
+                    : "Not set"
+                }
                 color="#F59E0B"
                 theme={theme}
               />
@@ -448,7 +521,9 @@ export default function ProfileScreen({ navigation }) {
                 icon={<Smartphone />}
                 title="App Tutorial"
                 subtitle="Learn how to use the app"
-                onPress={() => navigation.navigate("Dashboard", { showOnboarding: true })}
+                onPress={() =>
+                  navigation.navigate("Dashboard", { showOnboarding: true })
+                }
                 theme={theme}
               />
               <SettingsItem
@@ -497,146 +572,252 @@ export default function ProfileScreen({ navigation }) {
           visible={editModalVisible}
           onRequestClose={() => setEditModalVisible(false)}
         >
-          <View style={[styles.modalOverlay, { backgroundColor: theme.colors.overlay }]}>
+          <View
+            style={[
+              styles.modalOverlay,
+              { backgroundColor: theme.colors.overlay },
+            ]}
+          >
             <KeyboardAvoidingView
               style={styles.modalContainer}
               behavior={Platform.OS === "ios" ? "padding" : "height"}
             >
-              <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
+              <View
+                style={[
+                  styles.modalContent,
+                  { backgroundColor: theme.colors.surface },
+                ]}
+              >
                 {/* Modal Header */}
-                <View style={[styles.modalHeader, { borderBottomColor: theme.colors.border }]}>
+                <View
+                  style={[
+                    styles.modalHeader,
+                    { borderBottomColor: theme.colors.border },
+                  ]}
+                >
                   <View>
-                    <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
+                    <Text
+                      style={[styles.modalTitle, { color: theme.colors.text }]}
+                    >
                       Edit Profile
                     </Text>
-                    <Text style={[styles.modalSubtitle, { color: theme.colors.textTertiary }]}>
+                    <Text
+                      style={[
+                        styles.modalSubtitle,
+                        { color: theme.colors.textTertiary },
+                      ]}
+                    >
                       Update your personal information
                     </Text>
                   </View>
                   <TouchableOpacity
                     onPress={() => setEditModalVisible(false)}
-                    style={[styles.closeButton, { backgroundColor: theme.colors.buttonSecondary }]}
+                    style={[
+                      styles.closeButton,
+                      { backgroundColor: theme.colors.buttonSecondary },
+                    ]}
                   >
                     <X color={theme.colors.textTertiary} size={20} />
                   </TouchableOpacity>
                 </View>
 
-                <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+                <ScrollView
+                  style={styles.modalBody}
+                  showsVerticalScrollIndicator={false}
+                >
                   {/* Personal Information */}
                   <View style={styles.modalSection}>
-                    <Text style={[styles.modalSectionTitle, { color: theme.colors.text }]}>
+                    <Text
+                      style={[
+                        styles.modalSectionTitle,
+                        { color: theme.colors.text },
+                      ]}
+                    >
                       Personal Information
                     </Text>
-                    
+
                     <View style={styles.inputGroup}>
-                      <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
+                      <Text
+                        style={[
+                          styles.inputLabel,
+                          { color: theme.colors.textSecondary },
+                        ]}
+                      >
                         Full Name *
                       </Text>
                       <TextInput
-                        style={[styles.input, {
-                          backgroundColor: theme.colors.buttonSecondary,
-                          color: theme.colors.text,
-                          borderColor: theme.colors.border,
-                        }]}
+                        style={[
+                          styles.input,
+                          {
+                            backgroundColor: theme.colors.buttonSecondary,
+                            color: theme.colors.text,
+                            borderColor: theme.colors.border,
+                          },
+                        ]}
                         placeholder="Enter your full name"
                         placeholderTextColor={theme.colors.textTertiary}
                         value={editForm.full_name}
-                        onChangeText={(text) => setEditForm({ ...editForm, full_name: text })}
+                        onChangeText={(text) =>
+                          setEditForm({ ...editForm, full_name: text })
+                        }
                       />
                     </View>
 
                     <View style={styles.inputGroup}>
-                      <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
+                      <Text
+                        style={[
+                          styles.inputLabel,
+                          { color: theme.colors.textSecondary },
+                        ]}
+                      >
                         Username
                       </Text>
                       <TextInput
-                        style={[styles.input, {
-                          backgroundColor: theme.colors.buttonSecondary,
-                          color: theme.colors.text,
-                          borderColor: theme.colors.border,
-                        }]}
+                        style={[
+                          styles.input,
+                          {
+                            backgroundColor: theme.colors.buttonSecondary,
+                            color: theme.colors.text,
+                            borderColor: theme.colors.border,
+                          },
+                        ]}
                         placeholder="Enter your username"
                         placeholderTextColor={theme.colors.textTertiary}
                         value={editForm.username}
-                        onChangeText={(text) => setEditForm({ ...editForm, username: text })}
+                        onChangeText={(text) =>
+                          setEditForm({ ...editForm, username: text })
+                        }
                       />
                     </View>
                   </View>
 
                   {/* Financial Information */}
                   <View style={styles.modalSection}>
-                    <Text style={[styles.modalSectionTitle, { color: theme.colors.text }]}>
+                    <Text
+                      style={[
+                        styles.modalSectionTitle,
+                        { color: theme.colors.text },
+                      ]}
+                    >
                       Financial Information
                     </Text>
-                    
+
                     <View style={styles.inputGroup}>
-                      <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
+                      <Text
+                        style={[
+                          styles.inputLabel,
+                          { color: theme.colors.textSecondary },
+                        ]}
+                      >
                         Monthly Income (₹)
                       </Text>
                       <TextInput
-                        style={[styles.input, {
-                          backgroundColor: theme.colors.buttonSecondary,
-                          color: theme.colors.text,
-                          borderColor: theme.colors.border,
-                        }]}
+                        style={[
+                          styles.input,
+                          {
+                            backgroundColor: theme.colors.buttonSecondary,
+                            color: theme.colors.text,
+                            borderColor: theme.colors.border,
+                          },
+                        ]}
                         placeholder="Enter your monthly income"
                         placeholderTextColor={theme.colors.textTertiary}
                         value={editForm.monthly_income}
                         keyboardType="numeric"
-                        onChangeText={(text) => setEditForm({ ...editForm, monthly_income: text })}
+                        onChangeText={(text) =>
+                          setEditForm({ ...editForm, monthly_income: text })
+                        }
                       />
                     </View>
 
                     <View style={styles.inputGroup}>
-                      <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
+                      <Text
+                        style={[
+                          styles.inputLabel,
+                          { color: theme.colors.textSecondary },
+                        ]}
+                      >
                         Total Investments (₹)
                       </Text>
                       <TextInput
-                        style={[styles.input, {
-                          backgroundColor: theme.colors.buttonSecondary,
-                          color: theme.colors.text,
-                          borderColor: theme.colors.border,
-                        }]}
+                        style={[
+                          styles.input,
+                          {
+                            backgroundColor: theme.colors.buttonSecondary,
+                            color: theme.colors.text,
+                            borderColor: theme.colors.border,
+                          },
+                        ]}
                         placeholder="Enter your total investments"
                         placeholderTextColor={theme.colors.textTertiary}
                         value={editForm.total_investments}
                         keyboardType="numeric"
-                        onChangeText={(text) => setEditForm({ ...editForm, total_investments: text })}
+                        onChangeText={(text) =>
+                          setEditForm({ ...editForm, total_investments: text })
+                        }
                       />
                     </View>
 
                     <View style={styles.inputGroup}>
-                      <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
+                      <Text
+                        style={[
+                          styles.inputLabel,
+                          { color: theme.colors.textSecondary },
+                        ]}
+                      >
                         Monthly Budget (₹)
                       </Text>
                       <TextInput
-                        style={[styles.input, {
-                          backgroundColor: theme.colors.buttonSecondary,
-                          color: theme.colors.text,
-                          borderColor: theme.colors.border,
-                        }]}
+                        style={[
+                          styles.input,
+                          {
+                            backgroundColor: theme.colors.buttonSecondary,
+                            color: theme.colors.text,
+                            borderColor: theme.colors.border,
+                          },
+                        ]}
                         placeholder="Enter your monthly budget"
                         placeholderTextColor={theme.colors.textTertiary}
                         value={editForm.monthly_budget}
                         keyboardType="numeric"
-                        onChangeText={(text) => setEditForm({ ...editForm, monthly_budget: text })}
+                        onChangeText={(text) =>
+                          setEditForm({ ...editForm, monthly_budget: text })
+                        }
                       />
                     </View>
                   </View>
                 </ScrollView>
 
                 {/* Modal Footer */}
-                <View style={[styles.modalFooter, { borderTopColor: theme.colors.border }]}>
+                <View
+                  style={[
+                    styles.modalFooter,
+                    { borderTopColor: theme.colors.border },
+                  ]}
+                >
                   <TouchableOpacity
-                    style={[styles.modalButton, styles.cancelButton, { backgroundColor: theme.colors.buttonSecondary }]}
+                    style={[
+                      styles.modalButton,
+                      styles.cancelButton,
+                      { backgroundColor: theme.colors.buttonSecondary },
+                    ]}
                     onPress={() => setEditModalVisible(false)}
                   >
-                    <Text style={[styles.cancelButtonText, { color: theme.colors.textSecondary }]}>
+                    <Text
+                      style={[
+                        styles.cancelButtonText,
+                        { color: theme.colors.textSecondary },
+                      ]}
+                    >
                       Cancel
                     </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={[styles.modalButton, styles.saveButton, { backgroundColor: theme.colors.primary }]}
+                    style={[
+                      styles.modalButton,
+                      styles.saveButton,
+                      { backgroundColor: theme.colors.primary },
+                    ]}
                     onPress={updateProfile}
                   >
                     <Save color="white" size={16} style={{ marginRight: 8 }} />

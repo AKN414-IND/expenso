@@ -56,8 +56,10 @@ export default function SmartInsightsScreen({ navigation }) {
   const loadInsights = async () => {
     try {
       setLoading(true);
-      const { data: { user } } = await supabase.auth.getUser();
-      
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
       if (!user) {
         Alert.alert("Error", "Please log in to view insights");
         return;
@@ -75,15 +77,27 @@ export default function SmartInsightsScreen({ navigation }) {
         .from("expenses")
         .select("*")
         .eq("user_id", user.id)
-        .gte("date", `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-01`)
-        .lt("date", `${currentYear}-${String(currentMonth + 2).padStart(2, "0")}-01`);
+        .gte(
+          "date",
+          `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-01`
+        )
+        .lt(
+          "date",
+          `${currentYear}-${String(currentMonth + 2).padStart(2, "0")}-01`
+        );
 
       const { data: previousExpenses } = await supabase
         .from("expenses")
         .select("*")
         .eq("user_id", user.id)
-        .gte("date", `${previousYear}-${String(previousMonth + 1).padStart(2, "0")}-01`)
-        .lt("date", `${previousYear}-${String(previousMonth + 2).padStart(2, "0")}-01`);
+        .gte(
+          "date",
+          `${previousYear}-${String(previousMonth + 1).padStart(2, "0")}-01`
+        )
+        .lt(
+          "date",
+          `${previousYear}-${String(previousMonth + 2).padStart(2, "0")}-01`
+        );
 
       // Fetch investments
       const { data: investments } = await supabase
@@ -107,70 +121,102 @@ export default function SmartInsightsScreen({ navigation }) {
     }
   };
 
-  const processInsightsData = (currentExpenses, previousExpenses, investments) => {
+  const processInsightsData = (
+    currentExpenses,
+    previousExpenses,
+    investments
+  ) => {
     // Calculate spending trends
-    const currentTotal = currentExpenses.reduce((sum, exp) => sum + parseFloat(exp.amount), 0);
-    const previousTotal = previousExpenses.reduce((sum, exp) => sum + parseFloat(exp.amount), 0);
-    const changePercentage = previousTotal > 0 ? ((currentTotal - previousTotal) / previousTotal) * 100 : 0;
+    const currentTotal = currentExpenses.reduce(
+      (sum, exp) => sum + parseFloat(exp.amount),
+      0
+    );
+    const previousTotal = previousExpenses.reduce(
+      (sum, exp) => sum + parseFloat(exp.amount),
+      0
+    );
+    const changePercentage =
+      previousTotal > 0
+        ? ((currentTotal - previousTotal) / previousTotal) * 100
+        : 0;
 
     // Category analysis
     const categoryTotals = {};
     const previousCategoryTotals = {};
 
-    currentExpenses.forEach(exp => {
-      categoryTotals[exp.category] = (categoryTotals[exp.category] || 0) + parseFloat(exp.amount);
+    currentExpenses.forEach((exp) => {
+      categoryTotals[exp.category] =
+        (categoryTotals[exp.category] || 0) + parseFloat(exp.amount);
     });
 
-    previousExpenses.forEach(exp => {
-      previousCategoryTotals[exp.category] = (previousCategoryTotals[exp.category] || 0) + parseFloat(exp.amount);
+    previousExpenses.forEach((exp) => {
+      previousCategoryTotals[exp.category] =
+        (previousCategoryTotals[exp.category] || 0) + parseFloat(exp.amount);
     });
 
-    const categoryTrends = Object.keys(categoryTotals).map(category => {
-      const current = categoryTotals[category];
-      const previous = previousCategoryTotals[category] || 0;
-      const change = previous > 0 ? ((current - previous) / previous) * 100 : 0;
-      
-      return {
-        category,
-        amount: current,
-        change: change,
-        trend: Math.abs(change) < 5 ? "stable" : change > 0 ? "up" : "down"
-      };
-    }).sort((a, b) => b.amount - a.amount);
+    const categoryTrends = Object.keys(categoryTotals)
+      .map((category) => {
+        const current = categoryTotals[category];
+        const previous = previousCategoryTotals[category] || 0;
+        const change =
+          previous > 0 ? ((current - previous) / previous) * 100 : 0;
+
+        return {
+          category,
+          amount: current,
+          change: change,
+          trend: Math.abs(change) < 5 ? "stable" : change > 0 ? "up" : "down",
+        };
+      })
+      .sort((a, b) => b.amount - a.amount);
 
     // Financial health score calculation
-    const totalInvestments = investments.reduce((sum, inv) => sum + parseFloat(inv.amount), 0);
-    const savingsRate = totalInvestments > 0 ? (totalInvestments / (currentTotal + totalInvestments)) * 100 : 0;
+    const totalInvestments = investments.reduce(
+      (sum, inv) => sum + parseFloat(inv.amount),
+      0
+    );
+    const savingsRate =
+      totalInvestments > 0
+        ? (totalInvestments / (currentTotal + totalInvestments)) * 100
+        : 0;
     const spendingControl = Math.max(0, 100 - Math.abs(changePercentage));
     const budgetAdherence = 80; // This would be calculated based on actual budgets
-    const investmentDiversity = Math.min(100, (new Set(investments.map(inv => inv.type)).size) * 20);
+    const investmentDiversity = Math.min(
+      100,
+      new Set(investments.map((inv) => inv.type)).size * 20
+    );
 
     const healthScore = Math.round(
-      (spendingControl * 0.3 + savingsRate * 0.25 + budgetAdherence * 0.25 + investmentDiversity * 0.2)
+      spendingControl * 0.3 +
+        savingsRate * 0.25 +
+        budgetAdherence * 0.25 +
+        investmentDiversity * 0.2
     );
 
     // Generate smart alerts
     const alerts = [];
-    categoryTrends.forEach(trend => {
+    categoryTrends.forEach((trend) => {
       if (trend.change > 20) {
         alerts.push({
           type: "unusual_spending",
           category: trend.category,
-          message: `${trend.category} expenses increased by ${trend.change.toFixed(1)}%`,
+          message: `${
+            trend.category
+          } expenses increased by ${trend.change.toFixed(1)}%`,
           severity: "high",
-          action: `Review your ${trend.category.toLowerCase()} spending`
+          action: `Review your ${trend.category.toLowerCase()} spending`,
         });
       }
     });
 
     // Savings opportunities
     const savingsOpportunities = categoryTrends
-      .filter(trend => trend.amount > 500 && trend.change > 10)
-      .map(trend => ({
+      .filter((trend) => trend.amount > 500 && trend.change > 10)
+      .map((trend) => ({
         category: trend.category,
         opportunity: `Reduce ${trend.category.toLowerCase()} expenses`,
         potential_savings: Math.round(trend.amount * 0.2),
-        confidence: Math.round(85 - Math.random() * 15)
+        confidence: Math.round(85 - Math.random() * 15),
       }));
 
     return {
@@ -179,23 +225,36 @@ export default function SmartInsightsScreen({ navigation }) {
           current: currentTotal,
           previous: previousTotal,
           changePercentage,
-          trend: changePercentage > 5 ? "increasing" : changePercentage < -5 ? "decreasing" : "stable"
+          trend:
+            changePercentage > 5
+              ? "increasing"
+              : changePercentage < -5
+              ? "decreasing"
+              : "stable",
         },
-        categoryTrends
+        categoryTrends,
       },
       financialHealthScore: {
         score: healthScore,
         grade: healthScore >= 80 ? "A" : healthScore >= 60 ? "B" : "C",
         factors: [
-          { name: "Spending Control", score: Math.round(spendingControl), weight: 30 },
+          {
+            name: "Spending Control",
+            score: Math.round(spendingControl),
+            weight: 30,
+          },
           { name: "Savings Rate", score: Math.round(savingsRate), weight: 25 },
           { name: "Budget Adherence", score: budgetAdherence, weight: 25 },
-          { name: "Investment Diversity", score: Math.round(investmentDiversity), weight: 20 }
-        ]
+          {
+            name: "Investment Diversity",
+            score: Math.round(investmentDiversity),
+            weight: 20,
+          },
+        ],
       },
       smartAlerts: alerts,
       savingsOpportunities,
-      totalInvestments
+      totalInvestments,
     };
   };
 
@@ -231,11 +290,31 @@ export default function SmartInsightsScreen({ navigation }) {
           </Text>
         </View>
         <View style={styles.healthScoreContainer}>
-          <View style={[styles.scoreCircle, { borderColor: getHealthScoreColor(insights.financialHealthScore.score) }]}>
-            <Text style={[styles.scoreText, { color: getHealthScoreColor(insights.financialHealthScore.score) }]}>
+          <View
+            style={[
+              styles.scoreCircle,
+              {
+                borderColor: getHealthScoreColor(
+                  insights.financialHealthScore.score
+                ),
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.scoreText,
+                {
+                  color: getHealthScoreColor(
+                    insights.financialHealthScore.score
+                  ),
+                },
+              ]}
+            >
               {insights.financialHealthScore.score}
             </Text>
-            <Text style={[styles.gradeText, { color: theme.colors.textSecondary }]}>
+            <Text
+              style={[styles.gradeText, { color: theme.colors.textSecondary }]}
+            >
               Grade {insights.financialHealthScore.grade}
             </Text>
           </View>
@@ -245,7 +324,12 @@ export default function SmartInsightsScreen({ navigation }) {
                 <Text style={[styles.factorName, { color: theme.colors.text }]}>
                   {factor.name}
                 </Text>
-                <Text style={[styles.factorScore, { color: theme.colors.textSecondary }]}>
+                <Text
+                  style={[
+                    styles.factorScore,
+                    { color: theme.colors.textSecondary },
+                  ]}
+                >
                   {factor.score}%
                 </Text>
               </View>
@@ -264,27 +348,64 @@ export default function SmartInsightsScreen({ navigation }) {
         </View>
         <View style={styles.comparisonContainer}>
           <View style={styles.comparisonItem}>
-            <Text style={[styles.comparisonLabel, { color: theme.colors.textSecondary }]}>
+            <Text
+              style={[
+                styles.comparisonLabel,
+                { color: theme.colors.textSecondary },
+              ]}
+            >
               This Month
             </Text>
-            <Text style={[styles.comparisonAmount, { color: theme.colors.text }]}>
-              ₹{insights.spendingTrends.monthlyComparison.current.toLocaleString()}
+            <Text
+              style={[styles.comparisonAmount, { color: theme.colors.text }]}
+            >
+              ₹
+              {insights.spendingTrends.monthlyComparison.current.toLocaleString()}
             </Text>
           </View>
-          <View style={[styles.comparisonDivider, { backgroundColor: theme.colors.border }]} />
+          <View
+            style={[
+              styles.comparisonDivider,
+              { backgroundColor: theme.colors.border },
+            ]}
+          />
           <View style={styles.comparisonItem}>
-            <Text style={[styles.comparisonLabel, { color: theme.colors.textSecondary }]}>
+            <Text
+              style={[
+                styles.comparisonLabel,
+                { color: theme.colors.textSecondary },
+              ]}
+            >
               Last Month
             </Text>
-            <Text style={[styles.comparisonAmount, { color: theme.colors.text }]}>
-              ₹{insights.spendingTrends.monthlyComparison.previous.toLocaleString()}
+            <Text
+              style={[styles.comparisonAmount, { color: theme.colors.text }]}
+            >
+              ₹
+              {insights.spendingTrends.monthlyComparison.previous.toLocaleString()}
             </Text>
           </View>
         </View>
         <View style={styles.trendContainer}>
-          {getTrendIcon(insights.spendingTrends.monthlyComparison.trend, insights.spendingTrends.monthlyComparison.changePercentage)}
-          <Text style={[styles.trendText, { color: getTrendColor(insights.spendingTrends.monthlyComparison.trend, insights.spendingTrends.monthlyComparison.changePercentage) }]}>
-            {Math.abs(insights.spendingTrends.monthlyComparison.changePercentage).toFixed(1)}% vs last month
+          {getTrendIcon(
+            insights.spendingTrends.monthlyComparison.trend,
+            insights.spendingTrends.monthlyComparison.changePercentage
+          )}
+          <Text
+            style={[
+              styles.trendText,
+              {
+                color: getTrendColor(
+                  insights.spendingTrends.monthlyComparison.trend,
+                  insights.spendingTrends.monthlyComparison.changePercentage
+                ),
+              },
+            ]}
+          >
+            {Math.abs(
+              insights.spendingTrends.monthlyComparison.changePercentage
+            ).toFixed(1)}
+            % vs last month
           </Text>
         </View>
       </View>
@@ -299,13 +420,26 @@ export default function SmartInsightsScreen({ navigation }) {
             </Text>
           </View>
           {insights.smartAlerts.map((alert, index) => (
-            <View key={index} style={[styles.alertItem, { backgroundColor: "#FF6B6B15", borderColor: "#FF6B6B30" }]}>
+            <View
+              key={index}
+              style={[
+                styles.alertItem,
+                { backgroundColor: "#FF6B6B15", borderColor: "#FF6B6B30" },
+              ]}
+            >
               <AlertTriangle color="#FF6B6B" size={20} />
               <View style={styles.alertContent}>
-                <Text style={[styles.alertMessage, { color: theme.colors.text }]}>
+                <Text
+                  style={[styles.alertMessage, { color: theme.colors.text }]}
+                >
                   {alert.message}
                 </Text>
-                <Text style={[styles.alertAction, { color: theme.colors.textSecondary }]}>
+                <Text
+                  style={[
+                    styles.alertAction,
+                    { color: theme.colors.textSecondary },
+                  ]}
+                >
                   {alert.action}
                 </Text>
               </View>
@@ -325,7 +459,13 @@ export default function SmartInsightsScreen({ navigation }) {
         </Text>
       </View>
       {insights.spendingTrends.categoryTrends.map((category, index) => (
-        <View key={index} style={[styles.categoryItem, { borderBottomColor: theme.colors.border }]}>
+        <View
+          key={index}
+          style={[
+            styles.categoryItem,
+            { borderBottomColor: theme.colors.border },
+          ]}
+        >
           <View style={styles.categoryHeader}>
             <Text style={[styles.categoryName, { color: theme.colors.text }]}>
               {category.category}
@@ -336,7 +476,12 @@ export default function SmartInsightsScreen({ navigation }) {
           </View>
           <View style={styles.categoryTrend}>
             {getTrendIcon(category.trend, category.change)}
-            <Text style={[styles.categoryChange, { color: getTrendColor(category.trend, category.change) }]}>
+            <Text
+              style={[
+                styles.categoryChange,
+                { color: getTrendColor(category.trend, category.change) },
+              ]}
+            >
               {Math.abs(category.change).toFixed(1)}%
             </Text>
           </View>
@@ -355,14 +500,30 @@ export default function SmartInsightsScreen({ navigation }) {
       </View>
       {insights.savingsOpportunities.length > 0 ? (
         insights.savingsOpportunities.map((opportunity, index) => (
-          <View key={index} style={[styles.opportunityItem, { backgroundColor: theme.colors.background }]}>
+          <View
+            key={index}
+            style={[
+              styles.opportunityItem,
+              { backgroundColor: theme.colors.background },
+            ]}
+          >
             <View style={styles.opportunityHeader}>
               <Lightbulb color="#FECA57" size={20} />
               <View style={styles.opportunityContent}>
-                <Text style={[styles.opportunityTitle, { color: theme.colors.text }]}>
+                <Text
+                  style={[
+                    styles.opportunityTitle,
+                    { color: theme.colors.text },
+                  ]}
+                >
                   {opportunity.opportunity}
                 </Text>
-                <Text style={[styles.opportunityCategory, { color: theme.colors.textSecondary }]}>
+                <Text
+                  style={[
+                    styles.opportunityCategory,
+                    { color: theme.colors.textSecondary },
+                  ]}
+                >
                   {opportunity.category}
                 </Text>
               </View>
@@ -370,18 +531,28 @@ export default function SmartInsightsScreen({ navigation }) {
                 ₹{opportunity.potential_savings}
               </Text>
             </View>
-            <View style={[styles.confidenceBar, { backgroundColor: theme.colors.border }]}>
-              <View 
+            <View
+              style={[
+                styles.confidenceBar,
+                { backgroundColor: theme.colors.border },
+              ]}
+            >
+              <View
                 style={[
-                  styles.confidenceFill, 
-                  { 
+                  styles.confidenceFill,
+                  {
                     width: `${opportunity.confidence}%`,
-                    backgroundColor: "#4ECDC4"
-                  }
-                ]} 
+                    backgroundColor: "#4ECDC4",
+                  },
+                ]}
               />
             </View>
-            <Text style={[styles.confidenceText, { color: theme.colors.textSecondary }]}>
+            <Text
+              style={[
+                styles.confidenceText,
+                { color: theme.colors.textSecondary },
+              ]}
+            >
               {opportunity.confidence}% confidence
             </Text>
           </View>
@@ -389,8 +560,11 @@ export default function SmartInsightsScreen({ navigation }) {
       ) : (
         <View style={styles.noDataContainer}>
           <Zap color={theme.colors.textSecondary} size={48} />
-          <Text style={[styles.noDataText, { color: theme.colors.textSecondary }]}>
-            No savings opportunities identified yet. Keep tracking your expenses!
+          <Text
+            style={[styles.noDataText, { color: theme.colors.textSecondary }]}
+          >
+            No savings opportunities identified yet. Keep tracking your
+            expenses!
           </Text>
         </View>
       )}
@@ -405,9 +579,17 @@ export default function SmartInsightsScreen({ navigation }) {
 
   if (loading) {
     return (
-      <View style={[styles.container, styles.centered, { backgroundColor: theme.colors.background }]}>
+      <View
+        style={[
+          styles.container,
+          styles.centered,
+          { backgroundColor: theme.colors.background },
+        ]}
+      >
         <ActivityIndicator size="large" color={theme.colors.primary} />
-        <Text style={[styles.loadingText, { color: theme.colors.textSecondary }]}>
+        <Text
+          style={[styles.loadingText, { color: theme.colors.textSecondary }]}
+        >
           Analyzing your financial data...
         </Text>
       </View>
@@ -416,13 +598,24 @@ export default function SmartInsightsScreen({ navigation }) {
 
   if (!insights) {
     return (
-      <View style={[styles.container, styles.centered, { backgroundColor: theme.colors.background }]}>
+      <View
+        style={[
+          styles.container,
+          styles.centered,
+          { backgroundColor: theme.colors.background },
+        ]}
+      >
         <Brain color={theme.colors.textSecondary} size={48} />
-        <Text style={[styles.noDataText, { color: theme.colors.textSecondary }]}>
+        <Text
+          style={[styles.noDataText, { color: theme.colors.textSecondary }]}
+        >
           No data available for insights
         </Text>
-        <TouchableOpacity 
-          style={[styles.retryButton, { backgroundColor: theme.colors.primary }]}
+        <TouchableOpacity
+          style={[
+            styles.retryButton,
+            { backgroundColor: theme.colors.primary },
+          ]}
           onPress={loadInsights}
         >
           <Text style={styles.retryButtonText}>Retry</Text>
@@ -432,42 +625,76 @@ export default function SmartInsightsScreen({ navigation }) {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
+    <View
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+    >
+      <View
+        style={[
+          styles.header,
+          {
+            backgroundColor: theme.colors.surface,
+            borderBottomColor: theme.colors.border,
+          },
+        ]}
+      >
         <TouchableOpacity
-          style={[styles.backButton, { backgroundColor: theme.colors.buttonSecondary }]}
+          style={[
+            styles.backButton,
+            { backgroundColor: theme.colors.buttonSecondary },
+          ]}
           onPress={() => navigation.goBack()}
         >
           <ArrowLeft color={theme.colors.text} size={24} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.colors.text }]}>Smart Insights</Text>
+        <Text style={[styles.headerTitle, { color: theme.colors.text }]}>
+          Smart Insights
+        </Text>
         <TouchableOpacity onPress={loadInsights}>
-          <Text style={[styles.refreshButton, { color: theme.colors.primary }]}>Refresh</Text>
+          <Text style={[styles.refreshButton, { color: theme.colors.primary }]}>
+            Refresh
+          </Text>
         </TouchableOpacity>
       </View>
 
       {/* Tab Navigation */}
-      <View style={[styles.tabContainer, { backgroundColor: theme.colors.surface }]}>
+      <View
+        style={[styles.tabContainer, { backgroundColor: theme.colors.surface }]}
+      >
         {tabs.map((tab) => (
           <TouchableOpacity
             key={tab.id}
             style={[
               styles.tab,
-              selectedTab === tab.id && { backgroundColor: theme.colors.primary + "15" }
+              selectedTab === tab.id && {
+                backgroundColor: theme.colors.primary + "15",
+              },
             ]}
             onPress={() => setSelectedTab(tab.id)}
           >
-            <View style={{ color: selectedTab === tab.id ? theme.colors.primary : theme.colors.textSecondary }}>
-              {React.cloneElement(tab.icon, { 
-                color: selectedTab === tab.id ? theme.colors.primary : theme.colors.textSecondary 
+            <View
+              style={{
+                color:
+                  selectedTab === tab.id
+                    ? theme.colors.primary
+                    : theme.colors.textSecondary,
+              }}
+            >
+              {React.cloneElement(tab.icon, {
+                color:
+                  selectedTab === tab.id
+                    ? theme.colors.primary
+                    : theme.colors.textSecondary,
               })}
             </View>
             <Text
               style={[
                 styles.tabText,
                 {
-                  color: selectedTab === tab.id ? theme.colors.primary : theme.colors.textSecondary
-                }
+                  color:
+                    selectedTab === tab.id
+                      ? theme.colors.primary
+                      : theme.colors.textSecondary,
+                },
               ]}
             >
               {tab.label}
@@ -476,8 +703,8 @@ export default function SmartInsightsScreen({ navigation }) {
         ))}
       </View>
 
-      <ScrollView 
-        style={styles.content} 
+      <ScrollView
+        style={styles.content}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl

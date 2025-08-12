@@ -83,7 +83,7 @@ export default function ForgotPasswordScreen({ navigation }) {
           position: "top",
           visibilityTime: 5000,
         });
-        setTimeout(() => navigation.goBack(), 1200); 
+        setTimeout(() => navigation.goBack(), 1200);
       }
     } catch (err) {
       Toast.show({
@@ -122,7 +122,8 @@ export default function ForgotPasswordScreen({ navigation }) {
           <View style={styles.formContainer}>
             <Text style={styles.formTitle}>Forgot Password</Text>
             <Text style={styles.formSubtitle}>
-              Enter your registered email address and we'll send you a link to reset your password.
+              Enter your registered email address and we'll send you a link to
+              reset your password.
             </Text>
 
             <View style={styles.inputContainer}>
@@ -155,7 +156,12 @@ export default function ForgotPasswordScreen({ navigation }) {
               >
                 {loading ? (
                   <View style={styles.loadingContainer}>
-                    <Ionicons name="refresh" size={20} color="#FFF" style={styles.loadingSpinner} />
+                    <Ionicons
+                      name="refresh"
+                      size={20}
+                      color="#FFF"
+                      style={styles.loadingSpinner}
+                    />
                     <Text style={styles.buttonText}>Please wait...</Text>
                   </View>
                 ) : (
@@ -164,7 +170,10 @@ export default function ForgotPasswordScreen({ navigation }) {
               </LinearGradient>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => navigation.goBack()}
+            >
               <Ionicons name="arrow-back" size={18} color="#667eea" />
               <Text style={styles.backText}>Back to Sign In</Text>
             </TouchableOpacity>

@@ -1,9 +1,9 @@
 import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity, StatusBar } from "react-native";
 import { useTheme } from "../context/ThemeContext";
-import { ArrowLeft, Bell } from "lucide-react-native";
+import { ArrowLeft } from "lucide-react-native";
 
-export default function NotificationsScreen({ navigation }) {
+export default function ComingSoon({ navigation, title, message, icon }) {
   const { theme } = useTheme();
 
   return (
@@ -18,13 +18,13 @@ export default function NotificationsScreen({ navigation }) {
           <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
             <ArrowLeft color="white" size={24} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Notifications</Text>
+          <Text style={styles.headerTitle}>{title}</Text>
         </View>
         <View style={styles.content}>
-          <Bell color={theme.colors.primary} size={60} style={{ alignSelf: "center", marginBottom: 24 }} />
-          <Text style={[styles.title, { color: theme.colors.text }]}>Notifications Center</Text>
+          {icon && React.cloneElement(icon, { style: { alignSelf: "center", marginBottom: 24 } })}
+          <Text style={[styles.title, { color: theme.colors.text }]}>{title}</Text>
           <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
-            Manage your push, email, and in-app notification preferences here. (Coming soon!)
+            {message}
           </Text>
         </View>
       </View>

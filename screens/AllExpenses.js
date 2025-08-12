@@ -595,6 +595,16 @@ export default function TransactionsScreen({ navigation }) {
     filters.category !== "All" ||
     filters.dateRange.startDate;
 
+  const renderTransactionItem = useCallback(({ item }) => (
+    <TransactionCard
+      item={item}
+      config={currentConfig}
+      onEdit={openEditModal}
+      onDelete={handleDeleteItem}
+      theme={theme}
+    />
+  ), [currentConfig, theme]);
+
   return (
     <View
       style={[styles.container, { backgroundColor: theme.colors.background }]}
@@ -739,15 +749,7 @@ export default function TransactionsScreen({ navigation }) {
       ) : (
         <FlatList
           data={filteredData}
-          renderItem={({ item }) => (
-            <TransactionCard
-              item={item}
-              config={currentConfig}
-              onEdit={openEditModal}
-              onDelete={handleDeleteItem}
-              theme={theme}
-            />
-          )}
+          renderItem={renderTransactionItem}
           keyExtractor={(item) => item.id.toString()}
           contentContainerStyle={styles.listContainer}
           refreshControl={
