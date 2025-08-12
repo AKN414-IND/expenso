@@ -1,15 +1,12 @@
 import React, { useEffect } from "react";
 import { LogBox } from "react-native";
-import { createNavigationContainerRef } from '@react-navigation/native';
-import * as Notifications from 'expo-notifications';
+import * as Notifications from "expo-notifications";
 import Toast, { BaseToast, ErrorToast } from "react-native-toast-message";
 
 import { AuthProvider } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import AppNavigator from "./AppNavigator";
-
-// Create a ref for the navigation container to allow for global navigation
-export const navigationRef = createNavigationContainerRef();
+import { navigationRef } from "./navigation"; // ← moved here
 
 // Configure how notifications are handled when the app is in the foreground
 Notifications.setNotificationHandler({
@@ -24,14 +21,15 @@ Notifications.setNotificationHandler({
 export default function App() {
   // Listener for handling user interaction with notifications
   useEffect(() => {
-    const subscription = Notifications.addNotificationResponseReceivedListener(response => {
-      const { screen, params } = response.notification.request.content.data || {};
-      
-      if (screen && navigationRef.isReady()) {
-        navigationRef.navigate(screen, params);
+    const subscription = Notifications.addNotificationResponseReceivedListener(
+      (response) => {
+        const { screen, params } =
+          response.notification.request.content.data || {};
+        if (screen && navigationRef.isReady()) {
+          navigationRef.navigate(screen, params);
+        }
       }
-    });
-  
+    );
     return () => subscription.remove();
   }, []);
 

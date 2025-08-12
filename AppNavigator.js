@@ -5,7 +5,7 @@ import { ActivityIndicator, View } from "react-native";
 import * as SecureStore from "expo-secure-store";
 
 import { useAuth } from "./context/AuthContext";
-import { navigationRef } from "./App";
+import { navigationRef } from "./navigation"; // ← import from new module
 
 // Import all your screens
 import OnboardingScreen from "./screens/OnboardingScreen";
@@ -81,7 +81,6 @@ export default function AppNavigator() {
               name="SmartInsights"
               component={SmartInsightsScreen}
             />
-            
             <Stack.Screen
               name="InvestmentsScreen"
               component={InvestmentsScreen}
