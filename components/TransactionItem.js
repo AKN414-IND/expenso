@@ -1,7 +1,8 @@
 // components/TransactionItem.js
 import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, Platform } from "react-native";
 
+// This array can be moved to a separate constants file in a larger application.
 const EXPENSE_CATEGORIES = [
   { name: "Food & Dining", icon: "🍽️", color: "#FF6B6B" },
   { name: "Transportation", icon: "🚗", color: "#4ECDC4" },
@@ -17,216 +18,144 @@ const EXPENSE_CATEGORIES = [
 
 const TransactionItem = ({
   item,
-  type = "expense", 
+  type = "expense",
   onPress,
   onLongPress,
   theme,
 }) => {
-  let amountColor = theme.colors.primary;
-  let leftBorderColor = "transparent";
+  // --- Derive Display Data based on Type ---
   let icon = "📝";
   let iconBgColor = "#747D8C";
-  let title = item.title || "";
-  let category = item.category || "";
-  let date =
-    item.date && !isNaN(new Date(item.date))
-      ? new Date(item.date).toLocaleDateString()
-      : "No date";
-  let description = "";
+  let title = item.title || "Untitled";
 
   if (type === "income") {
-    amountColor = theme.colors.success;
-    leftBorderColor = theme.colors.success;
     icon = "💵";
     iconBgColor = theme.colors.success;
-    title = item.source || "Other Income";
-    description = item.frequency === "one-time" ? "One-time" : item.frequency || "Recurring";
-    if (item.is_recurring) description += " • 🔄";
+    title = item.source || "Income";
   } else if (type === "investment") {
-    amountColor = theme.colors.success;
-    leftBorderColor = theme.colors.success;
     icon = "📈";
-    iconBgColor = theme.colors.success;
+    iconBgColor = theme.colors.info || theme.colors.success;
     title = item.title || "Investment";
-    description = item.type || "N/A";
-  } else if (type === "expense") {
+  } else { // 'expense'
     const catObj = EXPENSE_CATEGORIES.find((c) => c.name === item.category);
-    icon = catObj?.icon || "📝";
-    iconBgColor = catObj?.color || "#747D8C";
-    title = item.title || "Untitled";
-    description = category;
+    if (catObj) {
+      icon = catObj.icon;
+      iconBgColor = catObj.color;
+    }
   }
+
+  // --- Format Date and Amount ---
+  const date =
+    item.date && !isNaN(new Date(item.date))
+      ? new Date(item.date).toLocaleDateString('en-GB', { // en-GB for DD-MM-YYYY
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+        })
+      : "No date";
 
   const formatAmount = (amount) => {
     const num = parseFloat(amount) || 0;
+    // Formats amount and places the currency symbol at the end, as per the reference image.
     return num.toLocaleString('en-IN', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
-    });
-  };
-
-  const getAmountPrefix = () => {
-    if (type === "income") return "+";
-    if (type === "investment") return "";
-    return "-";
+    }) + '₹';
   };
 
   return (
     <TouchableOpacity
       style={[
-        styles.item,
+        styles.container,
         {
           backgroundColor: theme.colors.surface,
-          borderLeftWidth: leftBorderColor !== "transparent" ? 4 : 0,
-          borderLeftColor: leftBorderColor,
-          shadowColor: theme.colors.textPrimary,
+          // The shadow is now more defined, matching the reference style.
+          ...styles.shadow,
         },
       ]}
       onLongPress={onLongPress}
       onPress={onPress}
-      activeOpacity={onPress || onLongPress ? 0.7 : 1}
+      activeOpacity={0.8}
     >
-      {/* Icon Section */}
-      <View style={[styles.iconContainer, { backgroundColor: iconBgColor + '15' }]}>
+      {/* Icon: A rounded square with a solid background color. */}
+      <View style={[styles.iconContainer, { backgroundColor: iconBgColor }]}>
         <Text style={styles.iconText}>{icon}</Text>
       </View>
 
-      {/* Content Section */}
-      <View style={styles.contentContainer}>
-        <View style={styles.mainInfo}>
-          <Text style={[styles.title, { color: theme.colors.textPrimary }]} numberOfLines={1}>
-            {title}
-          </Text>
-          <Text style={[styles.amount, { color: amountColor }]}>
-            {getAmountPrefix()}₹{formatAmount(item.amount)}
-          </Text>
-        </View>
-        
-        <View style={styles.subInfo}>
-          <View style={styles.leftSubInfo}>
-            {!!description && (
-              <Text style={[styles.category, { color: theme.colors.textSecondary }]} numberOfLines={1}>
-                {description}
-              </Text>
-            )}
-            <Text style={[styles.date, { color: theme.colors.textTertiary }]}>
-              {date}
-            </Text>
-          </View>
-          
-          {/* Status indicator */}
-          {type === "income" && item.is_recurring && (
-            <View style={[styles.statusBadge, { backgroundColor: theme.colors.success + '20' }]}>
-              <Text style={[styles.statusText, { color: theme.colors.success }]}>
-                Recurring
-              </Text>
-            </View>
-          )}
-          
-          {type === "expense" && (
-            <View style={styles.typeIndicator}>
-              <Text style={[styles.typeText, { color: theme.colors.textTertiary }]}>
-                Expense
-              </Text>
-            </View>
-          )}
-          
-          {type === "investment" && (
-            <View style={[styles.statusBadge, { backgroundColor: theme.colors.success + '20' }]}>
-              <Text style={[styles.statusText, { color: theme.colors.success }]}>
-                Investment
-              </Text>
-            </View>
-          )}
-        </View>
+      {/* Info: Title and Date */}
+      <View style={styles.infoContainer}>
+        <Text style={[styles.title, { color: theme.colors.textPrimary }]} numberOfLines={1}>
+          {title}
+        </Text>
+        <Text style={[styles.date, { color: theme.colors.textSecondary }]}>
+          {date}
+        </Text>
+      </View>
+
+      {/* Amount */}
+      <View style={styles.amountContainer}>
+        <Text style={[styles.amount, { color: theme.colors.textPrimary }]}>
+          {formatAmount(item.amount)}
+        </Text>
       </View>
     </TouchableOpacity>
   );
 };
 
 const styles = StyleSheet.create({
-  item: {
+  container: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 10,
-    
+    padding: 12,
+    borderRadius: 16,
+    marginBottom: 12,
+  },
+  shadow: {
+    // A more pronounced, cross-platform shadow similar to the image.
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.07,
+        shadowRadius: 10,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
   },
   iconContainer: {
     width: 48,
     height: 48,
-    borderRadius: 12,
+    borderRadius: 12, // Rounded square
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
   },
   iconText: {
-    fontSize: 20,
+    fontSize: 22,
+    // Note: Emojis have their own color and cannot be styled with 'color'.
+    // For monochrome icons, a library like react-native-vector-icons would be needed.
   },
-  contentContainer: {
-    flex: 1,
-    justifyContent: "space-between",
-  },
-  mainInfo: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 6,
+  infoContainer: {
+    flex: 1, // Takes up available space to push amount to the right
+    justifyContent: "center",
   },
   title: {
     fontSize: 16,
-    fontWeight: "600",
-    flex: 1,
-    marginRight: 8,
-    lineHeight: 20,
+    fontWeight: "700", // Bolder title
+    marginBottom: 4,
+  },
+  date: {
+    fontSize: 13,
+    opacity: 0.7,
+  },
+  amountContainer: {
+    paddingLeft: 10, // Ensure space between info and amount
   },
   amount: {
     fontSize: 16,
-    fontWeight: "700",
-    letterSpacing: -0.3,
-    textAlign: "right",
-  },
-  subInfo: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  leftSubInfo: {
-    flex: 1,
-  },
-  category: {
-    fontSize: 13,
-    fontWeight: "500",
-    marginBottom: 2,
-    opacity: 0.8,
-  },
-  date: {
-    fontSize: 12,
-    fontWeight: "400",
-    opacity: 0.6,
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-    marginLeft: 8,
-  },
-  statusText: {
-    fontSize: 10,
     fontWeight: "600",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  typeIndicator: {
-    marginLeft: 8,
-  },
-  typeText: {
-    fontSize: 10,
-    fontWeight: "500",
-    textTransform: "uppercase",
-    letterSpacing: 0.3,
-    opacity: 0.5,
   },
 });
 
