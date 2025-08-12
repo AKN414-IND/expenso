@@ -1,6 +1,5 @@
 import React from 'react';
 import { Modal, View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
-import { LogOut } from 'lucide-react-native';
 import { useTheme } from "../context/ThemeContext";
 
 const { width } = Dimensions.get('window');
@@ -11,16 +10,11 @@ const Alert = ({
   onCancel,
   title = "Alert",
   message = "",
-  confirmText = "Yes",
+  confirmText = "Confirm",
   cancelText = "Cancel",
-  icon = <LogOut color="#fff" size={40} />,
+  icon,
   iconBg,
   confirmColor,
-  cancelColor,
-  confirmTextColor,
-  cancelTextColor,
-  showIcon = true,
-  showCancel = true, 
 }) => {
   const { theme } = useTheme();
 
@@ -31,16 +25,15 @@ const Alert = ({
       animationType="fade"
       onRequestClose={onCancel}
     >
-      <View style={[styles.overlay]} >
+      <View style={styles.overlay}>
         <View style={[
           styles.container,
           {
             backgroundColor: theme.colors.surface,
-            shadowColor: theme.colors.shadow,
             borderColor: theme.colors.border,
           }
         ]}>
-          {showIcon && (
+          {icon && (
             <View style={[
               styles.iconWrapper,
               {
@@ -53,35 +46,39 @@ const Alert = ({
           )}
           <Text style={[styles.title, { color: theme.colors.text }]}>{title}</Text>
           <Text style={[styles.message, { color: theme.colors.textSecondary }]}>{message}</Text>
-          <View style={{ height: 16 }} />
-          <TouchableOpacity
-            style={[
-              styles.confirmBtn,
-              { backgroundColor: confirmColor || theme.colors.error, elevation: 2 }
-            ]}
-            onPress={onConfirm}
-            activeOpacity={0.85}
-          >
-            <Text style={[
-              styles.confirmText,
-              { color: confirmTextColor || theme.colors.surface }
-            ]}>{confirmText}</Text>
-          </TouchableOpacity>
-          {showCancel && (
+          
+          <View style={styles.buttonContainer}>
+            {onCancel && (
+              <TouchableOpacity
+                style={[
+                  styles.button,
+                  styles.cancelButton,
+                  { backgroundColor: theme.colors.buttonSecondary }
+                ]}
+                onPress={onCancel}
+                activeOpacity={0.8}
+              >
+                <Text style={[
+                  styles.buttonText,
+                  styles.cancelButtonText,
+                  { color: theme.colors.text }
+                ]}>{cancelText}</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               style={[
-                styles.cancelBtn,
-                { backgroundColor: cancelColor || theme.colors.background }
+                styles.button,
+                { backgroundColor: confirmColor || theme.colors.primary }
               ]}
-              onPress={onCancel}
-              activeOpacity={0.8}
+              onPress={onConfirm}
+              activeOpacity={0.85}
             >
               <Text style={[
-                styles.cancelText,
-                { color: cancelTextColor || theme.colors.text }
-              ]}>{cancelText}</Text>
+                styles.buttonText,
+                styles.confirmButtonText,
+              ]}>{confirmText}</Text>
             </TouchableOpacity>
-          )}
+          </View>
         </View>
       </View>
     </Modal>
@@ -93,61 +90,61 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.6)',
   },
   container: {
     width: width * 0.85,
+    maxWidth: 340,
     borderRadius: 24,
-    padding: 28,
+    padding: 24,
     alignItems: 'center',
-    shadowOpacity: 0.2,
-    shadowRadius: 16,
-    elevation: 10,
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 8,
     borderWidth: 1,
   },
   iconWrapper: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 20,
-    shadowOpacity: 0.18,
+    marginBottom: 16,
+    shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 6,
   },
   title: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    marginBottom: 10,
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 8,
     textAlign: 'center',
   },
   message: {
-    fontSize: 16,
+    fontSize: 15,
     textAlign: 'center',
-    marginBottom: 8,
+    lineHeight: 22,
+    marginBottom: 24,
   },
-  confirmBtn: {
+  buttonContainer: {
+    flexDirection: 'row',
     width: '100%',
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginBottom: 10,
+    gap: 12,
   },
-  confirmText: {
-    fontWeight: 'bold',
-    fontSize: 16,
-    letterSpacing: 1,
-  },
-  cancelBtn: {
-    width: '100%',
-    borderRadius: 14,
+  button: {
+    flex: 1,
+    borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
   },
-  cancelText: {
-    fontWeight: 'bold',
+  buttonText: {
+    fontWeight: '700',
     fontSize: 16,
-    letterSpacing: 1,
+  },
+  cancelButton: {},
+  cancelButtonText: {},
+  confirmButtonText: {
+    color: '#fff',
   },
 });
 

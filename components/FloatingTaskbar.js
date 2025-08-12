@@ -3,7 +3,7 @@ import {
   View,
   TouchableOpacity,
   Text,
-  StyleSheet,
+ StyleSheet,
   Dimensions,
 } from "react-native";
 import { useNavigationState } from "@react-navigation/native";
