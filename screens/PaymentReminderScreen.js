@@ -1,4 +1,10 @@
-import React, { useEffect, useState } from "react";
+import React, {
+  useEffect,
+  useState,
+  useCallback,
+  useMemo,
+  useRef,
+} from "react";
 import {
   View,
   Text,
@@ -12,1514 +18,1020 @@ import {
   RefreshControl,
   KeyboardAvoidingView,
   Platform,
+  Alert,
+  Switch,
 } from "react-native";
-import { supabase } from "../lib/supabase";
-import { useAuth } from "../context/AuthContext";
-import Alert from "../components/Alert";
+import { useFocusEffect } from "@react-navigation/native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import * as Notifications from "expo-notifications";
+
+import { supabase } from "../lib/supabase";
+import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import {
   setupNotificationCategories,
-  scheduleNotification as scheduleReminderNotification,
-  cleanupNotifications,
+  scheduleNotification,
+  syncAllNotifications,
   requestNotificationPermissions,
-  BACKGROUND_FETCH_TASK,
+  snoozeNotification,
+  cancelNotification,
+  NOTIFICATION_ACTIONS,
 } from "../services/NotificationService";
 import {
   Bell,
   Plus,
-  Edit3,
+  ArrowLeft,
+  X,
   Trash2,
   Calendar,
   Clock,
-  ArrowLeft,
-  CheckCircle2,
-  AlertCircle,
+  ChevronDown,
 } from "lucide-react-native";
+import AlertComponent from "../components/Alert";
+import ReminderCard from "../components/ReminderCard";
 
+// --- Constants ---
+const FILTERS = [
+  { key: "upcoming", label: "Upcoming" },
+  { key: "overdue", label: "Overdue" },
+  { key: "paid", label: "Paid" },
+];
+
+const CATEGORIES = [
+  "Rent",
+  "Utilities",
+  "Subscription",
+  "Loan",
+  "Insurance",
+  "Other",
+];
 const FREQUENCY_OPTIONS = [
-  { value: "monthly", label: "Monthly", icon: "📅" },
-  { value: "weekly", label: "Weekly", icon: "📋" },
-  { value: "yearly", label: "Yearly", icon: "🗓️" },
-  { value: "one-time", label: "One Time", icon: "⏰" },
+  "daily",
+  "weekly",
+  "monthly",
+  "quarterly",
+  "half_yearly",
+  "yearly",
 ];
 
-const CATEGORY_OPTIONS = [
-  { value: "Bills", label: "Bills" },
-  { value: "Subscription", label: "Subscription" },
-  { value: "Loan", label: "Loan" },
-  { value: "Rent", label: "Rent" },
-  { value: "Other", label: "Other" },
-];
-
+// --- Main Screen ---
 export default function PaymentReminderScreen({ navigation }) {
   const { session } = useAuth();
   const { theme } = useTheme();
+  const styles = useMemo(() => createScreenStyles(theme), [theme]);
 
   const [reminders, setReminders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [modalVisible, setModalVisible] = useState(false);
+  const [isModalVisible, setModalVisible] = useState(false);
   const [editingReminder, setEditingReminder] = useState(null);
   const [showDeleteAlert, setShowDeleteAlert] = useState(false);
   const [reminderToDelete, setReminderToDelete] = useState(null);
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const [notificationPermission, setNotificationPermission] = useState(null);
-  const [saving, setSaving] = useState(false);
-  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [activeFilter, setActiveFilter] = useState("upcoming");
 
-  const [form, setForm] = useState({
-    title: "",
-    amount: "",
-    frequency: "monthly",
-    next_due_date: "",
-    reminder_time: "09:00",
-    description: "",
-    notification_enabled: true,
-    category: "",
-  });
+  const notificationListener = useRef();
+  const responseListener = useRef();
 
-  useEffect(() => {
-    if (session?.user) {
-      initializeNotifications();
-      fetchReminders();
-    }
-    return () => {
-      Notifications.removeAllNotificationListeners &&
-        Notifications.removeAllNotificationListeners();
-    };
-  }, [session]);
+  const { counts, filteredReminders } = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-  const initializeNotifications = async () => {
-    try {
-      await setupNotificationCategories();
-      const status = await requestNotificationPermissions();
-      setNotificationPermission(status);
-      if (status !== "granted") {
-        Alert({
-          title: "Notification Permission Required",
-          message: "Please enable notifications to receive payment reminders.",
-          onConfirm: () => Notifications.openSettingsAsync(),
-          confirmText: "Settings",
-          cancelText: "Cancel",
-          open: true,
-        });
-      }
-      const subscription =
-        Notifications.addNotificationResponseReceivedListener(
-          handleNotificationResponse
-        );
-      return () => subscription.remove();
-    } catch (error) {}
-  };
-
-  const handleNotificationResponse = async (response) => {
-    const { screen, params, reminderId } = response.notification.request.content.data || {};
-    const actionIdentifier = response.actionIdentifier;
-  
-    if (actionIdentifier === "mark_paid") {
-      await markReminderAsPaid(reminderId);
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: "✅ Marked as Paid!",
-          body: "Your payment reminder has been marked as paid. Great job! 🎉",
-          sound: "default"
-        },
-        trigger: null,
-      });
-      fetchReminders(); 
-    } else if (actionIdentifier === "urgent_pay" || actionIdentifier === "view_details") {
-      navigation.navigate("PaymentReminder", params);
-    } else if (actionIdentifier === "snooze") {
-      await snoozeReminder(reminderId);
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: "😴 Snoozed!",
-          body: "We’ll remind you again in 1 hour. Don’t forget to pay! ⏰",
-          sound: "default"
-        },
-        trigger: null,
-      });
-      fetchReminders();
-    } else if (screen) {
-      navigation.navigate(screen, params);
-    }
-  };
-  
-  const scheduleNotification = async (reminder) => {
-    return await scheduleReminderNotification(reminder, form.reminder_time);
-  };
-
-  const markReminderAsPaid = async (reminderId) => {
-    try {
-      await supabase
-        .from("payment_reminders")
-        .update({ is_active: false })
-        .eq("id", reminderId);
-      await fetchReminders(); 
-    } catch (error) {}
-  };
-  
-  const snoozeReminder = async (reminderId) => {
-    try {
-      const reminder = reminders.find((r) => r.id === reminderId);
-      if (reminder) {
-        const snoozeTime = new Date();
-        snoozeTime.setHours(snoozeTime.getHours() + 1);
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: "💰 Payment Reminder (Snoozed)",
-            body: `${reminder.title} - Don't forget to pay!`,
-            data: { reminderId: reminder.id, type: "snoozed" },
-            sound: "default"
-          },
-          trigger: snoozeTime,
-        });
-      }
-    } catch (error) {}
-  };
-  
-
-  const fetchReminders = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("payment_reminders")
-        .select("*")
-        .eq("user_id", session.user.id)
-        .order("next_due_date", { ascending: true });
-      if (!error && data) {
-        setReminders(data);
-        await cleanupNotifications(data);
-        checkOverdueReminders(data);
-      } else {
-        setReminders([]);
-        if (error?.code !== "PGRST116") {
-          Alert({
-            title: "Error",
-            message: "Failed to load reminders. Please try again.",
-            open: true,
-          });
-        }
-      }
-    } catch (err) {
-      setReminders([]);
-      Alert({
-        title: "Error",
-        message: "Network error. Please check your connection.",
-        open: true,
-      });
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchReminders();
-  };
-
-  const checkOverdueReminders = (reminderList) => {
-    const today = new Date().toISOString().split("T")[0];
-    const overdueReminders = reminderList.filter(
-      (reminder) =>
-        reminder.is_active &&
-        reminder.next_due_date < today &&
-        reminder.notification_enabled !== false
-    );
-    if (overdueReminders.length > 0) sendOverdueNotifications(overdueReminders);
-  };
-
-  const sendOverdueNotifications = async (overdueReminders) => {
-    try {
-      for (const reminder of overdueReminders) {
-        const daysPast = Math.floor(
-          (new Date() - new Date(reminder.next_due_date)) /
-            (1000 * 60 * 60 * 24)
-        );
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: "⚠️ Overdue Payment Reminder",
-            body: `${reminder.title} was due ${daysPast} day(s) ago. Amount: ₹${
-              reminder.amount || "Not specified"
-            }`,
-            data: { reminderId: reminder.id, type: "overdue" },
-          },
-          trigger: null,
-        });
-      }
-    } catch (error) {}
-  };
-
-  const calculateNextDueDate = (currentDate, frequency) => {
-    const date = new Date(currentDate);
-    switch (frequency) {
-      case "weekly":
-        date.setDate(date.getDate() + 7);
-        break;
-      case "monthly":
-        date.setMonth(date.getMonth() + 1);
-        break;
-      case "yearly":
-        date.setFullYear(date.getFullYear() + 1);
-        break;
-      default:
-        return null;
-    }
-    return date.toISOString().split("T")[0];
-  };
-
-  const validateForm = () => {
-    const errors = [];
-    if (!form.title.trim()) errors.push("Title is required");
-    if (!form.next_due_date.trim()) errors.push("Due date is required");
-    if (!form.category?.trim()) errors.push("Category is required");
-    if (
-      form.amount &&
-      (isNaN(parseFloat(form.amount)) || parseFloat(form.amount) < 0)
-    )
-      errors.push("Amount must be a valid positive number");
-    if (errors.length > 0) {
-      Alert({
-        title: "Validation Error",
-        message: errors.join("\n"),
-        open: true,
-      });
-      return false;
-    }
-    return true;
-  };
-
-  const resetForm = () => {
-    setForm({
-      title: "",
-      amount: "",
-      frequency: "monthly",
-      next_due_date: "",
-      reminder_time: "09:00",
-      description: "",
-      notification_enabled: true,
-      category: "",
-    });
-    setEditingReminder(null);
-    setSelectedDate(new Date());
-  };
-
-  const openAddModal = () => {
-    resetForm();
-    setModalVisible(true);
-  };
-
-  const openEditModal = (reminder) => {
-    setEditingReminder(reminder);
-    setSelectedDate(new Date(reminder.next_due_date));
-    setForm({
-      title: reminder.title || "",
-      amount: reminder.amount?.toString() || "",
-      frequency: reminder.frequency || "monthly",
-      next_due_date: reminder.next_due_date || "",
-      reminder_time: reminder.reminder_time || "09:00",
-      description: reminder.description || "",
-      notification_enabled: reminder.notification_enabled !== false,
-      category: reminder.category || "",
-    });
-    setModalVisible(true);
-  };
-
-  const saveReminder = async () => {
-    if (!validateForm()) return;
-    setSaving(true);
-    try {
-      const reminderData = {
-        title: form.title.trim(),
-        amount: form.amount ? parseFloat(form.amount) : null,
-        frequency: form.frequency,
-        next_due_date: form.next_due_date,
-        description: form.description.trim(),
-        is_active: true,
-        user_id: session.user.id,
-        notification_enabled: form.notification_enabled,
-        updated_at: new Date().toISOString(),
-        category: form.category,
-        reminder_time: form.reminder_time,
+    let c = { upcoming: 0, overdue: 0, paid: 0 };
+    const tagged = reminders.map((item) => {
+      const dueDate = new Date(item.next_due_date);
+      dueDate.setHours(0, 0, 0, 0);
+      const isOverdue = item.is_active && dueDate < today;
+      const isUpcoming = item.is_active && !isOverdue;
+      const isPaid = !item.is_active;
+      if (isUpcoming) c.upcoming += 1;
+      if (isOverdue) c.overdue += 1;
+      if (isPaid) c.paid += 1;
+      return {
+        ...item,
+        __isOverdue: isOverdue,
+        __isUpcoming: isUpcoming,
+        __isPaid: isPaid,
       };
-      let savedReminder, error;
-      if (editingReminder) {
-        const { data, error: updateError } = await supabase
-          .from("payment_reminders")
-          .update(reminderData)
-          .eq("id", editingReminder.id)
-          .select()
-          .single();
-        error = updateError;
-        savedReminder = data;
-      } else {
-        reminderData.created_at = new Date().toISOString();
-        const { data, error: insertError } = await supabase
-          .from("payment_reminders")
-          .insert([reminderData])
-          .select()
-          .single();
-        error = insertError;
-        savedReminder = data;
+    });
+
+    const filtered = tagged.filter((t) => {
+      if (activeFilter === "upcoming") return t.__isUpcoming;
+      if (activeFilter === "overdue") return t.__isOverdue;
+      if (activeFilter === "paid") return t.__isPaid;
+      return true;
+    });
+
+    return { counts: c, filteredReminders: filtered };
+  }, [reminders, activeFilter]);
+
+  const fetchReminders = useCallback(
+    async (shouldSync = true) => {
+      if (!session?.user) {
+        setReminders([]);
+        setLoading(false);
+        return;
       }
-      if (!error && savedReminder) {
-        const notificationId = await scheduleNotification({
-          ...savedReminder,
-          notification_enabled: form.notification_enabled,
-        });
-        if (notificationId) {
-          await supabase
-            .from("payment_reminders")
-            .update({ notification_id: notificationId })
-            .eq("id", savedReminder.id);
-        }
-        if (form.frequency !== "one-time") {
-          const nextDueDate = calculateNextDueDate(
-            form.next_due_date,
-            form.frequency
-          );
-          if (nextDueDate) {
-            await supabase
-              .from("payment_reminders")
-              .update({ next_due_date: nextDueDate })
-              .eq("id", savedReminder.id);
+      try {
+        const { data, error } = await supabase
+          .from("payment_reminders")
+          .select("*")
+          .eq("user_id", session.user.id)
+          .order("next_due_date", { ascending: true });
+
+        if (error) throw error;
+
+        setReminders(data || []);
+
+        // Only sync notifications when explicitly told to.
+        if (shouldSync && data?.length) {
+          try {
+            await syncAllNotifications(data);
+          } catch (syncErr) {
+            console.error("Failed to sync notifications:", syncErr);
           }
         }
-        setModalVisible(false);
-        resetForm();
-        fetchReminders();
-        Alert({
-          title: "Success",
-          message: `Reminder ${
-            editingReminder ? "updated" : "created"
-          } successfully!`,
-          open: true,
-        });
-      } else {
-        Alert({
-          title: "Error",
-          message:
-            error?.message || "Failed to save reminder. Please try again.",
-          open: true,
-        });
+      } catch (err) {
+        console.error("Error fetching reminders:", err);
+        const errorMessage =
+          err instanceof Error ? err.message : "An unknown error occurred.";
+        Alert.alert("Error Fetching Data", errorMessage);
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
       }
-    } catch (err) {
-      Alert({
-        title: "Error",
-        message: "Network error. Please try again.",
-        open: true,
-      });
-    } finally {
-      setSaving(false);
-    }
-  };
+    },
+    [session]
+  );
 
-  const deleteReminder = async (reminderId) => {
+  useFocusEffect(
+    useCallback(() => {
+      setLoading(true);
+      fetchReminders(true); // Sync when the screen is focused
+    }, [fetchReminders])
+  );
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchReminders(true); // Sync on manual refresh
+  }, [fetchReminders]);
+
+  useEffect(() => {
+    requestNotificationPermissions();
+    setupNotificationCategories();
+
+    // ✅ FIX: Call fetchReminders with `false` to prevent the sync loop.
+    notificationListener.current =
+      Notifications.addNotificationReceivedListener(() => {
+        // This just refreshes the data on screen without re-syncing all notifications.
+        fetchReminders(false);
+      });
+
+    responseListener.current =
+      Notifications.addNotificationResponseReceivedListener(async (response) => {
+        const { actionIdentifier, notification } = response;
+        const reminderId = notification?.request?.content?.data?.reminderId;
+        if (!reminderId) return;
+
+        if (actionIdentifier === NOTIFICATION_ACTIONS.MARK_AS_PAID) {
+          await togglePaidStatus(reminderId, true);
+        } else if (actionIdentifier === NOTIFICATION_ACTIONS.SNOOZE) {
+          await snoozeNotification(reminderId);
+        } else {
+          navigation.navigate("PaymentReminder");
+        }
+      });
+
+    return () => {
+      notificationListener.current?.remove();
+      responseListener.current?.remove();
+    };
+  }, [fetchReminders, navigation]);
+
+  const handleSaveReminder = useCallback(
+    async (formData) => {
+      try {
+        let notificationId = formData.notification_id || null;
+        // ✅ FIX: Explicitly cancel the old notification before scheduling a new one.
+        if (notificationId) {
+          await cancelNotification(notificationId);
+        }
+
+        if (formData.notification_enabled) {
+          notificationId = await scheduleNotification(formData);
+        } else {
+          notificationId = null;
+        }
+
+        const payload = { ...formData, notification_id: notificationId };
+        const { error } = editingReminder
+          ? await supabase
+              .from("payment_reminders")
+              .update(payload)
+              .eq("id", editingReminder.id)
+          : await supabase
+              .from("payment_reminders")
+              .insert({ ...payload, user_id: session.user.id });
+
+        if (error) throw error;
+
+        setModalVisible(false);
+        setEditingReminder(null);
+        await fetchReminders(true); // Re-fetch and re-sync after saving.
+      } catch (err) {
+        Alert.alert("Save Error", `Failed to save reminder: ${err.message}`);
+      }
+    },
+    [editingReminder, fetchReminders, session?.user?.id]
+  );
+
+  const confirmDeleteReminder = useCallback(async () => {
+    if (!reminderToDelete) return;
     try {
-      const reminderToDelete = reminders.find((r) => r.id === reminderId);
-      if (reminderToDelete?.notification_id) {
-        await Notifications.cancelScheduledNotificationAsync(
-          reminderToDelete.notification_id
-        );
+      if (reminderToDelete.notification_id) {
+        await cancelNotification(reminderToDelete.notification_id);
       }
       const { error } = await supabase
         .from("payment_reminders")
         .delete()
-        .eq("id", reminderId);
-      if (!error) {
-        fetchReminders();
-        Alert({
-          title: "Success",
-          message: "Reminder deleted successfully!",
-          open: true,
-        });
-      } else {
-        Alert({
-          title: "Error",
-          message: "Failed to delete reminder. Please try again.",
-          open: true,
-        });
-      }
+        .eq("id", reminderToDelete.id);
+      if (error) throw error;
+
+      setShowDeleteAlert(false);
+      setReminderToDelete(null);
+      await fetchReminders(true); // Re-fetch and re-sync after deleting.
     } catch (err) {
-      Alert({
-        title: "Error",
-        message: "Network error. Please try again.",
-        open: true,
-      });
+      Alert.alert("Delete Error", `Failed to delete reminder: ${err.message}`);
     }
-  };
+  }, [reminderToDelete, fetchReminders]);
 
-  const onDateChange = (event, selectedDate) => {
-    setShowDatePicker(Platform.OS === "ios");
-    if (selectedDate) {
-      setSelectedDate(selectedDate);
-      setForm({
-        ...form,
-        next_due_date: selectedDate.toISOString().split("T")[0],
-      });
-    }
-  };
-  const onTimeChange = (event, selectedTime) => {
-    setShowTimePicker(false);
-    if (selectedTime) {
-      const hours = selectedTime.getHours().toString().padStart(2, "0");
-      const minutes = selectedTime.getMinutes().toString().padStart(2, "0");
-      setForm({ ...form, reminder_time: `${hours}:${minutes}` });
-    }
-  };
-
-  function formatDate(dateString) {
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-      });
-    } catch (error) {
-      return dateString;
-    }
-  }
-  function getDaysUntilDue(dateString) {
-    try {
-      const today = new Date();
-      const dueDate = new Date(dateString);
-      const diffTime = dueDate - today;
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      return diffDays;
-    } catch (error) {
-      return 0;
-    }
-  }
-  function getStatusColor(reminder) {
-    if (!reminder.is_active) return theme.colors.textTertiary;
-    const daysUntil = getDaysUntilDue(reminder.next_due_date);
-    if (daysUntil < 0) return theme.colors.error;
-    if (daysUntil <= 3) return theme.colors.warning;
-    return theme.colors.success;
-  }
-  function getStatusText(reminder) {
-    if (!reminder.is_active) return "Inactive";
-    const daysUntil = getDaysUntilDue(reminder.next_due_date);
-    if (daysUntil < 0) return `${Math.abs(daysUntil)} days overdue`;
-    if (daysUntil === 0) return "Due today";
-    if (daysUntil === 1) return "Due tomorrow";
-    return `${daysUntil} days left`;
-  }
-  function getFrequencyIcon(frequency) {
-    const option = FREQUENCY_OPTIONS.find((opt) => opt.value === frequency);
-    return option ? option.icon : "📅";
-  }
-  const toggleReminderStatus = async (reminder) => {
-    try {
-      const newStatus = !reminder.is_active;
-      if (reminder.notification_id) {
-        if (newStatus) {
-          const notificationId = await scheduleNotification(reminder);
-          await supabase
-            .from("payment_reminders")
-            .update({
-              is_active: newStatus,
-              notification_id: notificationId,
-            })
-            .eq("id", reminder.id);
-        } else {
-          await Notifications.cancelScheduledNotificationAsync(
-            reminder.notification_id
-          );
-          await supabase
-            .from("payment_reminders")
-            .update({
-              is_active: newStatus,
-              notification_id: null,
-            })
-            .eq("id", reminder.id);
-        }
-      } else {
-        await supabase
+  const togglePaidStatus = useCallback(
+    async (reminderId, isActiveNow) => {
+      try {
+        const { data, error } = await supabase
           .from("payment_reminders")
-          .update({ is_active: newStatus })
-          .eq("id", reminder.id);
-      }
-      fetchReminders();
-    } catch (err) {
-      Alert({
-        title: "Error",
-        message: "Failed to update reminder status.",
-        open: true,
-      });
-    }
-  };
+          .update({
+            is_active: !isActiveNow,
+            last_paid_date: !isActiveNow ? new Date().toISOString() : null,
+          })
+          .eq("id", reminderId)
+          .select()
+          .single();
 
-  const renderReminder = ({ item }) => (
-    <View
-      style={[
-        styles.reminderCard,
-        {
-          backgroundColor: theme.colors.surface,
-          borderLeftColor: getStatusColor(item),
-          borderColor: theme.colors.border,
-        },
-      ]}
-    >
-      <View style={styles.reminderHeader}>
-        <View style={styles.reminderTitleRow}>
-          <Text style={styles.reminderIcon}>
-            {getFrequencyIcon(item.frequency)}
-          </Text>
-          <View style={styles.reminderTitleContainer}>
-            <Text
-              style={[
-                styles.reminderTitle,
-                !item.is_active && styles.inactiveText,
-                { color: theme.colors.text },
-              ]}
-            >
-              {item.title}
-            </Text>
-            {item.description && (
-              <Text
-                style={[
-                  styles.reminderDescription,
-                  { color: theme.colors.textTertiary },
-                ]}
-              >
-                {item.description}
-              </Text>
-            )}
-          </View>
-          <View style={styles.reminderStatusContainer}>
-            <TouchableOpacity
-              style={[
-                styles.statusToggle,
-                { backgroundColor: getStatusColor(item) },
-              ]}
-              onPress={() => toggleReminderStatus(item)}
-            >
-              <CheckCircle2
-                size={16}
-                color="#fff"
-                style={{ opacity: item.is_active ? 1 : 0.6 }}
-              />
-            </TouchableOpacity>
-            {item.notification_enabled === false && (
-              <AlertCircle
-                size={16}
-                color={theme.colors.warning}
-                style={{ marginLeft: 4 }}
-              />
-            )}
-          </View>
-        </View>
-        <View style={styles.reminderDetails}>
-          <View style={styles.reminderInfo}>
-            <Calendar size={14} color={theme.colors.textTertiary} />
-            <Text
-              style={[
-                styles.reminderDate,
-                { color: theme.colors.textTertiary },
-              ]}
-            >
-              {formatDate(item.next_due_date)}
-            </Text>
-          </View>
-          {item.amount && (
-            <View style={styles.reminderInfo}>
-              <Text
-                style={[styles.reminderAmount, { color: theme.colors.primary }]}
-              >
-                ₹{item.amount}
-              </Text>
-            </View>
-          )}
-        </View>
-        <Text style={[styles.statusText, { color: getStatusColor(item) }]}>
-          {getStatusText(item)}
-        </Text>
-      </View>
-      <View style={styles.reminderActions}>
-        <TouchableOpacity
-          style={[
-            styles.actionButton,
-            { backgroundColor: theme.colors.buttonSecondary },
-          ]}
-          onPress={() => openEditModal(item)}
-        >
-          <Edit3 size={16} color={theme.colors.primary} />
-          <Text
-            style={[styles.actionButtonText, { color: theme.colors.primary }]}
-          >
-            Edit
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[
-            styles.actionButton,
-            styles.deleteButton,
-            { backgroundColor: theme.colors.error + "18" },
-          ]}
-          onPress={() => {
-            setReminderToDelete(item);
-            setShowDeleteAlert(true);
-          }}
-        >
-          <Trash2 size={16} color={theme.colors.error} />
-          <Text
-            style={[
-              styles.actionButtonText,
-              styles.deleteButtonText,
-              { color: theme.colors.error },
-            ]}
-          >
-            Delete
-          </Text>
-        </TouchableOpacity>
-      </View>
+        if (error) throw error;
+
+        if (data?.notification_id) {
+          await cancelNotification(data.notification_id);
+        }
+
+        if (!isActiveNow && data) {
+           // If marking as unpaid, schedule a new notification
+          await scheduleNotification(data);
+        }
+
+        await fetchReminders(true); // Re-fetch and re-sync after status change.
+      } catch (err) {
+        Alert.alert("Update Error", `Failed to update reminder: ${err.message}`);
+      }
+    },
+    [fetchReminders]
+  );
+
+  const handleOpenModal = useCallback((reminder = null) => {
+    setEditingReminder(reminder);
+    setModalVisible(true);
+  }, []);
+
+  const ListEmpty = (
+    <View style={styles.emptyState}>
+      <Bell size={64} color={theme.colors.border} />
+      <Text style={styles.emptyStateTitle}>No Reminders Here</Text>
+      <Text style={styles.emptyStateText}>
+        Tap the "+" button to add your first reminder in this category.
+      </Text>
     </View>
   );
 
-  if (loading) {
-    return (
-      <View
-        style={[
-          styles.loadingContainer,
-          { backgroundColor: theme.colors.background },
-        ]}
-      >
-        <ActivityIndicator size="large" color={theme.colors.primary} />
-        <Text
-          style={[styles.loadingText, { color: theme.colors.textTertiary }]}
-        >
-          Loading reminders...
-        </Text>
-      </View>
-    );
-  }
-
   return (
-    <>
-      <View
-        style={[styles.container, { backgroundColor: theme.colors.background }]}
-      >
-        <View
-          style={[
-            styles.header,
-            {
-              backgroundColor: theme.colors.surface,
-              borderBottomColor: theme.colors.border,
-            },
-          ]}
-        >
-          <TouchableOpacity
-            style={[
-              styles.backButton,
-              { backgroundColor: theme.colors.buttonSecondary },
-            ]}
-            onPress={() => navigation.goBack()}
-          >
-            <ArrowLeft size={24} color={theme.colors.text} />
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: theme.colors.text }]}>
-            Payment Reminders
-          </Text>
-          <TouchableOpacity
-            style={[
-              styles.addHeaderButton,
-              { backgroundColor: theme.colors.buttonSecondary },
-            ]}
-            onPress={openAddModal}
-          >
-            <Plus size={24} color={theme.colors.primary} />
-          </TouchableOpacity>
-        </View>
-        {notificationPermission !== "granted" && (
-          <View
-            style={[
-              styles.permissionBanner,
-              {
-                backgroundColor: theme.colors.warning + "22",
-                borderBottomColor: theme.colors.warning,
-              },
-            ]}
-          >
-            <AlertCircle size={20} color={theme.colors.warning} />
-            <Text
-              style={[styles.permissionText, { color: theme.colors.warning }]}
-            >
-              Enable notifications to receive payment reminders
-            </Text>
-            <TouchableOpacity
-              style={[
-                styles.enableButton,
-                { backgroundColor: theme.colors.warning },
-              ]}
-              onPress={initializeNotifications}
-            >
-              <Text style={styles.enableButtonText}>Enable</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-        <ScrollView
-          style={styles.content}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
-        >
-          {reminders.length > 0 ? (
-            <FlatList
-              data={reminders}
-              renderItem={renderReminder}
-              keyExtractor={(item) => item.id.toString()}
-              scrollEnabled={false}
-              showsVerticalScrollIndicator={false}
-            />
-          ) : (
-            <View
-              style={[
-                styles.emptyState,
-                { backgroundColor: theme.colors.surface },
-              ]}
-            >
-              <Bell size={64} color={theme.colors.border} />
-              <Text
-                style={[
-                  styles.emptyStateTitle,
-                  { color: theme.colors.textTertiary },
-                ]}
-              >
-                No Payment Reminders
-              </Text>
-              <Text
-                style={[
-                  styles.emptyStateText,
-                  { color: theme.colors.textTertiary },
-                ]}
-              >
-                Create your first payment reminder to stay on top of your bills
-                and subscriptions.
-              </Text>
-              <TouchableOpacity
-                style={[
-                  styles.emptyStateButton,
-                  { backgroundColor: theme.colors.primary },
-                ]}
-                onPress={openAddModal}
-              >
-                <Plus size={20} color="white" />
-                <Text style={styles.emptyStateButtonText}>Add Reminder</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </ScrollView>
+    <View style={styles.container}>
+      <View style={styles.header}>
         <TouchableOpacity
-          style={[styles.fab, { backgroundColor: theme.colors.primary }]}
-          onPress={openAddModal}
+          style={styles.headerButton}
+          onPress={() => navigation.goBack()}
         >
-          <Plus size={24} color="#fff" />
+          <ArrowLeft size={24} color={theme.colors.text} />
         </TouchableOpacity>
+        <Text style={styles.headerTitle}>Payment Reminders</Text>
+        <View style={styles.headerButton} />
       </View>
 
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={modalVisible}
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <KeyboardAvoidingView
-          style={styles.modalOverlay}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-        >
-          <View
-            style={[
-              styles.modalContent,
-              { backgroundColor: theme.colors.surface },
-            ]}
-          >
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
-                {editingReminder ? "Edit Reminder" : "Add Reminder"}
-              </Text>
-              <TouchableOpacity
-                style={[
-                  styles.modalCloseButton,
-                  { backgroundColor: theme.colors.buttonSecondary },
-                ]}
-                onPress={() => setModalVisible(false)}
-              >
-                <Text
-                  style={[
-                    styles.modalCloseText,
-                    { color: theme.colors.textTertiary },
-                  ]}
-                >
-                  ✕
-                </Text>
-              </TouchableOpacity>
-            </View>
-            <ScrollView style={styles.modalForm}>
-              <View style={styles.inputGroup}>
-                <Text
-                  style={[
-                    styles.inputLabel,
-                    { color: theme.colors.textSecondary },
-                  ]}
-                >
-                  Title *
-                </Text>
-                <TextInput
-                  style={[
-                    styles.input,
-                    {
-                      backgroundColor: theme.colors.buttonSecondary,
-                      color: theme.colors.text,
-                      borderColor: theme.colors.border,
-                    },
-                  ]}
-                  placeholder="e.g., Netflix Subscription"
-                  placeholderTextColor={theme.colors.textTertiary}
-                  value={form.title}
-                  onChangeText={(text) => setForm({ ...form, title: text })}
-                  maxLength={100}
-                />
-              </View>
-              <View style={styles.inputGroup}>
-                <Text
-                  style={[
-                    styles.inputLabel,
-                    { color: theme.colors.textSecondary },
-                  ]}
-                >
-                  Amount (Optional)
-                </Text>
-                <TextInput
-                  style={[
-                    styles.input,
-                    {
-                      backgroundColor: theme.colors.buttonSecondary,
-                      color: theme.colors.text,
-                      borderColor: theme.colors.border,
-                    },
-                  ]}
-                  placeholder="0.00"
-                  placeholderTextColor={theme.colors.textTertiary}
-                  value={form.amount}
-                  onChangeText={(text) => setForm({ ...form, amount: text })}
-                  keyboardType="numeric"
-                />
-              </View>
-              <View style={styles.inputGroup}>
-                <Text
-                  style={[
-                    styles.inputLabel,
-                    { color: theme.colors.textSecondary },
-                  ]}
-                >
-                  Category *
-                </Text>
-                <View style={[styles.frequencyOptions, { marginBottom: 8 }]}>
-                  {CATEGORY_OPTIONS.map((option) => (
-                    <TouchableOpacity
-                      key={option.value}
-                      style={[
-                        styles.frequencyOption,
-                        form.category === option.value && {
-                          backgroundColor: theme.colors.primary,
-                          borderColor: theme.colors.primaryDark,
-                        },
-                        {
-                          backgroundColor:
-                            form.category === option.value
-                              ? theme.colors.primary
-                              : theme.colors.buttonSecondary,
-                          borderColor:
-                            form.category === option.value
-                              ? theme.colors.primaryDark
-                              : theme.colors.borderLight,
-                        },
-                      ]}
-                      onPress={() =>
-                        setForm({ ...form, category: option.value })
-                      }
-                    >
-                      <Text
-                        style={[
-                          styles.frequencyLabel,
-                          form.category === option.value && { color: "#fff" },
-                          {
-                            color:
-                              form.category === option.value
-                                ? "#fff"
-                                : theme.colors.textTertiary,
-                          },
-                        ]}
-                      >
-                        {option.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-              <View style={styles.inputGroup}>
-                <Text
-                  style={[
-                    styles.inputLabel,
-                    { color: theme.colors.textSecondary },
-                  ]}
-                >
-                  Frequency
-                </Text>
-                <View style={styles.frequencyOptions}>
-                  {FREQUENCY_OPTIONS.map((option) => (
-                    <TouchableOpacity
-                      key={option.value}
-                      style={[
-                        styles.frequencyOption,
-                        form.frequency === option.value && {
-                          backgroundColor: theme.colors.primary,
-                          borderColor: theme.colors.primaryDark,
-                        },
-                        {
-                          backgroundColor:
-                            form.frequency === option.value
-                              ? theme.colors.primary
-                              : theme.colors.buttonSecondary,
-                          borderColor:
-                            form.frequency === option.value
-                              ? theme.colors.primaryDark
-                              : theme.colors.borderLight,
-                        },
-                      ]}
-                      onPress={() =>
-                        setForm({ ...form, frequency: option.value })
-                      }
-                    >
-                      <Text style={styles.frequencyIcon}>{option.icon}</Text>
-                      <Text
-                        style={[
-                          styles.frequencyLabel,
-                          form.frequency === option.value && { color: "#fff" },
-                          {
-                            color:
-                              form.frequency === option.value
-                                ? "#fff"
-                                : theme.colors.textTertiary,
-                          },
-                        ]}
-                      >
-                        {option.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-              <View style={styles.inputGroup}>
-                <Text
-                  style={[
-                    styles.inputLabel,
-                    { color: theme.colors.textSecondary },
-                  ]}
-                >
-                  Due Date *
-                </Text>
-                <TouchableOpacity
-                  style={[
-                    styles.datePickerButton,
-                    {
-                      backgroundColor: theme.colors.buttonSecondary,
-                      borderColor: theme.colors.border,
-                    },
-                  ]}
-                  onPress={() => setShowDatePicker(true)}
-                >
-                  <Calendar size={20} color={theme.colors.textTertiary} />
-                  <Text
-                    style={[
-                      styles.datePickerText,
-                      { color: theme.colors.text },
-                    ]}
-                  >
-                    {form.next_due_date
-                      ? formatDate(form.next_due_date)
-                      : "Select Date"}
-                  </Text>
-                </TouchableOpacity>
-                {showDatePicker && (
-                  <DateTimePicker
-                    value={selectedDate}
-                    mode="date"
-                    display="default"
-                    onChange={onDateChange}
-                    minimumDate={new Date()}
-                  />
-                )}
-              </View>
-              <View style={styles.inputGroup}>
-                <Text
-                  style={[
-                    styles.inputLabel,
-                    { color: theme.colors.textSecondary },
-                  ]}
-                >
-                  Reminder Time *
-                </Text>
-                <TouchableOpacity
-                  style={[
-                    styles.datePickerButton,
-                    {
-                      backgroundColor: theme.colors.buttonSecondary,
-                      borderColor: theme.colors.border,
-                    },
-                  ]}
-                  onPress={() => setShowTimePicker(true)}
-                >
-                  <Clock size={20} color={theme.colors.textTertiary} />
-                  <Text
-                    style={[
-                      styles.datePickerText,
-                      { color: theme.colors.text },
-                    ]}
-                  >
-                    {form.reminder_time || "Select Time"}
-                  </Text>
-                </TouchableOpacity>
-                {showTimePicker && (
-                  <DateTimePicker
-                    value={
-                      form.reminder_time
-                        ? new Date(`1970-01-01T${form.reminder_time}:00`)
-                        : new Date()
-                    }
-                    mode="time"
-                    display="default"
-                    onChange={onTimeChange}
-                  />
-                )}
-              </View>
-              <View style={styles.inputGroup}>
-                <Text
-                  style={[
-                    styles.inputLabel,
-                    { color: theme.colors.textSecondary },
-                  ]}
-                >
-                  Description (Optional)
-                </Text>
-                <TextInput
-                  style={[
-                    styles.input,
-                    styles.textArea,
-                    {
-                      backgroundColor: theme.colors.buttonSecondary,
-                      color: theme.colors.text,
-                      borderColor: theme.colors.border,
-                    },
-                  ]}
-                  placeholder="Additional notes..."
-                  placeholderTextColor={theme.colors.textTertiary}
-                  value={form.description}
-                  onChangeText={(text) =>
-                    setForm({ ...form, description: text })
-                  }
-                  multiline
-                  numberOfLines={3}
-                  maxLength={500}
-                />
-              </View>
-              <View style={styles.inputGroup}>
-                <View style={styles.switchContainer}>
-                  <Text
-                    style={[
-                      styles.inputLabel,
-                      { color: theme.colors.textSecondary },
-                    ]}
-                  >
-                    Enable Notifications
-                  </Text>
-                  <TouchableOpacity
-                    style={[
-                      styles.switch,
-                      form.notification_enabled && {
-                        backgroundColor: theme.colors.primary,
-                      },
-                      !form.notification_enabled && {
-                        backgroundColor: theme.colors.border,
-                      },
-                    ]}
-                    onPress={() =>
-                      setForm({
-                        ...form,
-                        notification_enabled: !form.notification_enabled,
-                      })
-                    }
-                  >
-                    <View
-                      style={[
-                        styles.switchThumb,
-                        form.notification_enabled && styles.switchThumbActive,
-                      ]}
-                    />
-                  </TouchableOpacity>
-                </View>
-                {notificationPermission !== "granted" && (
-                  <Text
-                    style={[
-                      styles.permissionWarning,
-                      { color: theme.colors.warning },
-                    ]}
-                  >
-                    ⚠️ Notification permission required
-                  </Text>
-                )}
-              </View>
-            </ScrollView>
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[
-                  styles.modalButton,
-                  styles.cancelButton,
-                  {
-                    backgroundColor: theme.colors.buttonSecondary,
-                    borderColor: theme.colors.border,
-                  },
-                ]}
-                onPress={() => setModalVisible(false)}
-                disabled={saving}
-              >
-                <Text
-                  style={[
-                    styles.cancelButtonText,
-                    { color: theme.colors.textSecondary },
-                  ]}
-                >
-                  Cancel
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.modalButton,
-                  styles.saveButton,
-                  { backgroundColor: theme.colors.primary },
-                  saving && { backgroundColor: theme.colors.textTertiary },
-                ]}
-                onPress={saveReminder}
-                disabled={saving}
-              >
-                {saving ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Text style={styles.saveButtonText}>
-                    {editingReminder ? "Update" : "Create"}
-                  </Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+      <View style={styles.filterContainer}>
+        {FILTERS.map(({ key, label }) => (
+          <FilterPill
+            key={key}
+            label={label}
+            count={counts[key] || 0}
+            active={activeFilter === key}
+            onPress={() => setActiveFilter(key)}
+            theme={theme}
+          />
+        ))}
+      </View>
 
-      <Alert
-        open={showDeleteAlert}
-        onConfirm={async () => {
-          setShowDeleteAlert(false);
-          if (reminderToDelete) {
-            await deleteReminder(reminderToDelete.id);
-            setReminderToDelete(null);
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+        </View>
+      ) : (
+        <FlatList
+          data={filteredReminders}
+          keyExtractor={(item) => String(item.id)}
+          renderItem={({ item }) => (
+            <ReminderCard
+              item={item}
+              onPress={() => handleOpenModal(item)}
+              onDelete={() => handleDeletePress(item)}
+              onTogglePaid={() => togglePaidStatus(item.id, item.is_active)}
+            />
+          )}
+          contentContainerStyle={styles.listContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[theme.colors.primary]}
+              tintColor={theme.colors.primary}
+            />
           }
-        }}
-        onCancel={() => {
-          setShowDeleteAlert(false);
-          setReminderToDelete(null);
-        }}
+          ListEmptyComponent={ListEmpty}
+        />
+      )}
+
+      <TouchableOpacity style={styles.fab} onPress={() => handleOpenModal()}>
+        <Plus size={28} color="#fff" />
+      </TouchableOpacity>
+
+      <ReminderFormModal
+        isVisible={isModalVisible}
+        onClose={() => setModalVisible(false)}
+        onSave={handleSaveReminder}
+        initialData={editingReminder}
+        theme={theme}
+        onTogglePaid={togglePaidStatus}
+      />
+
+      <AlertComponent
+        open={showDeleteAlert}
+        onConfirm={confirmDeleteReminder}
+        onCancel={() => setShowDeleteAlert(false)}
         title="Delete Reminder"
-        message={`Are you sure you want to delete "${reminderToDelete?.title}"? This action cannot be undone.`}
+        message={`Are you sure you want to delete "${reminderToDelete?.title}"? This is permanent.`}
         confirmText="Delete"
-        cancelText="Cancel"
-        icon={<Trash2 color="#fff" size={40} />}
+        icon={<Trash2 color="#fff" size={32} />}
         iconBg={theme.colors.error}
         confirmColor={theme.colors.error}
-        confirmTextColor="#fff"
-        cancelColor={theme.colors.buttonSecondary}
-        cancelTextColor={theme.colors.textSecondary}
       />
-    </>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
-  loadingText: { marginTop: 16, fontSize: 16, fontWeight: "500" },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 24,
-    borderBottomWidth: 1,
-    elevation: 2,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    letterSpacing: -0.3,
-  },
-  addHeaderButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  permissionBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-  },
-  permissionText: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: "500",
-    marginLeft: 8,
-  },
-  enableButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  enableButtonText: {
-    color: "white",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  content: {
-    flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 20,
-  },
-  reminderCard: {
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    borderLeftWidth: 4,
-    borderWidth: 1,
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-  },
-  reminderHeader: { marginBottom: 12 },
-  reminderTitleRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    marginBottom: 12,
-  },
-  reminderIcon: { fontSize: 20, marginRight: 12, marginTop: 2 },
-  reminderTitleContainer: { flex: 1 },
-  reminderTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    marginBottom: 4,
-    letterSpacing: -0.3,
-  },
-  inactiveText: { opacity: 0.6, textDecorationLine: "line-through" },
-  reminderDescription: { fontSize: 14, fontWeight: "500", lineHeight: 18 },
-  reminderStatusContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginLeft: 12,
-  },
-  statusToggle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  reminderDetails: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  reminderInfo: { flexDirection: "row", alignItems: "center" },
-  reminderDate: { fontSize: 14, fontWeight: "600", marginLeft: 6 },
-  reminderAmount: { fontSize: 16, fontWeight: "700", letterSpacing: -0.2 },
-  statusText: {
-    fontSize: 12,
-    fontWeight: "600",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  reminderActions: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    gap: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-  },
-  actionButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  deleteButton: {},
-  actionButtonText: { fontSize: 12, fontWeight: "600", marginLeft: 4 },
-  deleteButtonText: {},
-  emptyState: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingVertical: 60,
-    paddingHorizontal: 40,
-  },
-  emptyStateTitle: {
-    fontSize: 24,
-    fontWeight: "700",
-    marginTop: 20,
-    marginBottom: 12,
-    textAlign: "center",
-  },
-  emptyStateText: {
-    fontSize: 16,
-    textAlign: "center",
-    lineHeight: 24,
-    marginBottom: 32,
-  },
-  emptyStateButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 25,
-    elevation: 6,
-  },
-  emptyStateButtonText: {
-    color: "white",
-    fontSize: 16,
-    fontWeight: "600",
-    marginLeft: 8,
-  },
-  fab: {
-    position: "absolute",
-    bottom: 30,
-    right: 30,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    justifyContent: "center",
-    alignItems: "center",
-    elevation: 8,
-  },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.5)",
-  },
-  modalContent: {
-    borderRadius: 20,
-    width: "95%",
-    maxHeight: "90%",
-    elevation: 10,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-  },
-  modalTitle: { fontSize: 20, fontWeight: "700" },
-  modalCloseButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalCloseText: { fontSize: 16, fontWeight: "600" },
-  modalForm: { paddingHorizontal: 24, paddingVertical: 16, maxHeight: 400 },
-  inputGroup: { marginBottom: 20 },
-  inputLabel: { fontSize: 14, fontWeight: "600", marginBottom: 8 },
-  input: { borderWidth: 1, borderRadius: 12, padding: 16, fontSize: 16 },
-  textArea: { height: 80, textAlignVertical: "top" },
-  frequencyOptions: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
-  frequencyOption: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    minWidth: 100,
-  },
-  frequencyLabel: { fontSize: 14, fontWeight: "600" },
-  frequencyIcon: { fontSize: 16, marginRight: 8 },
-  datePickerButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 16,
-  },
-  datePickerText: { fontSize: 16, marginLeft: 12 },
-  switchContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  switch: {
-    width: 50,
-    height: 30,
-    borderRadius: 15,
-    justifyContent: "center",
-    paddingHorizontal: 2,
-  },
-  switchActive: {},
-  switchThumb: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: "white",
-    alignSelf: "flex-start",
-  },
-  switchThumbActive: { alignSelf: "flex-end" },
-  permissionWarning: { fontSize: 12, fontWeight: "500", marginTop: 4 },
-  modalButtons: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 12,
-    paddingHorizontal: 24,
-    paddingBottom: 24,
-    paddingTop: 16,
-  },
-  modalButton: {
-    flex: 1,
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: "center",
-  },
-  cancelButton: { borderWidth: 1 },
-  saveButton: {},
-  saveButtonDisabled: {},
-  cancelButtonText: { fontSize: 16, fontWeight: "600" },
-  saveButtonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
-});
+// --- Filter Pill Component ---
+function FilterPill({ label, count, active, onPress, theme }) {
+  const pillStyles = useMemo(() => createPillStyles(theme), [theme]);
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      style={[pillStyles.base, active && pillStyles.activeBase]}
+    >
+      <Text style={[pillStyles.text, active && pillStyles.activeText]}>
+        {label}
+      </Text>
+      <View style={[pillStyles.badge, active && pillStyles.activeBadge]}>
+        <Text
+          style={[pillStyles.badgeText, active && pillStyles.activeBadgeText]}
+        >
+          {count}
+        </Text>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+// --- Custom Picker Modal Component ---
+const PickerModal = ({ isVisible, onClose, theme, data }) => {
+  const styles = useMemo(() => createPickerModalStyles(theme), [theme]);
+  const { label, options, value, onSelect } = data;
+
+  const handleSelect = (option) => {
+    onSelect(option);
+    onClose();
+  };
+
+  return (
+    <Modal
+      animationType="fade"
+      transparent
+      visible={isVisible}
+      onRequestClose={onClose}
+    >
+      <TouchableOpacity
+        style={styles.backdrop}
+        activeOpacity={1}
+        onPress={onClose}
+      >
+        <View style={styles.modalView}>
+          <Text style={styles.title}>{`Select ${label}`}</Text>
+          <FlatList
+            data={options}
+            keyExtractor={(item) => item}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={[styles.option, item === value && styles.selectedOption]}
+                onPress={() => handleSelect(item)}
+              >
+                <Text
+                  style={[
+                    styles.optionText,
+                    item === value && styles.selectedOptionText,
+                  ]}
+                >
+                  {item.charAt(0).toUpperCase() + item.slice(1)}
+                </Text>
+              </TouchableOpacity>
+            )}
+          />
+        </View>
+      </TouchableOpacity>
+    </Modal>
+  );
+};
+
+// --- Add/Edit Modal ---
+const ReminderFormModal = ({
+  isVisible,
+  onClose,
+  onSave,
+  initialData,
+  theme,
+  onTogglePaid,
+}) => {
+  const styles = useMemo(() => createModalStyles(theme), [theme]);
+
+  const [title, setTitle] = useState("");
+  const [amount, setAmount] = useState("");
+  const [category, setCategory] = useState(CATEGORIES[0]);
+  const [frequency, setFrequency] = useState(FREQUENCY_OPTIONS[2]);
+  const [description, setDescription] = useState("");
+  const [nextDueDate, setNextDueDate] = useState(new Date());
+  const [reminderTime, setReminderTime] = useState(new Date());
+  const [notificationEnabled, setNotificationEnabled] = useState(true);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+
+  // State for the custom picker
+  const [isPickerVisible, setPickerVisible] = useState(false);
+  const [pickerData, setPickerData] = useState({
+    options: [],
+    value: "",
+    onSelect: () => {},
+    label: "",
+  });
+
+  useEffect(() => {
+    if (initialData) {
+      setTitle(initialData.title ?? "");
+      setAmount(initialData.amount?.toString() || "");
+      setCategory(initialData.category || CATEGORIES[0]);
+      setFrequency(initialData.frequency || FREQUENCY_OPTIONS[2]);
+      setDescription(initialData.description || "");
+      setNextDueDate(new Date(initialData.next_due_date));
+      const [h, m] = (initialData.reminder_time || "09:00")
+        .split(":")
+        .map(Number);
+      const t = new Date();
+      t.setHours(h, m, 0, 0);
+      setReminderTime(t);
+      setNotificationEnabled(initialData.notification_enabled ?? true);
+    } else {
+      // Reset form for new entry
+      setTitle("");
+      setAmount("");
+      setCategory(CATEGORIES[0]);
+      setFrequency(FREQUENCY_OPTIONS[2]);
+      setDescription("");
+      const d = new Date();
+      d.setDate(d.getDate() + 1); // Default to tomorrow
+      setNextDueDate(d);
+      const t = new Date();
+      t.setHours(9, 0, 0, 0); // Default to 9:00 AM
+      setReminderTime(t);
+      setNotificationEnabled(true);
+    }
+  }, [initialData]);
+
+  const handleSave = () => {
+    if (!title || !amount) {
+      Alert.alert("Missing Information", "Please enter a title and amount.");
+      return;
+    }
+    const hh = reminderTime.getHours().toString().padStart(2, "0");
+    const mm = reminderTime.getMinutes().toString().padStart(2, "0");
+
+    onSave({
+      title,
+      amount: parseFloat(amount),
+      category,
+      frequency,
+      description,
+      next_due_date: nextDueDate.toISOString().split("T")[0],
+      reminder_time: `${hh}:${mm}`,
+      notification_enabled: notificationEnabled,
+      notification_id: initialData?.notification_id || null,
+      is_active: initialData?.is_active ?? true,
+    });
+  };
+
+  const handleTogglePaid = () => {
+    if (initialData && onTogglePaid) {
+      onTogglePaid(initialData.id, initialData.is_active);
+      onClose(); // Close the modal after action
+    }
+  };
+
+  const openPicker = (label, options, currentValue, onSelect) => {
+    setPickerData({ label, options, value: currentValue, onSelect });
+    setPickerVisible(true);
+  };
+
+  const datePickerDisplay = Platform.OS === "ios" ? "spinner" : "default";
+
+  return (
+    <Modal
+      animationType="slide"
+      transparent
+      visible={isVisible}
+      onRequestClose={onClose}
+    >
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={styles.modalBackdrop}
+      >
+        <View style={styles.modalView}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>
+              {initialData ? "Edit Reminder" : "New Reminder"}
+            </Text>
+            <TouchableOpacity onPress={onClose}>
+              <X size={28} color={theme.colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView showsVerticalScrollIndicator={false}>
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Title</Text>
+              <TextInput
+                style={styles.input}
+                value={title}
+                onChangeText={setTitle}
+                placeholder="e.g., Rent Payment"
+                placeholderTextColor={theme.colors.textTertiary}
+              />
+            </View>
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Amount (₹)</Text>
+              <TextInput
+                style={styles.input}
+                value={amount}
+                onChangeText={setAmount}
+                keyboardType="numeric"
+                placeholder="e.g., 15000"
+                placeholderTextColor={theme.colors.textTertiary}
+              />
+            </View>
+
+            <View style={styles.inlineGroup}>
+              <View style={[styles.inputGroup, { flex: 1 }]}>
+                <Text style={styles.label}>Category</Text>
+                <TouchableOpacity
+                  style={styles.picker}
+                  onPress={() =>
+                    openPicker("Category", CATEGORIES, category, setCategory)
+                  }
+                >
+                  <Text style={styles.pickerText}>{category}</Text>
+                  <ChevronDown size={18} color={theme.colors.textSecondary} />
+                </TouchableOpacity>
+              </View>
+              <View style={[styles.inputGroup, { flex: 1 }]}>
+                <Text style={styles.label}>Frequency</Text>
+                <TouchableOpacity
+                  style={styles.picker}
+                  onPress={() =>
+                    openPicker(
+                      "Frequency",
+                      FREQUENCY_OPTIONS,
+                      frequency,
+                      setFrequency
+                    )
+                  }
+                >
+                  <Text style={styles.pickerText}>
+                    {frequency.charAt(0).toUpperCase() + frequency.slice(1)}
+                  </Text>
+                  <ChevronDown size={18} color={theme.colors.textSecondary} />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.inlineGroup}>
+              <View style={[styles.inputGroup, { flex: 1 }]}>
+                <Text style={styles.label}>Due Date</Text>
+                <TouchableOpacity
+                  onPress={() => setShowDatePicker(true)}
+                  style={[styles.input, styles.datePickerButton]}
+                >
+                  <Calendar size={18} color={theme.colors.textSecondary} />
+                  <Text style={styles.dateText}>
+                    {nextDueDate.toLocaleDateString()}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              {notificationEnabled && (
+                <View style={[styles.inputGroup, { flex: 1 }]}>
+                  <Text style={styles.label}>Notify At</Text>
+                  <TouchableOpacity
+                    onPress={() => setShowTimePicker(true)}
+                    style={[styles.input, styles.datePickerButton]}
+                  >
+                    <Clock size={18} color={theme.colors.textSecondary} />
+                    <Text style={styles.dateText}>
+                      {reminderTime.toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+
+            {showDatePicker && (
+              <DateTimePicker
+                value={nextDueDate}
+                mode="date"
+                display={datePickerDisplay}
+                onChange={(_e, s) => {
+                  setShowDatePicker(false);
+                  if (s) setNextDueDate(s);
+                }}
+              />
+            )}
+            {showTimePicker && (
+              <DateTimePicker
+                value={reminderTime}
+                mode="time"
+                display={datePickerDisplay}
+                onChange={(_e, s) => {
+                  setShowTimePicker(false);
+                  if (s) setReminderTime(s);
+                }}
+              />
+            )}
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Description (Optional)</Text>
+              <TextInput
+                style={[styles.input, styles.multilineInput]}
+                value={description}
+                onChangeText={setDescription}
+                placeholder="e.g., Monthly payment for apartment"
+                placeholderTextColor={theme.colors.textTertiary}
+                multiline
+              />
+            </View>
+            <View style={styles.switchGroup}>
+              <View>
+                <Text style={[styles.label, { marginBottom: 2 }]}>
+                  Enable Notification
+                </Text>
+                <Text style={styles.helpText}>
+                  Get a push notification on the due date.
+                </Text>
+              </View>
+              <Switch
+                trackColor={{
+                  false: "#767577",
+                  true: theme.colors.primary + "50",
+                }}
+                thumbColor={
+                  notificationEnabled ? theme.colors.primary : "#f4f3f4"
+                }
+                onValueChange={setNotificationEnabled}
+                value={notificationEnabled}
+              />
+            </View>
+          </ScrollView>
+
+          <View style={styles.footerContainer}>
+            {initialData && (
+              <TouchableOpacity
+                style={[
+                  styles.footerButton,
+                  {
+                    backgroundColor: initialData.is_active
+                      ? theme.colors.success
+                      : theme.colors.warning,
+                  },
+                ]}
+                onPress={handleTogglePaid}
+              >
+                <Text style={styles.footerButtonText}>
+                  {initialData.is_active ? "Mark as Paid" : "Mark as Unpaid"}
+                </Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              style={[
+                styles.footerButton,
+                styles.saveButton,
+                !initialData && { flex: 1 },
+              ]}
+              onPress={handleSave}
+            >
+              <Text style={styles.footerButtonText}>
+                {initialData ? "Save Changes" : "Create Reminder"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+      <PickerModal
+        isVisible={isPickerVisible}
+        onClose={() => setPickerVisible(false)}
+        theme={theme}
+        data={pickerData}
+      />
+    </Modal>
+  );
+};
+
+// --- Styles ---
+const createScreenStyles = (theme) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: theme.colors.background },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: theme.colors.background,
+    },
+    header: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingHorizontal: 16,
+      paddingTop: Platform.OS === "ios" ? 50 : 20,
+      paddingBottom: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.borderLight,
+      backgroundColor: theme.colors.surface,
+    },
+    headerButton: {
+      width: 44,
+      height: 44,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    headerTitle: { fontSize: 20, fontWeight: "700", color: theme.colors.text },
+    filterContainer: {
+      flexDirection: "row",
+      justifyContent: "space-around",
+      gap: 8,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      backgroundColor: theme.colors.surface,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.borderLight,
+    },
+    listContent: {
+      paddingHorizontal: 16,
+      paddingVertical: 16,
+      paddingBottom: 100,
+    },
+    emptyState: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      paddingTop: 80,
+      paddingHorizontal: 40,
+    },
+    emptyStateTitle: {
+      fontSize: 20,
+      fontWeight: "700",
+      color: theme.colors.text,
+      marginTop: 16,
+      textAlign: "center",
+    },
+    emptyStateText: {
+      fontSize: 14,
+      color: theme.colors.textSecondary,
+      marginTop: 6,
+      textAlign: "center",
+      lineHeight: 20,
+    },
+    fab: {
+      position: "absolute",
+      bottom: 30,
+      right: 30,
+      width: 60,
+      height: 60,
+      borderRadius: 30,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: theme.colors.primary,
+      elevation: 10,
+      shadowColor: "#000",
+      shadowOpacity: 0.2,
+      shadowRadius: 8,
+      shadowOffset: { width: 0, height: 4 },
+    },
+  });
+
+const createPillStyles = (theme) =>
+  StyleSheet.create({
+    base: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingVertical: 8,
+      paddingHorizontal: 16,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.surface,
+    },
+    activeBase: {
+      backgroundColor: theme.colors.primary,
+      borderColor: theme.colors.primary,
+    },
+    text: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: theme.colors.textSecondary,
+    },
+    activeText: { color: "#fff" },
+    badge: {
+      minWidth: 22,
+      height: 22,
+      paddingHorizontal: 6,
+      borderRadius: 11,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: theme.colors.borderLight,
+      marginLeft: 8,
+    },
+    activeBadge: { backgroundColor: "rgba(255,255,255,0.25)" },
+    badgeText: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: theme.colors.textSecondary,
+    },
+    activeBadgeText: { color: "#fff" },
+  });
+
+const createModalStyles = (theme) =>
+  StyleSheet.create({
+    modalBackdrop: {
+      flex: 1,
+      justifyContent: "flex-end",
+      backgroundColor: "rgba(0,0,0,0.5)",
+    },
+    modalView: {
+      height: "92%",
+      backgroundColor: theme.colors.surface,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      padding: 20,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: -4 },
+      shadowOpacity: 0.1,
+      shadowRadius: 10,
+      elevation: 20,
+    },
+    modalHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 20,
+    },
+    modalTitle: { fontSize: 22, fontWeight: "800", color: theme.colors.text },
+    inputGroup: { marginBottom: 16 },
+    inlineGroup: { flexDirection: "row", gap: 16 },
+    label: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: theme.colors.textSecondary,
+      marginBottom: 8,
+    },
+    helpText: {
+      fontSize: 12,
+      color: theme.colors.textTertiary,
+      maxWidth: "80%",
+    },
+    input: {
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: 12,
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      fontSize: 16,
+      color: theme.colors.text,
+      backgroundColor: theme.colors.background,
+    },
+    multilineInput: { height: 100, textAlignVertical: "top", paddingTop: 14 },
+    datePickerButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    dateText: { color: theme.colors.text, fontSize: 16 },
+    picker: {
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: 12,
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      backgroundColor: theme.colors.background,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    pickerText: { color: theme.colors.text, fontSize: 16 },
+    switchGroup: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingVertical: 10,
+      borderTopWidth: 1,
+      borderBottomWidth: 1,
+      borderColor: theme.colors.borderLight,
+      marginBottom: 20,
+    },
+    footerContainer: {
+      flexDirection: "row",
+      gap: 12,
+      marginTop: 12,
+    },
+    footerButton: {
+      flex: 1,
+      borderRadius: 12,
+      padding: 18,
+      alignItems: "center",
+    },
+    saveButton: {
+      backgroundColor: theme.colors.primary,
+    },
+    footerButtonText: {
+      color: "#fff",
+      fontSize: 16,
+      fontWeight: "bold",
+    },
+  });
+
+const createPickerModalStyles = (theme) =>
+  StyleSheet.create({
+    backdrop: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: "rgba(0,0,0,0.5)",
+    },
+    modalView: {
+      width: "80%",
+      backgroundColor: theme.colors.surface,
+      borderRadius: 14,
+      padding: 20,
+      maxHeight: "60%",
+    },
+    title: {
+      fontSize: 18,
+      fontWeight: "700",
+      color: theme.colors.text,
+      marginBottom: 16,
+    },
+    option: {
+      paddingVertical: 14,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.borderLight,
+    },
+    selectedOption: {
+      backgroundColor: theme.colors.primary + "20",
+      borderRadius: 8,
+    },
+    optionText: {
+      fontSize: 16,
+      color: theme.colors.textSecondary,
+    },
+    selectedOptionText: {
+      color: theme.colors.primary,
+      fontWeight: "600",
+    },
+  });

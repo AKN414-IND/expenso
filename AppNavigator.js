@@ -12,7 +12,7 @@ import OnboardingScreen from "./screens/OnboardingScreen";
 import AuthScreen from "./screens/AuthScreen";
 import DashboardScreen from "./screens/DashboardScreen";
 import AIExpenseScreen from "./screens/AIExpenseScreen";
-import AllExpenses from "./screens/AllExpenses";
+import AllExpenses from "./screens/TransactionsScreen.js";
 import ForgotPasswordScreen from "./screens/ForgotPasswordScreen";
 import BudgetScreen from "./screens/BudgetScreen";
 import ProfileScreen from "./screens/ProfileScreen";

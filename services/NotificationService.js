@@ -72,27 +72,30 @@ const getNotificationContent = (reminder) => {
 
   let title = `💰 Payment Reminder: ${reminder.title}`;
   let body = `Your payment of ${amountString} is due soon.`;
-  let priority = Notifications.NotificationPriority.DEFAULT;
+  // ✅ FIX: Use string literals for priority instead of the deprecated enum
+  let priority = "default";
 
   if (diffDays < 0) {
     title = `🚨 OVERDUE: ${reminder.title}`;
-    body = `This was due ${Math.abs(diffDays)} days ago. Pay ${amountString} now to avoid issues.`;
-    priority = Notifications.NotificationPriority.MAX;
+    body = `This was due ${Math.abs(
+      diffDays
+    )} days ago. Pay ${amountString} now to avoid issues.`;
+    priority = "max";
   } else if (diffDays === 0) {
     title = `⏰ Due Today: ${reminder.title}`;
     body = `Don't forget to pay ${amountString} today!`;
-    priority = Notifications.NotificationPriority.HIGH;
+    priority = "high";
   } else if (diffDays === 1) {
     title = `🗓️ Due Tomorrow: ${reminder.title}`;
     body = `Your payment of ${amountString} is due tomorrow.`;
   } else {
-     body = `Your payment of ${amountString} is due in ${diffDays} days.`;
+    body = `Your payment of ${amountString} is due in ${diffDays} days.`;
   }
 
   return {
     title,
     body,
-    priority,
+    priority, // Pass the priority string in the content
     data: {
       reminderId: reminder.id,
       url: `expensetracker://reminders/${reminder.id}`, // Deep linking URI
@@ -106,24 +109,21 @@ const getNotificationContent = (reminder) => {
  * @param {number} daysBefore - Number of days before the due date to send the notification. Defaults to 0 (on the due date).
  */
 export const scheduleNotification = async (reminder, daysBefore = 0) => {
-  if (!reminder.notification_enabled) return null;
-
-  // Cancel any existing notification for this reminder to avoid duplicates
-  if (reminder.notification_id) {
-    await Notifications.cancelScheduledNotificationAsync(reminder.notification_id);
-  }
+  if (!reminder.notification_enabled || !reminder.is_active) return null;
 
   const content = getNotificationContent(reminder);
   const reminderTime = reminder.reminder_time || "09:00";
   const [hours, minutes] = reminderTime.split(":").map(Number);
-  
+
   const triggerDate = new Date(reminder.next_due_date);
   triggerDate.setDate(triggerDate.getDate() - daysBefore);
   triggerDate.setHours(hours, minutes, 0, 0);
 
-  // Don't schedule notifications for the past
-  if (triggerDate <= new Date()) {
-    console.log(`Skipping past notification for reminder: ${reminder.title}`);
+  const now = new Date();
+  const secondsUntilTrigger = (triggerDate.getTime() - now.getTime()) / 1000;
+
+  if (secondsUntilTrigger <= 0) {
+    
     return null;
   }
 
@@ -131,17 +131,32 @@ export const scheduleNotification = async (reminder, daysBefore = 0) => {
     const notificationId = await Notifications.scheduleNotificationAsync({
       content: {
         ...content,
-        sound: content.priority > Notifications.NotificationPriority.DEFAULT ? "defaultCritical" : "default",
-        vibrate: content.priority > Notifications.NotificationPriority.DEFAULT ? [0, 250, 250, 250] : undefined,
+        sound:
+          content.priority === "high" || content.priority === "max"
+            ? "defaultCritical"
+            : "default",
+        vibrate:
+          content.priority === "high" || content.priority === "max"
+            ? [0, 250, 250, 250]
+            : undefined,
         categoryIdentifier: NOTIFICATION_CATEGORIES.REMINDER_ACTIONS,
       },
-      trigger: triggerDate,
+      trigger: {
+        seconds: secondsUntilTrigger,
+      },
     });
     return notificationId;
   } catch (error) {
-    console.error(`Failed to schedule notification for "${reminder.title}":`, error);
+    console.error(
+      `Failed to schedule notification for "${reminder.title}":`,
+      error
+    );
     return null;
   }
+};
+
+export const cancelNotification = async (notificationId) => {
+  await Notifications.cancelScheduledNotificationAsync(notificationId);
 };
 
 /**
@@ -149,18 +164,18 @@ export const scheduleNotification = async (reminder, daysBefore = 0) => {
  * @param {string} reminderId - The ID of the reminder to snooze.
  */
 export const snoozeNotification = async (reminderId) => {
-    const { data: reminder, error } = await supabase
-        .from('payment_reminders')
-        .select('*')
-        .eq('id', reminderId)
-        .single();
+  const { data: reminder, error } = await supabase
+    .from("payment_reminders")
+    .select("*")
+    .eq("id", reminderId)
+    .single();
 
-    if (error || !reminder) return;
-    
-    await Notifications.scheduleNotificationAsync({
-        content: getNotificationContent(reminder),
-        trigger: { seconds: 60 * 60 }, // 1 hour from now
-    });
+  if (error || !reminder) return;
+
+  await Notifications.scheduleNotificationAsync({
+    content: getNotificationContent(reminder),
+    trigger: { seconds: 60 * 60 }, // 1 hour from now
+  });
 };
 
 /**
@@ -168,22 +183,39 @@ export const snoozeNotification = async (reminderId) => {
  * Useful for bulk updates or after initial app load.
  */
 export const syncAllNotifications = async (reminders) => {
+  // 1. Start with a clean slate
   await Notifications.cancelAllScheduledNotificationsAsync();
-  const badgeCount = reminders.filter(r => r.is_active && r.notification_enabled).length;
-  await Notifications.setBadgeCountAsync(badgeCount);
 
-  for (const reminder of reminders) {
-    // Schedule for the due date and also 2 days before, if applicable
-    const notificationId = await scheduleNotification(reminder, 0); 
-    await scheduleNotification(reminder, 2); 
+  const activeReminders = reminders.filter(
+    (r) => r.is_active && r.notification_enabled
+  );
+
+  // 2. Set the badge count
+  await Notifications.setBadgeCountAsync(activeReminders.length);
+
+  // 3. Schedule all necessary notifications
+  for (const reminder of activeReminders) {
+    // Schedule primary notification for the due date
+    const primaryNotificationId = await scheduleNotification(reminder, 0);
+
+    // Update the database with the ID of the primary notification.
+    // This is important for individual cancellations (e.g., when marking as paid).
+    if (primaryNotificationId) {
+      await supabase
+        .from("payment_reminders")
+        .update({ notification_id: primaryNotificationId })
+        .eq("id", reminder.id);
+    }
     
-    if (notificationId) {
-      // Update the reminder with the primary notification ID
-      await supabase.from('payment_reminders').update({ notification_id: notificationId }).eq('id', reminder.id);
+    // Also schedule a notification for 2 days before, if applicable.
+    // We don't store the ID for this one; it will be wiped in the next full sync.
+    const dueDate = new Date(reminder.next_due_date);
+    const now = new Date();
+    if (dueDate.getTime() - now.getTime() > 2 * 24 * 60 * 60 * 1000) {
+      await scheduleNotification(reminder, 2);
     }
   }
 };
-
 
 // --- Background Task Setup ---
 
@@ -191,7 +223,9 @@ const BACKGROUND_FETCH_TASK = "background-reminder-check";
 
 TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
     if (!session?.user?.id) {
       return BackgroundFetch.BackgroundFetchResult.NoData;
     }
@@ -248,8 +282,4 @@ export const requestNotificationPermissions = async () => {
   return status;
 };
 
-export {
-    NOTIFICATION_ACTIONS,
-    NOTIFICATION_CATEGORIES,
-    BACKGROUND_FETCH_TASK
-}
+export { NOTIFICATION_ACTIONS, NOTIFICATION_CATEGORIES, BACKGROUND_FETCH_TASK };

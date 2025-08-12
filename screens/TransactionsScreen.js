@@ -53,7 +53,7 @@ const CATEGORY_DETAILS = {
   Salary: { emoji: "💼", color: "#4ECDC4" },
   Freelance: { emoji: "💻", color: "#54A0FF" },
   Investment: { emoji: "📈", color: "#96CEB4" },
-  Gift: { emoji: "🎁", color: "#FF9FF3" },
+  Gift: { emoji: "�", color: "#FF9FF3" },
   Other: { emoji: "📝", color: "#A8A8A8" },
 };
 
@@ -420,9 +420,14 @@ export default function TransactionsScreen({ navigation }) {
 
   const currentConfig = TAB_CONFIG[activeTab];
 
+  // --- START OF FIX ---
+  // The fetchData function is wrapped in useCallback to prevent it from being recreated on every render.
+  // The key change is removing `loading` from the dependency array. The function's logic
+  // does not depend on the loading state, so it shouldn't be re-created when `loading` changes.
   const fetchData = useCallback(async () => {
     try {
-      if (!loading) setLoading(true);
+      // The problematic `if (!loading) setLoading(true)` has been removed.
+      // The loading state is managed by the hooks that call this function (`useEffect` and `onRefresh`).
       const userId = session.user.id;
       const [expensesRes, incomesRes] = await Promise.all([
         supabase.from("expenses").select("*").eq("user_id", userId),
@@ -439,13 +444,16 @@ export default function TransactionsScreen({ navigation }) {
     } catch (error) {
       showErrorAlert("Failed to fetch data. Please try again.");
     } finally {
+      // This will run after the initial fetch or a refresh, turning off the loading indicator.
       setLoading(false);
     }
-  }, [session.user.id, loading]);
+  }, [session.user.id]); // Dependency array only includes `session.user.id`.
 
+  // This useEffect hook handles the initial data fetch when the component mounts.
   useEffect(() => {
     fetchData();
-  }, [fetchData]);
+  }, [fetchData]); // This now depends on a stable `fetchData` function.
+  // --- END OF FIX ---
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -543,6 +551,7 @@ export default function TransactionsScreen({ navigation }) {
       title: `Delete ${currentConfig.title}`,
       message: `Are you sure you want to delete "${title}"? This action cannot be undone.`,
       onConfirm: async () => {
+        setLoading(true);
         const { error } = await supabase
           .from(currentConfig.table)
           .delete()
@@ -551,8 +560,9 @@ export default function TransactionsScreen({ navigation }) {
           showErrorAlert(`Failed to delete ${currentConfig.title}.`);
         } else {
           showSuccessAlert(`${currentConfig.title} deleted successfully!`);
-          fetchData();
+          await fetchData();
         }
+        setLoading(false);
       },
     });
   };
@@ -791,7 +801,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
-    paddingTop: 50,
+    paddingTop: Platform.OS === 'android' ? 25 : 50,
     paddingBottom: 16,
     borderBottomWidth: 1,
   },
