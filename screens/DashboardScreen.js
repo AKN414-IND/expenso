@@ -131,7 +131,7 @@ const ONBOARDING_STEPS = [
 
 const ONBOARDING_FLAG_KEY = "onboarding_completed";
 
-const OnboardingOverlay = ({
+const DashboardOnboarding = ({
   isVisible,
   onComplete,
   targetRefs,
@@ -803,7 +803,7 @@ export default function DashboardScreen({ navigation }) {
         navigation={navigation}
         setTargetRef={setTargetRef}
       />
-      <OnboardingOverlay
+      <DashboardOnboarding
         isVisible={showOnboarding}
         onComplete={completeOnboarding}
         targetRefs={targetRefs.current}

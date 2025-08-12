@@ -87,7 +87,7 @@ const formatDate = (date, long = false) => {
     return new Date(date).toLocaleDateString("en-IN", options);
 };
 
-const FilterModal = ({
+const ExpenseFilterModal = ({
   visible,
   onClose,
   onApply,
@@ -770,7 +770,7 @@ export default function TransactionsScreen({ navigation }) {
 
       <Alert {...alertProps} />
       
-      <FilterModal
+      <ExpenseFilterModal
           visible={showFiltersModal}
           onClose={() => setShowFiltersModal(false)}
           onApply={handleApplyFilters}
