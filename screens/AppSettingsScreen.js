@@ -16,8 +16,6 @@ import {
   Bell,
   Download,
   HelpCircle,
-  Moon,
-  Sun,
   Palette,
 } from "lucide-react-native";
 import * as Notifications from "expo-notifications";
@@ -45,7 +43,7 @@ export default function AppSettingsScreen({ navigation }) {
   const { theme, currentTheme, setTheme } = useTheme();
   const [notificationStatus, setNotificationStatus] = useState("unknown");
   const [isLoading, setIsLoading] = useState(false);
-  const [showDatePicker, setShowDatePicker] = useState(null);
+  const [showDatePicker, setShowDatePicker] = useState(null); // "from" | "to" | null
   const [dateRange, setDateRange] = useState({ from: null, to: null });
   const [exportOptions, setExportOptions] = useState({
     expenses: true,
@@ -103,18 +101,9 @@ export default function AppSettingsScreen({ navigation }) {
         setAlertProps((a) => ({ ...a, open: false }));
         setIsLoading(true);
         try {
-          await supabase
-            .from("expenses")
-            .delete()
-            .eq("user_id", session.user.id);
-          await supabase
-            .from("budgets")
-            .delete()
-            .eq("user_id", session.user.id);
-          await supabase
-            .from("payment_reminders")
-            .delete()
-            .eq("user_id", session.user.id);
+          await supabase.from("expenses").delete().eq("user_id", session.user.id);
+          await supabase.from("budgets").delete().eq("user_id", session.user.id);
+          await supabase.from("payment_reminders").delete().eq("user_id", session.user.id);
           setAlertProps({
             open: true,
             title: "Success",
@@ -193,11 +182,7 @@ export default function AppSettingsScreen({ navigation }) {
     return `ExpenseReport_${fromDate}_to_${toDate}.csv`;
   };
 
-  function generateExpenseReportHTML(
-    expenses,
-    dateRange,
-    chartImageBase64 = null
-  ) {
+  function generateExpenseReportHTML(expenses, dateRange, chartImageBase64 = null) {
     const total = expenses.reduce(
       (sum, e) => sum + (parseFloat(e.amount) || 0),
       0
@@ -256,9 +241,7 @@ export default function AppSettingsScreen({ navigation }) {
           <div>
             <div class="app-title">Expenso</div>
             <div style="color:#64748b;font-size:1rem;font-weight:500;">Expense Report</div>
-            <div style="font-size:0.96rem;color:#64748b;">${
-              dateRange.from
-            } to ${dateRange.to}</div>
+            <div style="font-size:0.96rem;color:#64748b;">${dateRange.from} to ${dateRange.to}</div>
           </div>
         </div>
         <div class="summary">
@@ -314,6 +297,7 @@ export default function AppSettingsScreen({ navigation }) {
       onCancel: null,
     });
   };
+
   const diffInDays = (from, to) => {
     const d1 = new Date(from + "T00:00:00");
     const d2 = new Date(to + "T00:00:00");
@@ -322,10 +306,10 @@ export default function AppSettingsScreen({ navigation }) {
 
   const pickGranularity = (from, to) => {
     const days = diffInDays(from, to);
-    if (days <= 31) return "day"; // show Daily
-    if (days <= 180) return "month"; // show Monthly
-    if (days <= 730) return "quarter"; // show Quarterly
-    return "year"; // show Yearly
+    if (days <= 31) return "day";
+    if (days <= 180) return "month";
+    if (days <= 730) return "quarter";
+    return "year";
   };
 
   const keyFor = (dateStr, gran) => {
@@ -378,7 +362,9 @@ export default function AppSettingsScreen({ navigation }) {
     `;
   };
 
+  // async + non-blocking export with concurrency & cleanup
   const exportAppSettings = async () => {
+    if (isLoading) return; // prevent double taps
     if (!dateRange.from || !dateRange.to) {
       setAlertProps({
         open: true,
@@ -391,55 +377,62 @@ export default function AppSettingsScreen({ navigation }) {
     }
     setIsLoading(true);
 
-    const generateHtmlTable = (title, headers, data) => {
+    // make table builder async so we can yield on large datasets
+    const generateHtmlTable = async (title, headers, data) => {
       if (!data || data.length === 0) {
         return `<h2>${title}</h2><p>No records found for the selected period.</p>`;
       }
-      const headerRow = `<tr>${headers
-        .map((h) => `<th>${h}</th>`)
-        .join("")}</tr>`;
-      const bodyRows = data
-        .map((row) => {
-          const cells = headers
-            .map((header) => {
-              const key = header.toLowerCase().replace(/ /g, "_");
-              return `<td>${row[key] || ""}</td>`;
-            })
-            .join("");
-          return `<tr>${cells}</tr>`;
-        })
-        .join("");
-      return `<h2>${title} (${data.length})</h2><table><thead>${headerRow}</thead><tbody>${bodyRows}</tbody></table>`;
+      const headerRow = `<tr>${headers.map((h) => `<th>${h}</th>`).join("")}</tr>`;
+      const keyFromHeader = (h) => h.toLowerCase().replace(/ /g, "_");
+
+      const rows = [];
+      for (let i = 0; i < data.length; i++) {
+        const row = data[i];
+        const cells = headers
+          .map((h) => {
+            const key = keyFromHeader(h);
+            const val = row?.[key] ?? "";
+            return `<td>${String(val).replace(/</g, "&lt;")}</td>`;
+          })
+          .join("");
+        rows.push(`<tr>${cells}</tr>`);
+        if (i % 1000 === 0) await Promise.resolve(); // yield to UI
+      }
+      return `<h2>${title} (${data.length})</h2><table><thead>${headerRow}</thead><tbody>${rows.join(
+        ""
+      )}</tbody></table>`;
     };
 
     try {
-      // --- 1. Fetch data for totals first ---
-      const { data: expensesData } = await supabase
+      // 1) Totals queries in parallel
+      const expensesPromise = supabase
         .from("expenses")
         .select("amount")
         .eq("user_id", session.user.id)
         .gte("date", dateRange.from)
         .lte("date", dateRange.to);
-      const { data: incomesData } = await supabase
+      const incomesPromise = supabase
         .from("side_incomes")
         .select("amount")
         .eq("user_id", session.user.id);
-      const { data: investmentsData } = await supabase
+      const investmentsPromise = supabase
         .from("investments")
         .select("amount")
         .eq("user_id", session.user.id);
 
-      // --- 2. Calculate Totals ---
+      const [{ data: expensesData }, { data: incomesData }, { data: investmentsData }] =
+        await Promise.all([expensesPromise, incomesPromise, investmentsPromise]);
+
       const totalExpenses =
         expensesData?.reduce((sum, item) => sum + Number(item.amount), 0) || 0;
       const totalIncomes =
         incomesData?.reduce((sum, item) => sum + Number(item.amount), 0) || 0;
       const totalInvestments =
-        investmentsData?.reduce((sum, item) => sum + Number(item.amount), 0) ||
-        0;
+        investmentsData?.reduce((sum, item) => sum + Number(item.amount), 0) || 0;
 
-      // --- 3. Build HTML with Totals ---
-      let htmlContent = `
+      // 2) HTML parts (assembled at end)
+      const parts = [];
+      parts.push(`
         <html>
           <head>
             <title>Expenso Data Export</title>
@@ -463,12 +456,10 @@ export default function AppSettingsScreen({ navigation }) {
             
             <div class="totals-summary">
                 <p><b>Total Income:</b> ₹${totalIncomes.toFixed(2)}</p>
-                <p><b>Total Expenses (in period):</b> ₹${totalExpenses.toFixed(
-                  2
-                )}</p>
+                <p><b>Total Expenses (in period):</b> ₹${totalExpenses.toFixed(2)}</p>
                 <p><b>Total Investments:</b> ₹${totalInvestments.toFixed(2)}</p>
             </div>
-            `;
+      `);
 
       const sectionsToExport = [
         {
@@ -516,13 +507,7 @@ export default function AppSettingsScreen({ navigation }) {
         {
           key: "reminders",
           title: "Reminders",
-          headers: [
-            "Title",
-            "Description",
-            "Amount",
-            "Category",
-            "Next Due Date",
-          ],
+          headers: ["Title", "Description", "Amount", "Category", "Next Due Date"],
           query: () =>
             supabase
               .from("payment_reminders")
@@ -531,24 +516,22 @@ export default function AppSettingsScreen({ navigation }) {
         },
       ];
 
-      for (const section of sectionsToExport) {
-        if (exportOptions[section.key]) {
-          const { data, error } = await section.query();
-          if (error) throw error;
-          htmlContent += generateHtmlTable(
-            section.title,
-            section.headers,
-            data
-          );
-        }
+      // 3) Fetch selected sections concurrently
+      const selected = sectionsToExport.filter((s) => exportOptions[s.key]);
+      const results = await Promise.all(selected.map((s) => s.query()));
+
+      for (let i = 0; i < selected.length; i++) {
+        const { data, error } = results[i];
+        if (error) throw error;
+        parts.push(await generateHtmlTable(selected[i].title, selected[i].headers, data));
+        await Promise.resolve(); // yield between sections
       }
 
-      htmlContent += `</body></html>`;
+      parts.push(`</body></html>`);
+      const htmlContent = parts.join("");
 
-      const { uri } = await Print.printToFileAsync({
-        html: htmlContent,
-        base64: false,
-      });
+      // 4) Render and share
+      const { uri } = await Print.printToFileAsync({ html: htmlContent, base64: false });
 
       if (!(await Sharing.isAvailableAsync())) {
         setAlertProps({
@@ -569,6 +552,11 @@ export default function AppSettingsScreen({ navigation }) {
         dialogTitle: "Export App Settings (PDF)",
         UTI: "com.adobe.pdf",
       });
+
+      // clean up temp file
+      try {
+        await FileSystem.deleteAsync(uri, { idempotent: true });
+      } catch {}
 
       setAlertProps({
         open: true,
@@ -616,18 +604,14 @@ export default function AppSettingsScreen({ navigation }) {
     >
       <View style={styles.cardHeader}>
         {icon}
-        <Text style={[styles.cardTitle, { color: theme.colors.text }]}>
-          {title}
-        </Text>
+        <Text style={[styles.cardTitle, { color: theme.colors.text }]}>{title}</Text>
       </View>
       {children}
     </View>
   );
 
   return (
-    <View
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-    >
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {/* Header */}
       <View
         style={[
@@ -639,17 +623,12 @@ export default function AppSettingsScreen({ navigation }) {
         ]}
       >
         <TouchableOpacity
-          style={[
-            styles.backButton,
-            { backgroundColor: theme.colors.buttonSecondary },
-          ]}
+          style={[styles.backButton, { backgroundColor: theme.colors.buttonSecondary }]}
           onPress={() => navigation.goBack()}
         >
           <ArrowLeft color={theme.colors.text} size={24} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.colors.text }]}>
-          App Settings
-        </Text>
+        <Text style={[styles.headerTitle, { color: theme.colors.text }]}>App Settings</Text>
         <View style={{ width: 38 }} />
       </View>
 
@@ -660,13 +639,7 @@ export default function AppSettingsScreen({ navigation }) {
       >
         {/* Notifications Card */}
         <Card
-          icon={
-            <Bell
-              color={theme.colors.primary}
-              size={22}
-              style={{ marginRight: 10 }}
-            />
-          }
+          icon={<Bell color={theme.colors.primary} size={22} style={{ marginRight: 10 }} />}
           title="Notifications"
         >
           <View style={styles.cardRow}>
@@ -684,18 +657,10 @@ export default function AppSettingsScreen({ navigation }) {
               {notificationStatus === "granted" ? "Enabled" : "Disabled"}
             </Text>
             <TouchableOpacity
-              style={[
-                styles.manageButton,
-                { backgroundColor: theme.colors.buttonSecondary },
-              ]}
+              style={[styles.manageButton, { backgroundColor: theme.colors.buttonSecondary }]}
               onPress={openSettings}
             >
-              <Text
-                style={[
-                  styles.manageButtonText,
-                  { color: theme.colors.primary },
-                ]}
-              >
+              <Text style={[styles.manageButtonText, { color: theme.colors.primary }]}>
                 Manage
               </Text>
             </TouchableOpacity>
@@ -704,19 +669,11 @@ export default function AppSettingsScreen({ navigation }) {
 
         {/* Theme Card */}
         <Card
-          icon={
-            <Palette
-              color={theme.colors.primary}
-              size={22}
-              style={{ marginRight: 10 }}
-            />
-          }
+          icon={<Palette color={theme.colors.primary} size={22} style={{ marginRight: 10 }} />}
           title="Appearance"
         >
           <View style={styles.cardRow}>
-            <Text style={[styles.label, { color: theme.colors.textSecondary }]}>
-              Theme
-            </Text>
+            <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Theme</Text>
             <View style={styles.themeOptions}>
               {Object.keys(themeLabels).map((key) => (
                 <TouchableOpacity
@@ -741,10 +698,7 @@ export default function AppSettingsScreen({ navigation }) {
                     style={[
                       styles.themeOptionText,
                       {
-                        color:
-                          currentTheme === key
-                            ? "#fff"
-                            : theme.colors.textTertiary,
+                        color: currentTheme === key ? "#fff" : theme.colors.textTertiary,
                       },
                     ]}
                   >
@@ -759,29 +713,16 @@ export default function AppSettingsScreen({ navigation }) {
           </Text>
         </Card>
 
-        {/* App Tour Card */}
+        {/* Help & Tour */}
         <Card
-          icon={
-            <HelpCircle
-              color={theme.colors.primary}
-              size={22}
-              style={{ marginRight: 10 }}
-            />
-          }
+          icon={<HelpCircle color={theme.colors.primary} size={22} style={{ marginRight: 10 }} />}
           title="Help & Tour"
         >
           <View style={styles.cardRow}>
-            <Text style={[styles.label, { color: theme.colors.textSecondary }]}>
-              App Tour
-            </Text>
+            <Text style={[styles.label, { color: theme.colors.textSecondary }]}>App Tour</Text>
             <TouchableOpacity
-              style={[
-                styles.tourButton,
-                { backgroundColor: theme.colors.primary },
-              ]}
-              onPress={() =>
-                navigation.navigate("Dashboard", { showOnboarding: true })
-              }
+              style={[styles.tourButton, { backgroundColor: theme.colors.primary }]}
+              onPress={() => navigation.navigate("Dashboard", { showOnboarding: true })}
             >
               <Text style={styles.tourButtonText}>Show Tour</Text>
             </TouchableOpacity>
@@ -791,60 +732,37 @@ export default function AppSettingsScreen({ navigation }) {
           </Text>
         </Card>
 
-        {/* Export Data Card */}
+        {/* Export Data */}
         <Card
-          icon={
-            <Download
-              color={theme.colors.primary}
-              size={22}
-              style={{ marginRight: 10 }}
-            />
-          }
+          icon={<Download color={theme.colors.primary} size={22} style={{ marginRight: 10 }} />}
           title="Export Data"
         >
           <Text style={[styles.label, { color: theme.colors.textSecondary }]}>
             Export Expenses as Excel Report
           </Text>
           <Text style={[styles.sublabel, { color: theme.colors.textTertiary }]}>
-            Generate a detailed Excel report with expense summary and category
-            breakdown
+            Generate a detailed Excel report with expense summary and category breakdown
           </Text>
-          <View
-            style={{ flexDirection: "row", marginTop: 14, marginBottom: 6 }}
-          >
+
+          <View style={{ flexDirection: "row", marginTop: 14, marginBottom: 6 }}>
             <TouchableOpacity
               onPress={() => setShowDatePicker("from")}
-              style={[
-                styles.dateButton,
-                { backgroundColor: theme.colors.buttonSecondary },
-              ]}
+              style={[styles.dateButton, { backgroundColor: theme.colors.buttonSecondary }]}
             >
-              <Text
-                style={[
-                  styles.dateButtonText,
-                  { color: theme.colors.textSecondary },
-                ]}
-              >
+              <Text style={[styles.dateButtonText, { color: theme.colors.textSecondary }]}>
                 {dateRange.from || "Start Date"}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => setShowDatePicker("to")}
-              style={[
-                styles.dateButton,
-                { backgroundColor: theme.colors.buttonSecondary },
-              ]}
+              style={[styles.dateButton, { backgroundColor: theme.colors.buttonSecondary }]}
             >
-              <Text
-                style={[
-                  styles.dateButtonText,
-                  { color: theme.colors.textSecondary },
-                ]}
-              >
+              <Text style={[styles.dateButtonText, { color: theme.colors.textSecondary }]}>
                 {dateRange.to || "End Date"}
               </Text>
             </TouchableOpacity>
           </View>
+
           <View style={{ marginTop: 12 }}>
             {[
               { key: "expenses", label: "Expenses" },
@@ -855,16 +773,9 @@ export default function AppSettingsScreen({ navigation }) {
             ].map((item) => (
               <TouchableOpacity
                 key={item.key}
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  marginVertical: 5,
-                }}
+                style={{ flexDirection: "row", alignItems: "center", marginVertical: 5 }}
                 onPress={() =>
-                  setExportOptions((prev) => ({
-                    ...prev,
-                    [item.key]: !prev[item.key],
-                  }))
+                  setExportOptions((prev) => ({ ...prev, [item.key]: !prev[item.key] }))
                 }
               >
                 <View
@@ -886,9 +797,7 @@ export default function AppSettingsScreen({ navigation }) {
                     <Text style={{ color: "#fff", fontSize: 16 }}>✓</Text>
                   )}
                 </View>
-                <Text
-                  style={{ color: theme.colors.textSecondary, fontSize: 16 }}
-                >
+                <Text style={{ color: theme.colors.textSecondary, fontSize: 16 }}>
                   {item.label}
                 </Text>
               </TouchableOpacity>
@@ -896,26 +805,24 @@ export default function AppSettingsScreen({ navigation }) {
           </View>
 
           <TouchableOpacity
-            style={[
-              styles.exportButton,
-              { backgroundColor: theme.colors.primary, marginTop: 10 },
-            ]}
+            style={[styles.exportButton, { backgroundColor: theme.colors.primary, marginTop: 10 }]}
             onPress={exportAppSettings}
+            disabled={isLoading}
           >
-            <Download color="#fff" size={18} style={{ marginRight: 8 }} />
-            <Text style={styles.exportButtonText}>Export Selected</Text>
+            {isLoading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <Download color="#fff" size={18} style={{ marginRight: 8 }} />
+                <Text style={styles.exportButtonText}>Export Selected</Text>
+              </>
+            )}
           </TouchableOpacity>
         </Card>
 
-        {/* Danger Zone Card */}
+        {/* Danger Zone */}
         <Card
-          icon={
-            <Trash2
-              color={theme.colors.error}
-              size={22}
-              style={{ marginRight: 10 }}
-            />
-          }
+          icon={<Trash2 color={theme.colors.error} size={22} style={{ marginRight: 10 }} />}
           title="Danger Zone"
           style={[
             styles.dangerCard,
@@ -927,10 +834,7 @@ export default function AppSettingsScreen({ navigation }) {
         >
           <TouchableOpacity
             onPress={confirmDeleteAllData}
-            style={[
-              styles.deleteButton,
-              { backgroundColor: theme.colors.error },
-            ]}
+            style={[styles.deleteButton, { backgroundColor: theme.colors.error }]}
           >
             <Text style={styles.deleteButtonText}>Delete All Data</Text>
           </TouchableOpacity>
@@ -948,18 +852,17 @@ export default function AppSettingsScreen({ navigation }) {
         {showDatePicker && (
           <DateTimePicker
             value={
-              dateRange[showDatePicker]
-                ? new Date(dateRange[showDatePicker])
-                : new Date()
+              dateRange[showDatePicker] ? new Date(dateRange[showDatePicker]) : new Date()
             }
             mode="date"
             display="default"
             onChange={(event, selectedDate) => {
+              const which = showDatePicker; // capture key before clearing
               setShowDatePicker(null);
-              if (event.type === "set" && selectedDate) {
+              if (event.type === "set" && selectedDate && which) {
                 setDateRange((prev) => ({
                   ...prev,
-                  [showDatePicker]: selectedDate.toISOString().slice(0, 10),
+                  [which]: selectedDate.toISOString().slice(0, 10),
                 }));
               }
             }}
@@ -1069,7 +972,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 12,
     paddingHorizontal: 20,
-
     marginTop: 12,
     width: "100%",
     alignSelf: "flex",
