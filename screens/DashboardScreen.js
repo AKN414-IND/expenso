@@ -21,6 +21,7 @@ import {
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
+
 import Alert from "../components/Alert";
 import {
   Trash2,
@@ -604,7 +605,7 @@ export default function DashboardScreen({ navigation }) {
       >
         <View
           style={[
-            styles.unchangedHeader,
+            styles.header,
             { backgroundColor: theme.colors.surface },
           ]}
         >
@@ -828,19 +829,13 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F9FBFC" },
   scrollContent: { paddingBottom: 100, paddingTop: 20 },
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
-  unchangedHeader: {
+  header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: Math.max(screenWidth * 0.05, 16),
-    paddingTop: Math.max(screenHeight * 0.07, 36),
+    paddingTop: Math.max(screenHeight * 0.0, 33),
     paddingBottom: Math.max(screenHeight * 0.03, 18),
-    borderBottomLeftRadius: Math.max(screenWidth * 0.06, 15),
-    borderBottomRightRadius: Math.max(screenWidth * 0.06, 15),
-    elevation: 8,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
   },
   headerContent: { flex: 1 },
   welcomeText: {

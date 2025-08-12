@@ -94,20 +94,13 @@ const styles = StyleSheet.create({
   taskbar: {
     position: "absolute",
     bottom: 0,
-    width: "95%",
+    width: "100%",
     height: 65,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    borderRadius: 32.5,
-    paddingHorizontal: 5,
-    elevation: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.1,
-    shadowRadius: 15,
     borderWidth: 1,
-    borderColor: "rgba(200, 200, 200, 0.2)",
+    
   },
   navItemGroup: {
     flex: 1,

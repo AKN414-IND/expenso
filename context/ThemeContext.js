@@ -1,16 +1,15 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const ThemeContext = createContext({});
+const ThemeContext = createContext(null);
 
 export const useTheme = () => {
   const context = useContext(ThemeContext);
-  if (!context) {
-    throw new Error('useTheme must be used within a ThemeProvider');
-  }
+  if (!context) throw new Error('useTheme must be used within a ThemeProvider');
   return context;
 };
 
+/* ---------- LIGHT (unchanged except aliases) ---------- */
 const lightTheme = {
   name: 'light',
   colors: {
@@ -31,59 +30,74 @@ const lightTheme = {
     buttonSecondaryText: '#475569',
     shadow: '#000000',
     overlay: 'rgba(15, 23, 42, 0.7)',
+    // aliases
+    appBg: '#f5f7fa',
+    cardBg: '#ffffff',
+    onPrimary: '#ffffff',
   }
 };
 
+/* ---------- DARK (improved readability/contrast) ---------- */
 const darkTheme = {
   name: 'dark',
   colors: {
-    background: '#0f172a',
-    surface: '#1e293b',
-    card: '#334155',
+    background: '#0b1220',      // app bg (slightly warmer than pure black)
+    surface: '#111827',         // header/sections
+    card: '#1f2937',            // cards
     text: '#f8fafc',
     textSecondary: '#e2e8f0',
-    textTertiary: '#a0aec0',
-    primary: '#06b6d4',
-    primaryDark: '#0891b2',
+    textTertiary: '#94a3b8',
+    primary: '#22d3ee',         // cyan-400
+    primaryDark: '#06b6d4',     // cyan-500
     success: '#10b981',
     warning: '#f59e0b',
     error: '#ef4444',
-    border: 'rgba(148, 163, 184, 0.3)',
-    borderLight: 'rgba(148, 163, 184, 0.1)',
-    buttonSecondary: '#475569',
-    buttonSecondaryText: '#f8fafc',
+    border: 'rgba(148, 163, 184, 0.24)',
+    borderLight: 'rgba(148, 163, 184, 0.12)',
+    buttonSecondary: '#334155',
+    buttonSecondaryText: '#e2e8f0',
     shadow: '#000000',
-    overlay: 'rgba(15, 23, 42, 0.8)',
+    overlay: 'rgba(2, 6, 23, 0.7)',
+    // aliases
+    appBg: '#0b1220',
+    cardBg: '#1f2937',
+    onPrimary: '#0b1220',       // dark ink over bright cyan for WCAG contrast
   }
 };
 
+/* ---------- MINT (less neon, more UI-friendly mint) ---------- */
 const mintTheme = {
   name: 'mint',
   colors: {
     background: '#e8faf5',
-    surface: '#d1fae5',
-    card: '#baf7ce',
+    surface: '#d9f7ee',
+    card: '#c9f2e6',
     text: '#064e3b',
     textSecondary: '#065f46',
-    textTertiary: '#047857',
+    textTertiary: '#0e766e',
     primary: '#10b981',
     primaryDark: '#059669',
     success: '#059669',
     warning: '#a16207',
     error: '#b91c1c',
-    border: 'rgba(16, 185, 129, 0.15)',
-    borderLight: 'rgba(16, 185, 129, 0.07)',
+    border: 'rgba(5, 150, 105, 0.18)',
+    borderLight: 'rgba(5, 150, 105, 0.10)',
     buttonSecondary: '#a7f3d0',
     buttonSecondaryText: '#065f46',
     shadow: '#065f46',
-    overlay: 'rgba(16, 185, 129, 0.3)',
+    overlay: 'rgba(16, 185, 129, 0.25)',
+    // aliases
+    appBg: '#e8faf5',
+    cardBg: '#c9f2e6',
+    onPrimary: '#064e3b',       // dark text on bright mint button
   },
 };
 
+/* ---------- SUNSET (warmer but toned for legibility) ---------- */
 const sunsetTheme = {
   name: 'sunset',
   colors: {
-    background: '#fff7ed',
+    background: '#fff7ed',      // stone/peach bg
     surface: '#ffedd5',
     card: '#fed7aa',
     text: '#7c2d12',
@@ -91,62 +105,75 @@ const sunsetTheme = {
     textTertiary: '#b45309',
     primary: '#f59e0b',
     primaryDark: '#d97706',
-    success: '#92400e',
+    success: '#16a34a',
     warning: '#c2410c',
     error: '#b91c1c',
-    border: 'rgba(251, 191, 36, 0.14)',
-    borderLight: 'rgba(251, 191, 36, 0.07)',
+    border: 'rgba(251, 191, 36, 0.18)',
+    borderLight: 'rgba(251, 191, 36, 0.10)',
     buttonSecondary: '#fdba74',
     buttonSecondaryText: '#7c2d12',
     shadow: '#7c2d12',
     overlay: 'rgba(124, 45, 18, 0.2)',
+    // aliases
+    appBg: '#fff7ed',
+    cardBg: '#fed7aa',
+    onPrimary: '#7c2d12',       // dark text on amber button
   },
 };
 
+/* ---------- CLASSIC (material-ish neutral with blue primary) ---------- */
 const classicTheme = {
   name: 'classic',
   colors: {
     background: '#f1f5f9',
     surface: '#e2e8f0',
-    card: '#cbd5e1',
+    card: '#ffffff',
     text: '#1e293b',
     textSecondary: '#475569',
-    textTertiary: '#5f7080',
+    textTertiary: '#64748b',
     primary: '#2563eb',
     primaryDark: '#1d4ed8',
     success: '#15803d',
     warning: '#92400e',
     error: '#b91c1c',
-    border: 'rgba(51, 65, 85, 0.11)',
-    borderLight: 'rgba(51, 65, 85, 0.07)',
-    buttonSecondary: '#e0e7ef',
-    buttonSecondaryText: '#475569',
+    border: 'rgba(51, 65, 85, 0.13)',
+    borderLight: 'rgba(51, 65, 85, 0.08)',
+    buttonSecondary: '#e2e8f0',
+    buttonSecondaryText: '#334155',
     shadow: '#0f172a',
     overlay: 'rgba(30, 41, 59, 0.17)',
+    // aliases
+    appBg: '#f1f5f9',
+    cardBg: '#ffffff',
+    onPrimary: '#ffffff',       // white text on blue
   },
 };
 
-// --- Improved Neon Theme ---
+/* ---------- NEON (dialed back for usability, still “neon”) ---------- */
 const neonTheme = {
   name: 'neon',
   colors: {
-    background: '#15151a', // true deep black-blue
-    surface: '#222232',
-    card: '#181827',
-    text: '#f9f9ff', // almost white for high neon contrast
-    textSecondary: '#39ff14', // neon green
-    textTertiary: '#00e6ff',  // neon blue
-    primary: '#fe00ff', // neon magenta
-    primaryDark: '#00f0ff', // neon cyan (glow accent)
-    success: '#0aff9d', // neon green for success
-    warning: '#fff200', // neon yellow for warning
-    error: '#ff2975', // neon pink/red for error
-    border: 'rgba(255, 255, 255, 0.12)',
-    borderLight: 'rgba(254, 0, 255, 0.16)', // subtle magenta glow
-    buttonSecondary: '#151b3d', // dark indigo for contrast
-    buttonSecondaryText: '#39ff14', // neon green text on button
-    shadow: '#fe00ff', // magenta glow for "neon" shadow
-    overlay: 'rgba(0,255,255,0.13)', // subtle cyan overlay
+    background: '#14151b',
+    surface: '#1b1c27',
+    card: '#171826',
+    text: '#f8fbff',
+    textSecondary: '#a6ffe0',   // softer neon accents
+    textTertiary: '#8ee7ff',
+    primary: '#fe00ff',         // neon magenta
+    primaryDark: '#00e5ff',     // neon cyan
+    success: '#0aff9d',
+    warning: '#fff200',
+    error: '#ff2975',
+    border: 'rgba(255, 255, 255, 0.14)',
+    borderLight: 'rgba(254, 0, 255, 0.16)',
+    buttonSecondary: '#232546',
+    buttonSecondaryText: '#e2e8f0',
+    shadow: '#fe00ff',
+    overlay: 'rgba(0, 229, 255, 0.12)',
+    // aliases
+    appBg: '#14151b',
+    cardBg: '#171826',
+    onPrimary: '#0b0b12',       // near-black text on neon primaries
   },
 };
 
@@ -163,16 +190,12 @@ export const ThemeProvider = ({ children }) => {
   const [currentTheme, setCurrentTheme] = useState('light');
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadTheme();
-  }, []);
+  useEffect(() => { loadTheme(); }, []);
 
   const loadTheme = async () => {
     try {
       const savedTheme = await AsyncStorage.getItem('userTheme');
-      if (savedTheme && themes[savedTheme]) {
-        setCurrentTheme(savedTheme);
-      }
+      if (savedTheme && themes[savedTheme]) setCurrentTheme(savedTheme);
     } catch (error) {
       console.log('Error loading theme:', error);
     } finally {
@@ -204,9 +227,5 @@ export const ThemeProvider = ({ children }) => {
     loading,
   };
 
-  return (
-    <ThemeContext.Provider value={value}>
-      {children}
-    </ThemeContext.Provider>
-  );
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 };

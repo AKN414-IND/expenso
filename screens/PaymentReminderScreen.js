@@ -786,14 +786,12 @@ const createScreenStyles = (theme) =>
     },
     header: {
       flexDirection: "row",
-      justifyContent: "space-between",
       alignItems: "center",
-      paddingHorizontal: 16,
-      paddingTop: Platform.OS === "ios" ? 50 : 20,
-      paddingBottom: 12,
+      paddingHorizontal: 20,
+      paddingTop: 60,
+      paddingBottom: 18,
       borderBottomWidth: 1,
-      borderBottomColor: theme.colors.borderLight,
-      backgroundColor: theme.colors.surface,
+      justifyContent: "space-between",
     },
     headerButton: {
       width: 44,
@@ -808,9 +806,6 @@ const createScreenStyles = (theme) =>
       gap: 8,
       paddingHorizontal: 16,
       paddingVertical: 12,
-      backgroundColor: theme.colors.surface,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.colors.borderLight,
     },
     listContent: {
       paddingHorizontal: 16,
