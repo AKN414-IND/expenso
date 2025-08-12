@@ -27,6 +27,7 @@ import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { supabase } from "../lib/supabase";
 import Alert from "../components/Alert";
+import DateTimePicker from "@react-native-community/datetimepicker";
 
 export default function InvestmentsScreen({ navigation }) {
   const { session } = useAuth();
@@ -43,6 +44,11 @@ export default function InvestmentsScreen({ navigation }) {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingInvestment, setEditingInvestment] = useState(null);
   const [alertProps, setAlertProps] = useState({ open: false });
+  const [dateRange, setDateRange] = useState({
+    startDate: null,
+    endDate: null,
+  });
+  const [showDatePicker, setShowDatePicker] = useState(null);
 
   const INVESTMENT_TYPES = [
     "All",
@@ -71,7 +77,7 @@ export default function InvestmentsScreen({ navigation }) {
   }, []);
   useEffect(() => {
     filterAndSortInvestments();
-  }, [investments, searchQuery, selectedType, sortBy, sortOrder]);
+  }, [investments, searchQuery, selectedType, sortBy, sortOrder, dateRange]);
 
   const fetchInvestments = async () => {
     setLoading(true);
@@ -102,6 +108,12 @@ export default function InvestmentsScreen({ navigation }) {
     }
     if (selectedType !== "All") {
       filtered = filtered.filter((inv) => inv.type === selectedType);
+    }
+    if (dateRange.startDate && dateRange.endDate) {
+      filtered = filtered.filter((inv) => {
+        const invDate = new Date(inv.date);
+        return invDate >= dateRange.startDate && invDate <= dateRange.endDate;
+      });
     }
     filtered.sort((a, b) => {
       let aValue, bValue;
@@ -201,6 +213,20 @@ export default function InvestmentsScreen({ navigation }) {
       day: "numeric",
       year: "numeric",
     });
+  };
+
+  const onDateChange = (event, selectedDate) => {
+    const currentDate =
+      selectedDate ||
+      (showDatePicker === "startDate"
+        ? dateRange.startDate
+        : dateRange.endDate);
+    setShowDatePicker(null);
+    if (showDatePicker === "startDate") {
+      setDateRange({ ...dateRange, startDate: currentDate });
+    } else {
+      setDateRange({ ...dateRange, endDate: currentDate });
+    }
   };
 
   const InvestmentCard = ({ investment, index }) => (
@@ -325,6 +351,56 @@ export default function InvestmentsScreen({ navigation }) {
                 ✕
               </Text>
             </TouchableOpacity>
+          </View>
+          <View style={styles.filterSection}>
+            <Text
+              style={[styles.filterSectionTitle, { color: theme.colors.text }]}
+            >
+              Date Range
+            </Text>
+            <View
+              style={{ flexDirection: "row", justifyContent: "space-between" }}
+            >
+              <TouchableOpacity
+                onPress={() => setShowDatePicker("startDate")}
+                style={[
+                  styles.datePickerButton,
+                  { borderColor: theme.colors.border },
+                ]}
+              >
+                <Text style={{ color: theme.colors.text }}>
+                  {dateRange.startDate
+                    ? formatDate(dateRange.startDate)
+                    : "Start Date"}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setShowDatePicker("endDate")}
+                style={[
+                  styles.datePickerButton,
+                  { borderColor: theme.colors.border },
+                ]}
+              >
+                <Text style={{ color: theme.colors.text }}>
+                  {dateRange.endDate
+                    ? formatDate(dateRange.endDate)
+                    : "End Date"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+            {showDatePicker && (
+              <DateTimePicker
+                testID="dateTimePicker"
+                value={
+                  showDatePicker === "startDate"
+                    ? dateRange.startDate || new Date()
+                    : dateRange.endDate || new Date()
+                }
+                mode="date"
+                display="default"
+                onChange={onDateChange}
+              />
+            )}
           </View>
           <View style={styles.filterSection}>
             <Text
@@ -1153,6 +1229,14 @@ const styles = StyleSheet.create({
   closeButton: { fontSize: 24, fontWeight: "300" },
   filterSection: { marginBottom: 24 },
   filterSectionTitle: { fontSize: 16, fontWeight: "600", marginBottom: 12 },
+  datePickerButton: {
+    flex: 1,
+    padding: 12,
+    borderWidth: 1,
+    borderRadius: 8,
+    alignItems: "center",
+    marginHorizontal: 5,
+  },
   categoryFilters: { flexDirection: "row", paddingVertical: 4 },
   categoryFilter: {
     paddingHorizontal: 16,

@@ -1,4 +1,10 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, {
+  useEffect,
+  useState,
+  useMemo,
+  useCallback,
+  memo,
+} from "react";
 import {
   View,
   Text,
@@ -10,860 +16,814 @@ import {
   RefreshControl,
   Dimensions,
   Modal,
+  Platform,
 } from "react-native";
 import {
   ArrowLeft,
   Search,
   Filter,
-  Calendar,
-  TrendingUp,
-  TrendingDown,
   Plus,
   Eye,
   Edit3,
   Trash2,
-  DollarSign,
   Clock,
+  X,
+  Calendar,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react-native";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { supabase } from "../lib/supabase";
 import Alert from "../components/Alert";
+import DateTimePicker from "@react-native-community/datetimepicker";
 
 const { width } = Dimensions.get("window");
 
-export default function AllExpensesScreen({ navigation }) {
-  const { session } = useAuth();
-  const { theme } = useTheme();
-  const [expenses, setExpenses] = useState([]);
-  const [filteredExpenses, setFilteredExpenses] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("All");
-  const [sortBy, setSortBy] = useState("date");
-  const [sortOrder, setSortOrder] = useState("desc");
-  const [showFilters, setShowFilters] = useState(false);
-  const [selectedExpense, setSelectedExpense] = useState(null);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [editingExpense, setEditingExpense] = useState(null);
+const CATEGORY_DETAILS = {
+  "Food & Dining": { emoji: "🍽️", color: "#FF6B6B" },
+  Transportation: { emoji: "🚗", color: "#45B7D1" },
+  Shopping: { emoji: "🛍️", color: "#4ECDC4" },
+  Entertainment: { emoji: "🎬", color: "#96CEB4" },
+  "Bills & Utilities": { emoji: "💡", color: "#FECA57" },
+  Healthcare: { emoji: "🏥", color: "#FF9FF3" },
+  Travel: { emoji: "✈️", color: "#5F27CD" },
+  Education: { emoji: "📚", color: "#54A0FF" },
+  Groceries: { emoji: "🛒", color: "#00D2D3" },
+  Salary: { emoji: "💼", color: "#4ECDC4" },
+  Freelance: { emoji: "💻", color: "#54A0FF" },
+  Investment: { emoji: "📈", color: "#96CEB4" },
+  Gift: { emoji: "🎁", color: "#FF9FF3" },
+  Other: { emoji: "📝", color: "#A8A8A8" },
+};
 
-  const categories = [
-    "All",
-    "Food & Dining",
-    "Transportation",
-    "Shopping",
-    "Entertainment",
-    "Bills & Utilities",
-    "Healthcare",
-    "Travel",
-    "Education",
-    "Others",
-  ];
-  const CATEGORIES = [
-    {
-      id: "Food",
-      name: "Food & Dining",
-      icon: "restaurant",
-      emoji: "🍽️",
-      color: "#FF6B6B",
-    },
-    {
-      id: "Shopping",
-      name: "Shopping",
-      icon: "bag",
-      emoji: "🛍️",
-      color: "#4ECDC4",
-    },
-    {
-      id: "Transportation",
-      name: "Transportation",
-      icon: "car",
-      emoji: "🚗",
-      color: "#45B7D1",
-    },
-    {
-      id: "Entertainment",
-      name: "Entertainment",
-      icon: "game-controller",
-      emoji: "🎬",
-      color: "#96CEB4",
-    },
-    {
-      id: "Healthcare",
-      name: "Healthcare",
-      icon: "medical",
-      emoji: "🏥",
-      color: "#FF9FF3",
-    },
-    {
-      id: "Utilities",
-      name: "Bills & Utilities",
-      icon: "flash",
-      emoji: "💡",
-      color: "#FECA57",
-    },
-    {
-      id: "Education",
-      name: "Education",
-      icon: "school",
-      emoji: "📚",
-      color: "#54A0FF",
-    },
-    {
-      id: "Travel",
-      name: "Travel",
-      icon: "airplane",
-      emoji: "✈️",
-      color: "#5F27CD",
-    },
-    {
-      id: "Groceries",
-      name: "Groceries",
-      icon: "basket",
-      emoji: "🛒",
-      color: "#00D2D3",
-    },
-    {
-      id: "Other",
-      name: "Other",
-      icon: "ellipsis-horizontal",
-      emoji: "📝",
-      color: "#A8A8A8",
-    },
-  ];
+const EXPENSE_CATEGORIES = [
+  "All",
+  "Food & Dining",
+  "Transportation",
+  "Shopping",
+  "Entertainment",
+  "Bills & Utilities",
+  "Healthcare",
+  "Travel",
+  "Education",
+  "Groceries",
+  "Other",
+];
+const INCOME_SOURCES = [
+  "All",
+  "Salary",
+  "Freelance",
+  "Investment",
+  "Gift",
+  "Other",
+];
 
-  const [alertProps, setAlertProps] = useState({
-    open: false,
-    title: "",
-    message: "",
-    confirmText: "",
-    cancelText: "",
-    icon: null,
-    iconBg: "",
-    confirmColor: "",
-    confirmTextColor: "",
-    cancelColor: "",
-    cancelTextColor: "",
-    onConfirm: null,
-    onCancel: null,
-  });
+const formatDate = (date, long = false) => {
+    if (!date) return long ? "Select Date" : "N/A";
+    const options = long
+      ? { year: 'numeric', month: 'long', day: 'numeric' }
+      : { month: "short", day: "numeric", year: "numeric" };
+    return new Date(date).toLocaleDateString("en-IN", options);
+};
+
+const FilterModal = ({
+  visible,
+  onClose,
+  onApply,
+  initialFilters,
+  categories,
+  theme,
+}) => {
+  const [filters, setFilters] = useState(initialFilters);
+  const [showPicker, setShowPicker] = useState(null);
 
   useEffect(() => {
-    fetchExpenses();
-  }, []);
+    setFilters(initialFilters);
+  }, [initialFilters]);
 
-  useEffect(() => {
-    filterAndSortExpenses();
-  }, [expenses, searchQuery, selectedCategory, sortBy, sortOrder]);
-
-  const fetchExpenses = async () => {
-    try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from("expenses")
-        .select("*")
-        .eq("user_id", session.user.id)
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-      setExpenses(data || []);
-    } catch (error) {
-      console.error("Error fetching expenses:", error);
-    } finally {
-      setLoading(false);
+  const handleDateChange = (event, selectedDate) => {
+    const currentPicker = showPicker;
+    setShowPicker(null);
+    if (event.type === 'set' && selectedDate) {
+      setFilters(prev => ({ ...prev, dateRange: { ...prev.dateRange, [currentPicker]: selectedDate } }));
     }
   };
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await fetchExpenses();
-    setRefreshing(false);
+  const handleApply = () => {
+    onApply(filters);
+    onClose();
   };
 
-  const filterAndSortExpenses = () => {
-    let filtered = [...expenses];
-
-    if (searchQuery) {
-      filtered = filtered.filter(
-        (expense) =>
-          expense.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          expense.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          expense.description?.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-    }
-
-    if (selectedCategory !== "All") {
-      filtered = filtered.filter(
-        (expense) => expense.category === selectedCategory
-      );
-    }
-
-    filtered.sort((a, b) => {
-      let aValue, bValue;
-
-      switch (sortBy) {
-        case "amount":
-          aValue = parseFloat(a.amount);
-          bValue = parseFloat(b.amount);
-          break;
-        case "title":
-          aValue = a.title.toLowerCase();
-          bValue = b.title.toLowerCase();
-          break;
-        case "date":
-        default:
-          aValue = new Date(a.date);
-          bValue = new Date(b.date);
-          break;
-      }
-
-      if (sortOrder === "asc") {
-        return aValue > bValue ? 1 : -1;
-      } else {
-        return aValue < bValue ? 1 : -1;
-      }
-    });
-
-    setFilteredExpenses(filtered);
-  };
-
-  const deleteExpense = async (expenseId) => {
-    try {
-      const { error } = await supabase
-        .from("expenses")
-        .delete()
-        .eq("id", expenseId);
-
-      if (error) throw error;
-
-      setExpenses(expenses.filter((exp) => exp.id !== expenseId));
-      showSuccessAlert("Expense deleted successfully!");
-    } catch (error) {
-      showErrorAlert("Failed to delete expense. Please try again.");
-    }
-  };
-
-  const confirmDelete = (expense) => {
-    setAlertProps({
-      open: true,
-      title: "Delete Expense",
-      message: `Are you sure you want to delete "${expense.title}"?`,
-      confirmText: "Delete",
-      cancelText: "Cancel",
-      icon: <Trash2 color="#fff" size={40} />,
-      iconBg: theme.colors.error,
-      confirmColor: theme.colors.error,
-      confirmTextColor: "#fff",
-      cancelColor: theme.colors.buttonSecondary,
-      cancelTextColor: theme.colors.text,
-      onConfirm: () => {
-        setAlertProps((prev) => ({ ...prev, open: false }));
-        deleteExpense(expense.id);
-      },
-      onCancel: () => setAlertProps((prev) => ({ ...prev, open: false })),
-    });
-  };
-
-  const showSuccessAlert = (message) => {
-    setAlertProps({
-      open: true,
-      title: "Success",
-      message,
-      confirmText: "OK",
-showCancel: false,
-      icon: <DollarSign color="#fff" size={40} />,
-      iconBg: theme.colors.primary,
-      confirmColor: theme.colors.primary,
-      confirmTextColor: "#fff",
-      cancelText: null,
-      onConfirm: () => setAlertProps((prev) => ({ ...prev, open: false })),
-      onCancel: null,
-    });
-  };
-
-  const showErrorAlert = (message) => {
-    setAlertProps({
-      open: true,
-      title: "Error",
-      message,
-      confirmText: "OK",
-showCancel: false,
-      icon: <Trash2 color="#fff" size={40} />,
-      iconBg: theme.colors.error,
-      confirmColor: theme.colors.error,
-      confirmTextColor: "#fff",
-      cancelText: null,
-      onConfirm: () => setAlertProps((prev) => ({ ...prev, open: false })),
-      onCancel: null,
-    });
-  };
-
-  const totalAmount = useMemo(() => {
-    return filteredExpenses.reduce(
-      (sum, expense) => sum + parseFloat(expense.amount),
-      0
-    );
-  }, [filteredExpenses]);
-
-  const getCategoryIcon = (category) => {
-    const iconMap = {
-      "Food & Dining": "🍽️",
-      Transportation: "🚗",
-      Shopping: "🛒",
-      Entertainment: "🎬",
-      "Bills & Utilities": "💡",
-      Healthcare: "🏥",
-      Travel: "✈️",
-      Education: "📚",
-      Others: "📝",
+  const handleReset = () => {
+    const resetFilters = {
+      searchQuery: filters.searchQuery,
+      category: "All",
+      sortBy: "date",
+      sortOrder: "desc",
+      dateRange: { startDate: null, endDate: null },
     };
-    return iconMap[category] || "📝";
+    setFilters(resetFilters);
+    onApply(resetFilters);
+    onClose();
   };
 
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  };
+  const renderOption = (value, field, label) => (
+    <TouchableOpacity
+      style={[
+        styles.modalOption,
+        filters[field] === value && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
+      ]}
+      onPress={() => setFilters(prev => ({ ...prev, [field]: value }))}
+    >
+      <Text style={[styles.modalOptionText, { color: theme.colors.text }, filters[field] === value && { color: '#fff' }]}>
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
 
-  const ExpenseCard = ({ expense, index }) => (
+  return (
+    <Modal visible={visible} transparent={true} animationType="fade" onRequestClose={onClose}>
+      <View style={styles.modalOverlay}>
+        <View style={[styles.modalContainer, { backgroundColor: theme.colors.surface }]}>
+          <View style={[styles.modalHeader, { borderBottomColor: theme.colors.border }]}>
+            <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Filter & Sort</Text>
+            <TouchableOpacity onPress={onClose} style={styles.modalCloseButton}>
+              <X color={theme.colors.textSecondary} size={24} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView contentContainerStyle={styles.modalScrollView}>
+            <Text style={[styles.modalSectionTitle, { color: theme.colors.text }]}>Date Range</Text>
+            <View style={styles.dateRangeContainer}>
+              <TouchableOpacity style={[styles.dateInput, { borderColor: theme.colors.border }]} onPress={() => setShowPicker('startDate')}>
+                 <Calendar color={theme.colors.textSecondary} size={18}/>
+                 <Text style={{color: theme.colors.textSecondary}}>{formatDate(filters.dateRange.startDate, true)}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.dateInput, { borderColor: theme.colors.border }]} onPress={() => setShowPicker('endDate')}>
+                 <Calendar color={theme.colors.textSecondary} size={18}/>
+                 <Text style={{color: theme.colors.textSecondary}}>{formatDate(filters.dateRange.endDate, true)}</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={[styles.modalSectionTitle, { color: theme.colors.text }]}>Category</Text>
+            <View style={styles.optionsContainer}>
+              {categories.map(cat => (
+                <TouchableOpacity
+                  key={cat}
+                  style={[styles.modalOption, { borderColor: theme.colors.border }, filters.category === cat && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }]}
+                  onPress={() => setFilters(prev => ({ ...prev, category: cat }))}
+                >
+                  <Text style={[styles.modalOptionText, { color: theme.colors.textSecondary }, filters.category === cat && { color: '#fff' }]}>{cat}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={[styles.modalSectionTitle, { color: theme.colors.text }]}>Sort By</Text>
+            <View style={styles.optionsContainer}>
+                {renderOption('date', 'sortBy', 'Date')}
+                {renderOption('amount', 'sortBy', 'Amount')}
+                {renderOption('title', 'sortBy', 'Title')}
+            </View>
+
+            <Text style={[styles.modalSectionTitle, { color: theme.colors.text }]}>Sort Order</Text>
+            <View style={styles.optionsContainer}>
+                <TouchableOpacity style={[styles.modalOption, filters.sortOrder === 'desc' && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }]} onPress={() => setFilters(prev => ({ ...prev, sortOrder: 'desc' }))}>
+                  <ChevronDown color={filters.sortOrder === 'desc' ? '#fff' : theme.colors.text} size={16} />
+                  <Text style={[styles.modalOptionText, { color: theme.colors.text }, filters.sortOrder === 'desc' && { color: '#fff' }]}>Descending</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.modalOption, filters.sortOrder === 'asc' && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }]} onPress={() => setFilters(prev => ({ ...prev, sortOrder: 'asc' }))}>
+                  <ChevronUp color={filters.sortOrder === 'asc' ? '#fff' : theme.colors.text} size={16} />
+                  <Text style={[styles.modalOptionText, { color: theme.colors.text }, filters.sortOrder === 'asc' && { color: '#fff' }]}>Ascending</Text>
+                </TouchableOpacity>
+            </View>
+          </ScrollView>
+
+          <View style={[styles.modalFooter, { borderTopColor: theme.colors.border }]}>
+            <TouchableOpacity style={[styles.modalButton, styles.resetButton]} onPress={handleReset}>
+              <Text style={[styles.modalButtonText, { color: theme.colors.textSecondary }]}>Reset</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.modalButton, styles.applyButton, { backgroundColor: theme.colors.primary }]} onPress={handleApply}>
+              <Text style={[styles.modalButtonText, { color: '#fff' }]}>Apply Filters</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+      {showPicker && (
+        <DateTimePicker
+          value={filters.dateRange[showPicker] || new Date()}
+          mode="date"
+          display="default"
+          onChange={handleDateChange}
+          maximumDate={new Date()}
+        />
+      )}
+    </Modal>
+  );
+};
+
+const TransactionCard = memo(({ item, config, onEdit, onDelete, theme }) => {
+  const details =
+    CATEGORY_DETAILS[item[config.categoryKey]] || CATEGORY_DETAILS["Other"];
+  const title = item[config.titleKey];
+
+  return (
     <View
       style={[
-        styles.expenseCard,
+        styles.card,
         {
-          marginBottom: index === filteredExpenses.length - 1 ? 20 : 12,
           backgroundColor: theme.colors.surface,
           borderColor: theme.colors.borderLight,
         },
       ]}
     >
-      <View style={styles.expenseHeader}>
-        <View style={[styles.expenseIcon, { backgroundColor: theme.colors.buttonSecondary }]}>
-          <Text style={styles.categoryEmoji}>
-            {getCategoryIcon(expense.category)}
-          </Text>
+      <View style={styles.cardHeader}>
+        <View
+          style={[
+            styles.cardIconContainer,
+            { backgroundColor: details.color + "20" },
+          ]}
+        >
+          <Text style={styles.cardIconEmoji}>{details.emoji}</Text>
         </View>
-        <View style={styles.expenseInfo}>
-          <Text style={[styles.expenseTitle, { color: theme.colors.text }]} numberOfLines={1}>
-            {expense.title}
+        <View style={styles.cardInfo}>
+          <Text
+            style={[styles.cardTitle, { color: theme.colors.text }]}
+            numberOfLines={1}
+          >
+            {title}
           </Text>
-          <Text style={[styles.expenseCategory, { color: theme.colors.textSecondary }]}>{expense.category}</Text>
-          <View style={styles.expenseDate}>
+          <Text
+            style={[
+              styles.cardCategory,
+              { color: theme.colors.textSecondary },
+            ]}
+          >
+            {item[config.categoryKey]}
+          </Text>
+          <View style={styles.cardDate}>
             <Clock color={theme.colors.textTertiary} size={12} />
-            <Text style={[styles.expenseDateText, { color: theme.colors.textTertiary }]}>
-              {formatDate(expense.date)}
+            <Text
+              style={[
+                styles.cardDateText,
+                { color: theme.colors.textTertiary },
+              ]}
+            >
+              {formatDate(item.date)}
             </Text>
           </View>
         </View>
-        <View style={styles.expenseAmount}>
-          <Text style={[styles.amountText, { color: theme.colors.primary }]}>
-            ₹{parseFloat(expense.amount).toLocaleString()}
-          </Text>
-        </View>
+        <Text style={[styles.amountText, { color: config.color }]}>
+          {config.sign}₹{parseFloat(item.amount).toLocaleString('en-IN')}
+        </Text>
       </View>
-
-      {expense.description && (
-        <Text style={[styles.expenseDescription, { color: theme.colors.textSecondary }]} numberOfLines={2}>
-          {expense.description}
+      {item.description && (
+        <Text
+          style={[styles.cardDescription, { color: theme.colors.textSecondary }]}
+        >
+          {item.description}
         </Text>
       )}
-
-      <View style={styles.expenseActions}>
+      <View
+        style={[
+          styles.cardActions,
+          { borderTopColor: theme.colors.borderLight },
+        ]}
+      >
         <TouchableOpacity
-          style={[styles.actionButton, { backgroundColor: theme.colors.warning + "15" }]}
-          onPress={() => {
-            setEditingExpense(expense);
-            setShowEditModal(true);
-          }}
+          style={[
+            styles.actionButton,
+            { backgroundColor: theme.colors.warning + "15" },
+          ]}
+          onPress={() => onEdit(item)}
         >
           <Edit3 color={theme.colors.warning} size={16} />
-          <Text style={[styles.editButtonText, { color: theme.colors.warning }]}>Edit</Text>
+          <Text style={[styles.buttonText, { color: theme.colors.warning }]}>
+            Edit
+          </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.actionButton, { backgroundColor: theme.colors.error + "15" }]}
-          onPress={() => confirmDelete(expense)}
+          style={[
+            styles.actionButton,
+            { backgroundColor: theme.colors.error + "15" },
+          ]}
+          onPress={() => onDelete(item)}
         >
           <Trash2 color={theme.colors.error} size={16} />
-          <Text style={[styles.deleteButtonText, { color: theme.colors.error }]}>Delete</Text>
+          <Text style={[styles.buttonText, { color: theme.colors.error }]}>
+            Delete
+          </Text>
         </TouchableOpacity>
       </View>
     </View>
   );
+});
 
-  const FilterModal = () =>
-    showFilters && (
-      <View style={styles.filterOverlay}>
-        <View style={[styles.filterModal, { backgroundColor: theme.colors.surface }]}>
-          <View style={styles.filterHeader}>
-            <Text style={[styles.filterTitle, { color: theme.colors.text }]}>Filter & Sort</Text>
-            <TouchableOpacity onPress={() => setShowFilters(false)}>
-              <Text style={[styles.closeButton, { color: theme.colors.textTertiary }]}>✕</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.filterSection}>
-            <Text style={[styles.filterSectionTitle, { color: theme.colors.text }]}>Categories</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View style={styles.categoryFilters}>
-                {categories.map((category) => (
-                  <TouchableOpacity
-                    key={category}
-                    style={[
-                      styles.categoryFilter,
-                      {
-                        backgroundColor:
-                          selectedCategory === category
-                            ? theme.colors.primary
-                            : theme.colors.buttonSecondary,
-                      },
-                    ]}
-                    onPress={() => setSelectedCategory(category)}
-                  >
-                    <Text
-                      style={[
-                        styles.categoryFilterText,
-                        {
-                          color:
-                            selectedCategory === category
-                              ? "#fff"
-                              : theme.colors.textSecondary,
-                        },
-                      ]}
-                    >
-                      {category}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
-          </View>
-          <View style={styles.filterSection}>
-            <Text style={[styles.filterSectionTitle, { color: theme.colors.text }]}>Sort By</Text>
-            <View style={styles.sortOptions}>
-              {[
-                { key: "date", label: "Date" },
-                { key: "amount", label: "Amount" },
-                { key: "title", label: "Title" },
-              ].map((option) => (
-                <TouchableOpacity
-                  key={option.key}
-                  style={[
-                    styles.sortOption,
-                    {
-                      backgroundColor:
-                        sortBy === option.key
-                          ? theme.colors.primary
-                          : theme.colors.buttonSecondary,
-                    },
-                  ]}
-                  onPress={() => setSortBy(option.key)}
-                >
-                  <Text
-                    style={[
-                      styles.sortOptionText,
-                      {
-                        color:
-                          sortBy === option.key
-                            ? "#fff"
-                            : theme.colors.textSecondary,
-                      },
-                    ]}
-                  >
-                    {option.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-          <View style={styles.filterSection}>
-            <Text style={[styles.filterSectionTitle, { color: theme.colors.text }]}>Sort Order</Text>
-            <View style={styles.sortOptions}>
-              <TouchableOpacity
-                style={[
-                  styles.sortOption,
-                  {
-                    backgroundColor:
-                      sortOrder === "desc"
-                        ? theme.colors.primary
-                        : theme.colors.buttonSecondary,
-                  },
-                ]}
-                onPress={() => setSortOrder("desc")}
-              >
-                <TrendingDown
-                  color={sortOrder === "desc" ? "#fff" : theme.colors.primary}
-                  size={16}
-                />
-                <Text
-                  style={[
-                    styles.sortOptionText,
-                    {
-                      color:
-                        sortOrder === "desc"
-                          ? "#fff"
-                          : theme.colors.textSecondary,
-                    },
-                  ]}
-                >
-                  Descending
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.sortOption,
-                  {
-                    backgroundColor:
-                      sortOrder === "asc"
-                        ? theme.colors.primary
-                        : theme.colors.buttonSecondary,
-                  },
-                ]}
-                onPress={() => setSortOrder("asc")}
-              >
-                <TrendingUp
-                  color={sortOrder === "asc" ? "#fff" : theme.colors.primary}
-                  size={16}
-                />
-                <Text
-                  style={[
-                    styles.sortOptionText,
-                    {
-                      color:
-                        sortOrder === "asc"
-                          ? "#fff"
-                          : theme.colors.textSecondary,
-                    },
-                  ]}
-                >
-                  Ascending
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-          <TouchableOpacity
-            style={[styles.applyFiltersButton, { backgroundColor: theme.colors.primary }]}
-            onPress={() => setShowFilters(false)}
-          >
-            <Text style={styles.applyFiltersText}>Apply Filters</Text>
-          </TouchableOpacity>
-        </View>
+const TransactionCardSkeleton = ({ theme }) => (
+  <View
+    style={[
+      styles.card,
+      {
+        backgroundColor: theme.colors.surface,
+        borderColor: theme.colors.borderLight,
+      },
+    ]}
+  >
+    <View style={styles.cardHeader}>
+      <View
+        style={[
+          styles.cardIconContainer,
+          { backgroundColor: theme.colors.borderLight },
+        ]}
+      />
+      <View style={styles.cardInfo}>
+        <View
+          style={{
+            height: 20,
+            width: "70%",
+            backgroundColor: theme.colors.borderLight,
+            borderRadius: 4,
+            marginBottom: 8,
+          }}
+        />
+        <View
+          style={{
+            height: 16,
+            width: "40%",
+            backgroundColor: theme.colors.borderLight,
+            borderRadius: 4,
+          }}
+        />
       </View>
-    );
+    </View>
+  </View>
+);
+
+const ListEmptyState = ({ theme, activeTab, isFiltered }) => (
+  <View style={styles.emptyState}>
+    <Eye color={theme.colors.textTertiary} size={64} />
+    <Text style={[styles.emptyStateTitle, { color: theme.colors.text }]}>
+      No Transactions Found
+    </Text>
+    <Text style={[styles.emptyStateText, { color: theme.colors.textSecondary }]}>
+      {isFiltered
+        ? "Try adjusting your search or filter criteria."
+        : `Add a new ${activeTab} to see it here.`}
+    </Text>
+  </View>
+);
+
+export default function TransactionsScreen({ navigation }) {
+  const { session } = useAuth();
+  const { theme } = useTheme();
+
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [activeTab, setActiveTab] = useState("expenses");
+  const [data, setData] = useState({ expenses: [], income: [] });
+
+  const [filters, setFilters] = useState({
+    searchQuery: "",
+    category: "All",
+    sortBy: "date",
+    sortOrder: "desc",
+    dateRange: { startDate: null, endDate: null },
+  });
+
+  const [showFiltersModal, setShowFiltersModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingItem, setEditingItem] = useState(null);
+  const [alertProps, setAlertProps] = useState({ open: false });
+
+  const TAB_CONFIG = {
+    expenses: {
+      title: "Expenses",
+      table: "expenses",
+      data: data.expenses,
+      titleKey: "title",
+      categoryKey: "category",
+      categories: EXPENSE_CATEGORIES,
+      color: theme.colors.error,
+      sign: "-",
+    },
+    income: {
+      title: "Income",
+      table: "side_incomes",
+      data: data.income,
+      titleKey: "source",
+      categoryKey: "source",
+      categories: INCOME_SOURCES,
+      color: theme.colors.success,
+      sign: "+",
+    },
+  };
+
+  const currentConfig = TAB_CONFIG[activeTab];
+
+  const fetchData = useCallback(async () => {
+    try {
+      if (!loading) setLoading(true);
+      const userId = session.user.id;
+      const [expensesRes, incomesRes] = await Promise.all([
+        supabase.from("expenses").select("*").eq("user_id", userId),
+        supabase.from("side_incomes").select("*").eq("user_id", userId),
+      ]);
+
+      if (expensesRes.error) throw expensesRes.error;
+      if (incomesRes.error) throw incomesRes.error;
+
+      setData({
+        expenses: expensesRes.data || [],
+        income: incomesRes.data || [],
+      });
+    } catch (error) {
+      showErrorAlert("Failed to fetch data. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }, [session.user.id, loading]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchData();
+    setRefreshing(false);
+  };
+
+  const filteredData = useMemo(() => {
+    let items = [...currentConfig.data];
+    const { searchQuery, category, dateRange, sortBy, sortOrder } = filters;
+
+    if (searchQuery) {
+      const lowerCaseQuery = searchQuery.toLowerCase();
+      items = items.filter(
+        (item) =>
+          item[currentConfig.titleKey]
+            ?.toLowerCase()
+            .includes(lowerCaseQuery) ||
+          item.description?.toLowerCase().includes(lowerCaseQuery)
+      );
+    }
+
+    if (category !== "All") {
+      items = items.filter(
+        (item) => item[currentConfig.categoryKey] === category
+      );
+    }
+
+    if (dateRange.startDate && dateRange.endDate) {
+      const start = new Date(dateRange.startDate);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(dateRange.endDate);
+      end.setHours(23, 59, 59, 999);
+
+      items = items.filter((item) => {
+        const itemDate = new Date(item.date);
+        return itemDate >= start && itemDate <= end;
+      });
+    }
+
+    items.sort((a, b) => {
+      let valA, valB;
+      if (sortBy === "amount") {
+        valA = parseFloat(a.amount);
+        valB = parseFloat(b.amount);
+      } else if (sortBy === "title") {
+        valA = a[currentConfig.titleKey]?.toLowerCase() || "";
+        valB = b[currentConfig.titleKey]?.toLowerCase() || "";
+      } else {
+        valA = new Date(a.date);
+        valB = new Date(b.date);
+      }
+      if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
+      if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    return items;
+  }, [currentConfig.data, filters, currentConfig.titleKey, currentConfig.categoryKey]);
+
+  const totalAmount = useMemo(
+    () =>
+      filteredData.reduce((sum, item) => sum + parseFloat(item.amount || 0), 0),
+    [filteredData]
+  );
+
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    setFilters((prev) => ({
+      ...prev,
+      category: "All",
+      dateRange: { startDate: null, endDate: null },
+      sortBy: 'date',
+      sortOrder: 'desc',
+    }));
+  };
+  
+  const handleApplyFilters = (newFilters) => {
+    setFilters(newFilters);
+  };
+
+  const openAddModal = () => {
+    setEditingItem(null);
+    setShowEditModal(true);
+  };
+
+  const openEditModal = (item) => {
+    setEditingItem(item);
+    setShowEditModal(true);
+  };
+
+  const handleDeleteItem = async (item) => {
+    const title = item[currentConfig.titleKey];
+    confirmAction({
+      title: `Delete ${currentConfig.title}`,
+      message: `Are you sure you want to delete "${title}"? This action cannot be undone.`,
+      onConfirm: async () => {
+        const { error } = await supabase
+          .from(currentConfig.table)
+          .delete()
+          .eq("id", item.id);
+        if (error) {
+          showErrorAlert(`Failed to delete ${currentConfig.title}.`);
+        } else {
+          showSuccessAlert(`${currentConfig.title} deleted successfully!`);
+          fetchData();
+        }
+      },
+    });
+  };
+
+  const confirmAction = ({ title, message, onConfirm }) => {
+    setAlertProps({
+      open: true,
+      title,
+      message,
+      onConfirm,
+      confirmText: "Confirm",
+      cancelText: "Cancel",
+      icon: <Trash2 color="#fff" size={40} />,
+      iconBg: theme.colors.error,
+      confirmColor: theme.colors.error,
+      onCancel: () => setAlertProps({ open: false }),
+    });
+  };
+
+  const showSuccessAlert = (message) =>
+    setAlertProps({
+      open: true,
+      title: "Success",
+      message,
+      confirmText: "OK",
+      onConfirm: () => setAlertProps({ open: false }),
+    });
+
+  const showErrorAlert = (message) =>
+    setAlertProps({
+      open: true,
+      title: "Error",
+      message,
+      confirmText: "OK",
+      onConfirm: () => setAlertProps({ open: false }),
+    });
+
+  const isFiltered =
+    filters.searchQuery ||
+    filters.category !== "All" ||
+    filters.dateRange.startDate;
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
+    <View
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+    >
+      <View
+        style={[
+          styles.header,
+          {
+            backgroundColor: theme.colors.surface,
+            borderBottomColor: theme.colors.border,
+          },
+        ]}
+      >
         <TouchableOpacity
-          style={[styles.backButton, { backgroundColor: theme.colors.buttonSecondary }]}
+          style={styles.headerButton}
           onPress={() => navigation.goBack()}
         >
           <ArrowLeft color={theme.colors.text} size={24} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.colors.text }]}>All Expenses</Text>
+        <Text style={[styles.headerTitle, { color: theme.colors.text }]}>
+          Transactions
+        </Text>
         <TouchableOpacity
-          style={[styles.addButton, { backgroundColor: theme.colors.buttonSecondary }]}
-          onPress={() => navigation.navigate("AddExpense")}
+          style={[
+            styles.headerButton,
+            { backgroundColor: theme.colors.primary },
+          ]}
+          onPress={openAddModal}
         >
-          <Plus color={theme.colors.primary} size={24} />
+          <Plus color="#fff" size={24} />
         </TouchableOpacity>
       </View>
-      <View style={[styles.summaryCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.borderLight }]}>
-        <View style={styles.summaryRow}>
-          <View style={styles.summaryItem}>
-            <Text style={[styles.summaryLabel, { color: theme.colors.textTertiary }]}>Total Expenses</Text>
-            <Text style={[styles.summaryValue, { color: theme.colors.text }]}>{filteredExpenses.length}</Text>
-          </View>
-          <View style={[styles.summaryDivider, { backgroundColor: theme.colors.borderLight }]} />
-          <View style={styles.summaryItem}>
-            <Text style={[styles.summaryLabel, { color: theme.colors.textTertiary }]}>Total Amount</Text>
-            <Text style={[styles.summaryAmount, { color: theme.colors.primary }]}>
-              ₹{totalAmount.toLocaleString()}
+
+      <View style={[styles.tabBar, { backgroundColor: theme.colors.surface }]}>
+        {Object.keys(TAB_CONFIG).map((tabKey) => (
+          <TouchableOpacity
+            key={tabKey}
+            style={[
+              styles.tab,
+              activeTab === tabKey && {
+                borderBottomColor: TAB_CONFIG[tabKey].color,
+              },
+            ]}
+            onPress={() => handleTabChange(tabKey)}
+          >
+            <Text
+              style={[
+                styles.tabText,
+                activeTab === tabKey
+                  ? { color: TAB_CONFIG[tabKey].color }
+                  : { color: theme.colors.textSecondary },
+              ]}
+            >
+              {TAB_CONFIG[tabKey].title}
             </Text>
-          </View>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <View
+        style={[
+          styles.summaryCard,
+          {
+            backgroundColor: theme.colors.surface,
+            borderColor: theme.colors.borderLight,
+          },
+        ]}
+      >
+        <View style={styles.summaryItem}>
+          <Text
+            style={[styles.summaryLabel, { color: theme.colors.textTertiary }]}
+          >
+            Total {currentConfig.title}
+          </Text>
+          <Text style={[styles.summaryAmount, { color: currentConfig.color }]}>
+            {currentConfig.sign}₹
+            {totalAmount.toLocaleString("en-IN", {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}
+          </Text>
+        </View>
+        <View
+          style={[
+            styles.summaryDivider,
+            { backgroundColor: theme.colors.borderLight },
+          ]}
+        />
+        <View style={styles.summaryItem}>
+          <Text
+            style={[styles.summaryLabel, { color: theme.colors.textTertiary }]}
+          >
+            Transactions
+          </Text>
+          <Text style={[styles.summaryValue, { color: theme.colors.text }]}>
+            {filteredData.length}
+          </Text>
         </View>
       </View>
+
       <View style={styles.searchContainer}>
-        <View style={[styles.searchBar, { backgroundColor: theme.colors.surface, borderColor: theme.colors.borderLight }]}>
+        <View
+          style={[
+            styles.searchBar,
+            {
+              backgroundColor: theme.colors.surface,
+              borderColor: theme.colors.borderLight,
+            },
+          ]}
+        >
           <Search color={theme.colors.textTertiary} size={18} />
           <TextInput
             style={[styles.searchInput, { color: theme.colors.text }]}
-            placeholder="Search expenses..."
+            placeholder={`Search ${currentConfig.title}...`}
             placeholderTextColor={theme.colors.textTertiary}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
+            value={filters.searchQuery}
+            onChangeText={(text) =>
+              setFilters((prev) => ({ ...prev, searchQuery: text }))
+            }
           />
         </View>
         <TouchableOpacity
-          style={[styles.filterButton, { backgroundColor: theme.colors.surface, borderColor: theme.colors.borderLight }]}
-          onPress={() => setShowFilters(true)}
+          style={[
+            styles.filterButton,
+            {
+              backgroundColor: theme.colors.surface,
+              borderColor: theme.colors.borderLight,
+            },
+          ]}
+          onPress={() => setShowFiltersModal(true)}
         >
           <Filter color={theme.colors.primary} size={20} />
         </TouchableOpacity>
       </View>
-      {(selectedCategory !== "All" || searchQuery) && (
-        <View style={styles.activeFilters}>
-          <Text style={[styles.activeFiltersLabel, { color: theme.colors.textSecondary }]}>Active filters:</Text>
-          {selectedCategory !== "All" && (
-            <View style={[styles.activeFilterTag, { backgroundColor: theme.colors.primary }]}>
-              <Text style={styles.activeFilterText}>{selectedCategory}</Text>
-              <TouchableOpacity onPress={() => setSelectedCategory("All")}>
-                <Text style={styles.removeFilterText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-          {searchQuery && (
-            <View style={[styles.activeFilterTag, { backgroundColor: theme.colors.primary }]}>
-              <Text style={styles.activeFilterText}>"{searchQuery}"</Text>
-              <TouchableOpacity onPress={() => setSearchQuery("")}>
-                <Text style={styles.removeFilterText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+
+      {loading ? (
+        <View style={styles.listContainer}>
+          <TransactionCardSkeleton theme={theme} />
+          <TransactionCardSkeleton theme={theme} />
+          <TransactionCardSkeleton theme={theme} />
         </View>
+      ) : (
+        <FlatList
+          data={filteredData}
+          renderItem={({ item }) => (
+            <TransactionCard
+              item={item}
+              config={currentConfig}
+              onEdit={openEditModal}
+              onDelete={handleDeleteItem}
+              theme={theme}
+            />
+          )}
+          keyExtractor={(item) => item.id.toString()}
+          contentContainerStyle={styles.listContainer}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[theme.colors.primary]}
+              tintColor={theme.colors.primary}
+            />
+          }
+          ListEmptyComponent={
+            <ListEmptyState
+              theme={theme}
+              activeTab={activeTab}
+              isFiltered={isFiltered}
+            />
+          }
+        />
       )}
-      <FlatList
-        data={filteredExpenses}
-        renderItem={({ item, index }) => (
-          <ExpenseCard expense={item} index={index} />
-        )}
-        keyExtractor={(item) => item.id.toString()}
-        contentContainerStyle={styles.listContainer}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <DollarSign color={theme.colors.textTertiary} size={64} />
-            <Text style={[styles.emptyStateTitle, { color: theme.colors.text }]}>{loading ? "Loading..." : "No expenses found"}</Text>
-            <Text style={[styles.emptyStateText, { color: theme.colors.textSecondary }]}>
-              {searchQuery || selectedCategory !== "All"
-                ? "Try adjusting your search or filters"
-                : "Start tracking your expenses by adding your first expense"}
-            </Text>
-            <TouchableOpacity
-              style={[styles.addExpenseButton, { backgroundColor: theme.colors.primary }]}
-              onPress={() => navigation.navigate("AddExpense")}
-            >
-              <Plus color="#fff" size={20} />
-              <Text style={styles.addExpenseButtonText}>Add Expense</Text>
-            </TouchableOpacity>
-          </View>
-        }
-      />
-      <FilterModal />
+
       <Alert {...alertProps} />
-      <Modal visible={showEditModal} animationType="slide" transparent={false}>
-        <View style={[styles.modalContainer, { backgroundColor: theme.colors.background }]}>
-          <View style={[styles.modalHeader, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
-            <TouchableOpacity onPress={() => setShowEditModal(false)}>
-              <ArrowLeft color={theme.colors.text} size={24} />
-            </TouchableOpacity>
-            <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Edit Expense</Text>
-            <View style={styles.placeholder} />
-          </View>
-          <ScrollView style={styles.modalContent}>
-            <View style={styles.modalSection}>
-              <Text style={[styles.modalLabel, { color: theme.colors.text }]}>Title</Text>
-              <TextInput
-                style={[styles.modalInput, { backgroundColor: theme.colors.surface, borderColor: theme.colors.borderLight, color: theme.colors.text }]}
-                value={editingExpense?.title}
-                onChangeText={(text) =>
-                  setEditingExpense({ ...editingExpense, title: text })
-                }
-                placeholder="Expense Title"
-                placeholderTextColor={theme.colors.textTertiary}
-              />
-            </View>
-            <View style={styles.modalSection}>
-              <Text style={[styles.modalLabel, { color: theme.colors.text }]}>Amount</Text>
-              <TextInput
-                style={[styles.modalInput, { backgroundColor: theme.colors.surface, borderColor: theme.colors.borderLight, color: theme.colors.text }]}
-                value={String(editingExpense?.amount)}
-                onChangeText={(text) =>
-                  setEditingExpense({ ...editingExpense, amount: text })
-                }
-                placeholder="Amount"
-                placeholderTextColor={theme.colors.textTertiary}
-                keyboardType="decimal-pad"
-              />
-            </View>
-            <View style={styles.modalSection}>
-              <Text style={[styles.modalLabel, { color: theme.colors.text }]}>Date</Text>
-              <TextInput
-                style={[styles.modalInput, { backgroundColor: theme.colors.surface, borderColor: theme.colors.borderLight, color: theme.colors.text }]}
-                value={editingExpense?.date}
-                onChangeText={(text) =>
-                  setEditingExpense({ ...editingExpense, date: text })
-                }
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor={theme.colors.textTertiary}
-              />
-            </View>
-            <View style={styles.modalSection}>
-              <Text style={[styles.modalLabel, { color: theme.colors.text }]}>Category</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.categoryEditScroll}
-              >
-                {CATEGORIES.map((cat) => {
-                  const isActive = editingExpense?.category === cat.name;
-                  return (
-                    <TouchableOpacity
-                      key={cat.id}
-                      style={[
-                        styles.categoryEditChip,
-                        isActive && [
-                          styles.categoryEditChipActive,
-                          { backgroundColor: cat.color, borderColor: cat.color },
-                        ],
-                      ]}
-                      onPress={() =>
-                        setEditingExpense({ ...editingExpense, category: cat.name })
-                      }
-                      activeOpacity={0.8}
-                    >
-                      <Text
-                        style={[
-                          styles.categoryEditChipEmoji,
-                          isActive && styles.categoryEditChipEmojiActive,
-                        ]}
-                      >
-                        {cat.emoji}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.categoryEditChipText,
-                          isActive && styles.categoryEditChipTextActive,
-                        ]}
-                      >
-                        {cat.name}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-            </View>
-            <View style={styles.modalSection}>
-              <Text style={[styles.modalLabel, { color: theme.colors.text }]}>Description</Text>
-              <TextInput
-                style={[styles.modalInput, styles.modalTextArea, { backgroundColor: theme.colors.surface, borderColor: theme.colors.borderLight, color: theme.colors.text }]}
-                value={editingExpense?.description || ""}
-                onChangeText={(text) =>
-                  setEditingExpense({ ...editingExpense, description: text })
-                }
-                placeholder="Description (optional)"
-                placeholderTextColor={theme.colors.textTertiary}
-                multiline
-                numberOfLines={4}
-              />
-            </View>
-          </ScrollView>
-          <View style={[styles.modalButtonContainer, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border }]}>
-            <TouchableOpacity
-              style={[styles.modalButton, styles.modalCancelButton, { backgroundColor: theme.colors.buttonSecondary, borderColor: theme.colors.border }]}
-              onPress={() => setShowEditModal(false)}
-            >
-              <Text style={[styles.modalCancelButtonText, { color: theme.colors.text }]}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.modalButton, { backgroundColor: theme.colors.primary }]}
-              onPress={async () => {
-                const { error } = await supabase
-                  .from("expenses")
-                  .update({
-                    title: editingExpense.title,
-                    amount: editingExpense.amount,
-                    category: editingExpense.category,
-                    date: editingExpense.date,
-                    description: editingExpense.description,
-                  })
-                  .eq("id", editingExpense.id);
-                if (!error) {
-                  setShowEditModal(false);
-                  fetchExpenses();
-                  showSuccessAlert("Expense updated successfully!");
-                } else {
-                  showErrorAlert("Failed to update expense. Please try again.");
-                }
-              }}
-            >
-              <Text style={styles.modalButtonText}>Save Changes</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+      
+      <FilterModal
+          visible={showFiltersModal}
+          onClose={() => setShowFiltersModal(false)}
+          onApply={handleApplyFilters}
+          initialFilters={filters}
+          categories={currentConfig.categories}
+          theme={theme}
+      />
     </View>
   );
 }
 
-
-
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
   header: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 18,
-    borderBottomWidth: 1,
     justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingTop: 50,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
   },
-  backButton: {
-    padding: 8,
-    borderRadius: 12,
+  headerButton: {
+    width: 40,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 20,
   },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    flex: 1,
-    textAlign: "center",
+  headerTitle: { fontSize: 20, fontWeight: "700" },
+  tabBar: { flexDirection: "row", justifyContent: "space-around" },
+  tab: {
+    paddingVertical: 14,
+    borderBottomWidth: 2,
+    borderBottomColor: "transparent",
+    width: "50%",
+    alignItems: "center",
   },
-  addButton: {
-    padding: 8,
-    borderRadius: 12,
-  },
+  tabText: { fontSize: 16, fontWeight: "600" },
   summaryCard: {
     marginHorizontal: 20,
     marginTop: 20,
     borderRadius: 16,
     padding: 20,
     borderWidth: 1,
-    elevation: 2,
-  },
-  summaryRow: {
     flexDirection: "row",
     alignItems: "center",
   },
-  summaryItem: {
-    flex: 1,
-    alignItems: "center",
-  },
-  summaryDivider: {
-    width: 1,
-    height: 40,
-    marginHorizontal: 20,
-  },
-  summaryLabel: {
-    fontSize: 14,
-    fontWeight: "600",
-    marginBottom: 4,
-  },
-  summaryValue: {
-    fontSize: 24,
-    fontWeight: "700",
-  },
-  summaryAmount: {
-    fontSize: 24,
-    fontWeight: "700",
-  },
+  summaryItem: { flex: 1, alignItems: "center", gap: 4 },
+  summaryDivider: { width: 1, height: 40 },
+  summaryLabel: { fontSize: 14, fontWeight: "500" },
+  summaryValue: { fontSize: 22, fontWeight: "700" },
+  summaryAmount: { fontSize: 22, fontWeight: "700" },
   searchContainer: {
     flexDirection: "row",
     paddingHorizontal: 20,
@@ -877,65 +837,29 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderRadius: 12,
     paddingHorizontal: 16,
-    paddingVertical: 1,
     borderWidth: 1,
-    elevation: 1,
   },
-  searchInput: {
-    flex: 1,
-    marginLeft: 12,
-    fontSize: 16,
-  },
+  searchInput: { flex: 1, marginLeft: 10, fontSize: 16, height: 48 },
   filterButton: {
     borderRadius: 12,
     padding: 12,
     borderWidth: 1,
-    elevation: 1,
-  },
-  activeFilters: {
-    flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 20,
-    paddingBottom: 10,
-    flexWrap: "wrap",
-  },
-  activeFiltersLabel: {
-    fontSize: 14,
-    marginRight: 8,
-  },
-  activeFilterTag: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    marginRight: 8,
-  },
-  activeFilterText: {
-    fontSize: 12,
-    fontWeight: "600",
-    marginRight: 4,
-  },
-  removeFilterText: {
-    fontSize: 12,
-    fontWeight: "700",
+    justifyContent: "center",
   },
   listContainer: {
     paddingHorizontal: 20,
     paddingTop: 10,
+    paddingBottom: 50,
   },
-  expenseCard: {
+  card: {
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    elevation: 2,
-  },
-  expenseHeader: {
-    flexDirection: "row",
-    alignItems: "center",
     marginBottom: 12,
   },
-  expenseIcon: {
+  cardHeader: { flexDirection: "row", alignItems: "center" },
+  cardIconContainer: {
     width: 48,
     height: 48,
     borderRadius: 12,
@@ -943,48 +867,26 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginRight: 12,
   },
-  categoryEmoji: {
-    fontSize: 20,
-  },
-  expenseInfo: {
-    flex: 1,
-    marginRight: 12,
-  },
-  expenseTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    marginBottom: 4,
-  },
-  expenseCategory: {
+  cardIconEmoji: { fontSize: 20 },
+  cardInfo: { flex: 1, marginRight: 12 },
+  cardTitle: { fontSize: 16, fontWeight: "700", marginBottom: 4 },
+  cardCategory: { fontSize: 14, marginBottom: 6 },
+  cardDate: { flexDirection: "row", alignItems: "center" },
+  cardDateText: { fontSize: 12, marginLeft: 4 },
+  amountText: { fontSize: 18, fontWeight: "700" },
+  cardDescription: {
     fontSize: 14,
-    marginBottom: 4,
-  },
-  expenseDate: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  expenseDateText: {
-    fontSize: 12,
-    marginLeft: 4,
-  },
-  expenseAmount: {
-    alignItems: "flex-end",
-  },
-  amountText: {
-    fontSize: 18,
-    fontWeight: "700",
-  },
-  expenseDescription: {
-    fontSize: 14,
-    marginBottom: 12,
     lineHeight: 20,
+    marginTop: 12,
+    paddingLeft: 60,
   },
-  expenseActions: {
+  cardActions: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    justifyContent: "flex-end",
     paddingTop: 12,
+    marginTop: 12,
     borderTopWidth: 1,
-    
+    gap: 8,
   },
   actionButton: {
     flexDirection: "row",
@@ -992,25 +894,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
-    flex: 1,
-    marginHorizontal: 4,
-    justifyContent: "center",
   },
-  viewButtonText: {
-    fontWeight: "600",
-    fontSize: 14,
-    marginLeft: 4,
-  },
-  editButtonText: {
-    fontWeight: "600",
-    fontSize: 14,
-    marginLeft: 4,
-  },
-  deleteButtonText: {
-    fontWeight: "600",
-    fontSize: 14,
-    marginLeft: 4,
-  },
+  buttonText: { fontWeight: "600", fontSize: 14, marginLeft: 6 },
   emptyState: {
     alignItems: "center",
     justifyContent: "center",
@@ -1022,201 +907,101 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     marginTop: 16,
     marginBottom: 8,
+    textAlign: "center",
   },
   emptyStateText: {
     fontSize: 16,
     textAlign: "center",
     lineHeight: 24,
-    marginBottom: 24,
   },
-  addExpenseButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 12,
-  },
-  addExpenseButtonText: {
-    fontWeight: "700",
-    fontSize: 16,
-    marginLeft: 8,
-  },
-  filterOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: "flex-end",
-  },
-  filterModal: {
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 40,
-    maxHeight: "80%",
-  },
-  filterHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 24,
-  },
-  filterTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-  },
-  closeButton: {
-    fontSize: 24,
-    fontWeight: "300",
-  },
-  filterSection: {
-    marginBottom: 24,
-  },
-  filterSectionTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    marginBottom: 12,
-  },
-  categoryFilters: {
-    flexDirection: "row",
-    paddingVertical: 4,
-  },
-  categoryFilter: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginRight: 8,
-  },
-  
-  categoryFilterText: {
-    fontSize: 14,
-    fontWeight: "600",
-    
-  },
-  
-  sortOptions: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  sortOption: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-  sortOptionText: {
-    fontSize: 14,
-    fontWeight: "600",
-    marginLeft: 6,
-  },
-  applyFiltersButton: {
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: "center",
-    marginTop: 20,
-  },
-  applyFiltersText: {
-    fontSize: 16,
-    fontWeight: "700",
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   modalContainer: {
-    flex: 1,
+    width: '90%',
+    maxHeight: '80%',
+    borderRadius: 20,
+    overflow: 'hidden',
   },
   modalHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
     borderBottomWidth: 1,
   },
   modalTitle: {
     fontSize: 20,
-    fontWeight: "700",
-    letterSpacing: 0.3,
+    fontWeight: '700',
   },
-  modalContent: {
+  modalCloseButton: {
+    padding: 4,
+  },
+  modalScrollView: {
+    padding: 20,
+  },
+  modalSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  dateRangeContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginBottom: 20,
+  },
+  dateInput: {
     flex: 1,
-    padding: 20,
-  },
-  modalSection: {
-    marginBottom: 24,
-  },
-  modalLabel: {
-    fontSize: 16,
-    marginBottom: 8,
-    fontWeight: "600",
-    letterSpacing: 0.2,
-  },
-  modalInput: {
-    borderRadius: 16,
-    padding: 16,
-    fontSize: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 14,
+    borderRadius: 10,
     borderWidth: 1,
-
-    fontWeight: "500",
   },
-  modalTextArea: {
-    height: 100,
-    textAlignVertical: "top",
+  optionsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 20,
   },
-  categoryEditScroll: {
-    flexDirection: "row",
-    paddingVertical: 8,
-    gap: 12,
-  },
-  categoryEditChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderRadius: 20,
-    borderWidth: 1,
-    paddingHorizontal: 16,
+  modalOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
     paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
   },
-  categoryEditChipActive: {
-    borderWidth: 2,
-  },
-  categoryEditChipEmoji: {
-    fontSize: 16,
-    marginRight: 8,
-  },
-  categoryEditChipText: {
+  modalOptionText: {
     fontSize: 14,
-    fontWeight: "600",
+    fontWeight: '500',
   },
-  categoryEditChipTextActive: {
-    fontWeight: "700",
-  },
-  modalButtonContainer: {
-    flexDirection: "row",
+  modalFooter: {
+    flexDirection: 'row',
     padding: 20,
-    gap: 16,
     borderTopWidth: 1,
   },
   modalButton: {
     flex: 1,
-    paddingVertical: 16,
-    borderRadius: 16,
-    alignItems: "center",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  resetButton: {
+    marginRight: 10,
+  },
+  applyButton: {
+    marginLeft: 10,
   },
   modalButtonText: {
-    fontWeight: "700",
     fontSize: 16,
-    letterSpacing: 0.3,
+    fontWeight: '700',
   },
-  modalCancelButton: {
-    shadowColor: "transparent",
-    elevation: 0,
-    borderWidth: 1,
-  }
 });
