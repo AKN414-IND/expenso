@@ -5,6 +5,9 @@ import { ActivityIndicator, View } from "react-native";
 import * as SecureStore from "expo-secure-store";
 
 import { useAuth } from "./context/AuthContext";
+import { navigationRef } from "./App";
+
+// Import all your screens
 import OnboardingScreen from "./screens/OnboardingScreen";
 import AuthScreen from "./screens/AuthScreen";
 import DashboardScreen from "./screens/DashboardScreen";
@@ -19,11 +22,8 @@ import PaymentReminderScreen from "./screens/PaymentReminderScreen";
 import SmartInsightsScreen from "./screens/SmartInsightsScreen";
 import IncomeManagement from "./screens/IncomeManagement.js";
 import InvestmentsScreen from "./screens/InvestmentsScreen.js";
-
 import NotificationsScreen from "./screens/NotificationsScreen";
 import SecurityScreen from "./screens/SecurityScreen";
-
-import Toast from "react-native-toast-message";
 
 const Stack = createNativeStackNavigator();
 
@@ -44,7 +44,6 @@ export default function AppNavigator() {
     checkStatus();
   }, []);
 
-  // Mark onboarding as complete
   const handleOnboardingFinish = async () => {
     try {
       await SecureStore.setItemAsync("onboardingComplete", "true");
@@ -54,7 +53,6 @@ export default function AppNavigator() {
     }
   };
 
-  // Show loader while checking auth and onboarding status
   if (loading || onboardingComplete === null) {
     return (
       <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
@@ -64,67 +62,60 @@ export default function AppNavigator() {
   }
 
   return (
-    <NavigationContainer>
-      <>
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
-          {!onboardingComplete ? (
-            <Stack.Screen name="Onboarding">
-              {(props) => (
-                <OnboardingScreen
-                  {...props}
-                  onFinish={handleOnboardingFinish}
-                />
-              )}
-            </Stack.Screen>
-          ) : session ? (
-            <>
-              <Stack.Screen name="Dashboard" component={DashboardScreen} />
-              <Stack.Screen name="AddExpense" component={AIExpenseScreen} />
-              <Stack.Screen name="AllExpenses" component={AllExpenses} />
-              <Stack.Screen name="BudgetScreen" component={BudgetScreen} />
-              <Stack.Screen name="Profile" component={ProfileScreen} />
-              <Stack.Screen name="AppSettings" component={AppSettingsScreen} />
-              <Stack.Screen
-                name="SmartInsights"
-                component={SmartInsightsScreen}
-              />
-              <Stack.Screen
-                name="IncomeManagement"
-                component={IncomeManagement}
-              />
-              <Stack.Screen
-                name="InvestmentsScreen"
-                component={InvestmentsScreen}
-              />
-              <Stack.Screen
-                name="Notifications"
-                component={NotificationsScreen}
-              />
-              <Stack.Screen name="Security" component={SecurityScreen} />
-
-              <Stack.Screen
-                name="PaymentReminder"
-                component={PaymentReminderScreen}
-                options={{ headerShown: false }}
-              />
-              <Stack.Screen
-                name="PrivacySecurity"
-                component={PrivacySecurityScreen}
-                options={{ headerShown: false }}
-              />
-            </>
-          ) : (
-            <>
-              <Stack.Screen name="Auth" component={AuthScreen} />
-              <Stack.Screen
-                name="ForgotPassword"
-                component={ForgotPasswordScreen}
-              />
-            </>
-          )}
-        </Stack.Navigator>
-        <Toast />
-      </>
+    <NavigationContainer ref={navigationRef}>
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        {!onboardingComplete ? (
+          <Stack.Screen name="Onboarding">
+            {(props) => (
+              <OnboardingScreen {...props} onFinish={handleOnboardingFinish} />
+            )}
+          </Stack.Screen>
+        ) : session ? (
+          <>
+            <Stack.Screen name="Dashboard" component={DashboardScreen} />
+            <Stack.Screen name="AddExpense" component={AIExpenseScreen} />
+            <Stack.Screen name="AllExpenses" component={AllExpenses} />
+            <Stack.Screen name="BudgetScreen" component={BudgetScreen} />
+            <Stack.Screen name="Profile" component={ProfileScreen} />
+            <Stack.Screen name="AppSettings" component={AppSettingsScreen} />
+            <Stack.Screen
+              name="SmartInsights"
+              component={SmartInsightsScreen}
+            />
+            <Stack.Screen
+              name="IncomeManagement"
+              component={IncomeManagement}
+            />
+            <Stack.Screen
+              name="InvestmentsScreen"
+              component={InvestmentsScreen}
+            />
+            <Stack.Screen
+              name="Notifications"
+              component={NotificationsScreen}
+            />
+            <Stack.Screen name="Security" component={SecurityScreen} />
+            <Stack.Screen
+              name="PaymentReminder"
+              component={PaymentReminderScreen}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="PrivacySecurity"
+              component={PrivacySecurityScreen}
+              options={{ headerShown: false }}
+            />
+          </>
+        ) : (
+          <>
+            <Stack.Screen name="Auth" component={AuthScreen} />
+            <Stack.Screen
+              name="ForgotPassword"
+              component={ForgotPasswordScreen}
+            />
+          </>
+        )}
+      </Stack.Navigator>
     </NavigationContainer>
   );
 }

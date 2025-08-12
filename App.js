@@ -1,32 +1,42 @@
 import React, { useEffect } from "react";
 import { LogBox } from "react-native";
-import * as SecureStore from "expo-secure-store";
-import AppNavigator from "./AppNavigator";
+import { createNavigationContainerRef } from '@react-navigation/native';
+import * as Notifications from 'expo-notifications';
+import Toast, { BaseToast, ErrorToast } from "react-native-toast-message";
+
 import { AuthProvider } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
-import Toast, { BaseToast, ErrorToast } from "react-native-toast-message";
-import * as Notifications from 'expo-notifications';
+import AppNavigator from "./AppNavigator";
 
+// Create a ref for the navigation container to allow for global navigation
+export const navigationRef = createNavigationContainerRef();
+
+// Configure how notifications are handled when the app is in the foreground
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
+});
 
 export default function App() {
+  // Listener for handling user interaction with notifications
   useEffect(() => {
     const subscription = Notifications.addNotificationResponseReceivedListener(response => {
       const { screen, params } = response.notification.request.content.data || {};
       
-      if (screen && navigationRef.current) {
-        navigationRef.current.navigate(screen, params);
+      if (screen && navigationRef.isReady()) {
+        navigationRef.navigate(screen, params);
       }
     });
   
     return () => subscription.remove();
   }, []);
-  useEffect(() => {
-    // Optional: reset onboarding for testing (DEV ONLY)
-    if (__DEV__) {
-      SecureStore.deleteItemAsync("onboardingComplete");
-    }
 
-    // Suppress common warnings you’ve already handled (optional)
+  // Suppress specific logs in development for a cleaner console
+  useEffect(() => {
     LogBox.ignoreLogs([
       "Non-serializable values were found in the navigation state",
     ]);

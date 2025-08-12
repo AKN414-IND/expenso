@@ -4,6 +4,7 @@ import React, {
   useMemo,
   useCallback,
   useRef,
+  forwardRef,
 } from "react";
 import {
   View,
@@ -15,22 +16,26 @@ import {
   ScrollView,
   RefreshControl,
   Dimensions,
-  Alert as RNAlert,
   Modal,
-  Animated,
-  UIManager,
-  findNodeHandle,
 } from "react-native";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
-import { PieChart } from "react-native-chart-kit";
 import Alert from "../components/Alert";
-import { LogOut, Trash2, X, ArrowLeft, ArrowRight } from "lucide-react-native";
+import {
+  Trash2,
+  X,
+  ArrowLeft,
+  ArrowRight,
+  Sparkles,
+} from "lucide-react-native";
 import Carousel from "react-native-reanimated-carousel";
 import ReminderCard from "../components/ReminderCard";
-import { useFocusEffect } from "@react-navigation/native";
-import { useRoute, useNavigation } from "@react-navigation/native";
+import {
+  useFocusEffect,
+  useRoute,
+  useNavigation,
+} from "@react-navigation/native";
 import CalendarHeatmap from "../components/Heatmap";
 import FloatingTaskbar from "../components/FloatingTaskbar";
 import TransactionItem from "../components/TransactionItem";
@@ -39,50 +44,31 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 const screenWidth = Dimensions.get("window").width;
 const screenHeight = Dimensions.get("window").height;
 
-
-const EXPENSE_CATEGORIES = [
-  { name: "Food & Dining", icon: "🍽️", color: "#FF6B6B" },
-  { name: "Transportation", icon: "🚗", color: "#4ECDC4" },
-  { name: "Shopping", icon: "🛍️", color: "#45B7D1" },
-  { name: "Entertainment", icon: "🎬", color: "#96CEB4" },
-  { name: "Bills & Utilities", icon: "💡", color: "#FECA57" },
-  { name: "Healthcare", icon: "🏥", color: "#FF9FF3" },
-  { name: "Education", icon: "📚", color: "#54A0FF" },
-  { name: "Travel", icon: "✈️", color: "#5F27CD" },
-  { name: "Groceries", icon: "🛒", color: "#00D2D3" },
-  { name: "Other", icon: "📝", color: "#747D8C" },
-];
-
-const CHART_COLORS = [
-  "#FF6B6B",
-  "#4ECDC4",
-  "#45B7D1",
-  "#96CEB4",
-  "#FFEAA7",
-  "#DDA0DD",
-];
-
+// --- Onboarding Configuration (Updated for New UI) ---
 const ONBOARDING_STEPS = [
   {
     id: "welcome",
-    title: "Welcome to Expenso Your Financial Hub! 🎉",
-    description: "Let's take a quick tour to see how you can master your money.",
+    title: "Welcome to Your Financial Hub! 🎉",
+    description:
+      "Let's take a quick tour to see how you can master your money.",
     targetId: null,
     position: "center",
     icon: "🚀",
   },
   {
     id: "profile",
-    title: "Your Profile",
-    description: "Tap your avatar to manage your account details, preferences, and app theme.",
-    targetId: "profile-avatar",
+    title: "Your Profile & Insights",
+    description:
+      "Tap the 'Insights' icon for smart analysis or your avatar for account details.",
+    targetId: "header-actions",
     position: "bottom",
     icon: "👤",
   },
   {
     id: "quick-stats",
     title: "At-a-Glance Stats",
-    description: "Instantly see your total spending for the current month and today.",
+    description:
+      "Instantly see your total spending for the current month and today.",
     targetId: "stats-container",
     position: "bottom",
     icon: "📊",
@@ -90,7 +76,8 @@ const ONBOARDING_STEPS = [
   {
     id: "heatmap",
     title: "Spending Heatmap",
-    description: "Visualize your daily spending habits. Darker squares mean more spending!",
+    description:
+      "Visualize your daily spending habits. Darker squares mean more spending!",
     targetId: "chart-container",
     position: "bottom",
     icon: "🔥",
@@ -98,7 +85,8 @@ const ONBOARDING_STEPS = [
   {
     id: "reminders",
     title: "Never Miss a Bill",
-    description: "Set up and view reminders for bills and subscriptions so you always pay on time.",
+    description:
+      "Your upcoming reminders appear here. Swipe through them to see them all.",
     targetId: "reminders-section",
     position: "top",
     icon: "🔔",
@@ -106,87 +94,35 @@ const ONBOARDING_STEPS = [
   {
     id: "budget",
     title: "Stay on Budget",
-    description: "Monitor your spending against your budgets. The progress bars help you stay in control.",
+    description:
+      "Quickly monitor your spending against your category budgets right here.",
     targetId: "budget-section",
     position: "top",
     icon: "💰",
   },
   {
-    id: "recent-income",
-    title: "Track Your Income",
-    description: "View your latest income entries here. Tap 'See All' to manage them.",
-    targetId: "recent-income-section",
+    id: "recent-activity",
+    title: "Recent Activity",
+    description:
+      "All your latest transactions are organized here. Tap the tabs to switch between expenses, income, and investments.",
+    targetId: "recent-activity-section",
     position: "top",
-    icon: "💵",
-  },
-  {
-    id: "recent",
-    title: "Recent Expenses",
-    description: "Your latest expenses appear here. Long-press an item to edit or delete it.",
-    targetId: "recent-section",
-    position: "top",
-    icon: "📝",
-  },
-  {
-    id: "investments",
-    title: "Watch Your Investments",
-    description: "Keep an eye on your stocks, crypto, and other investments.",
-    targetId: "investments-section",
-    position: "top",
-    icon: "📈",
+    icon: "📚",
   },
   {
     id: "taskbar",
     title: "Quick Actions",
-    description: "This floating taskbar gives you one-tap access to key features.",
+    description:
+      "This navigation bar gives you one-tap access to key features. Tap the '+' to add a new transaction.",
     targetId: "taskbar",
     position: "top",
     icon: "⚡️",
   },
   {
-    id: "add-expense",
-    title: "Add a Transaction",
-    description: "The plus button is your go-to for logging a new expense, income, or investment.",
-    targetId: "add-button",
-    position: "top",
-    icon: "➕",
-  },
-  {
-    id: "budget-btn",
-    title: "Manage Budgets",
-    description: "Tap here to create and manage your budgets for different spending categories.",
-    targetId: "budget-btn",
-    position: "top",
-    icon: "💰",
-  },
-  {
-    id: "reminders-btn",
-    title: "Set Reminders",
-    description: "Use this to create new reminders for your recurring bills and payments.",
-    targetId: "reminders-btn",
-    position: "top",
-    icon: "🔔",
-  },
-  {
-    id: "expenses-btn",
-    title: "View All Expenses",
-    description: "Dive deep into your spending history with powerful sorting and filtering tools.",
-    targetId: "expenses-btn",
-    position: "top",
-    icon: "📊",
-  },
-  {
-    id: "insights-btn",
-    title: "Get Smart Insights",
-    description: "Discover AI-powered analysis and personalized tips to improve your financial health.",
-    targetId: "insights-btn",
-    position: "top",
-    icon: "🧠",
-  },
-  {
     id: "complete",
     title: "You're All Set! ✅",
-    description: "You're ready to take charge of your finances. Start by adding your first transaction!",
+    description:
+      "You're ready to take charge of your finances. Start by adding your first transaction!",
     targetId: null,
     position: "center",
     icon: "🎯",
@@ -194,21 +130,6 @@ const ONBOARDING_STEPS = [
 ];
 
 const ONBOARDING_FLAG_KEY = "onboarding_completed";
-
-const checkOnboardingCompleted = async () => {
-  try {
-    const flag = await AsyncStorage.getItem(ONBOARDING_FLAG_KEY);
-    return flag === "true";
-  } catch {
-    return false;
-  }
-};
-
-const setOnboardingCompleted = async () => {
-  try {
-    await AsyncStorage.setItem(ONBOARDING_FLAG_KEY, "true");
-  } catch {}
-};
 
 const OnboardingOverlay = ({
   isVisible,
@@ -218,27 +139,7 @@ const OnboardingOverlay = ({
 }) => {
   const { theme } = useTheme();
   const [currentStep, setCurrentStep] = useState(0);
-  const [overlayOpacity] = useState(new Animated.Value(0));
-  const [highlightOpacity] = useState(new Animated.Value(0));
   const [targetLayout, setTargetLayout] = useState(null);
-  const [tooltipLayout, setTooltipLayout] = useState({ width: 0, height: 0 });
-  const [tooltipMeasured, setTooltipMeasured] = useState(false);
-
-  useEffect(() => {
-    if (isVisible) {
-      Animated.timing(overlayOpacity, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: true,
-      }).start();
-
-      Animated.timing(highlightOpacity, {
-        toValue: 1,
-        duration: 400,
-        useNativeDriver: true,
-      }).start();
-    }
-  }, [isVisible]);
 
   const measureAndScrollToTarget = useCallback(() => {
     const step = ONBOARDING_STEPS[currentStep];
@@ -246,334 +147,142 @@ const OnboardingOverlay = ({
       setTargetLayout(null);
       return;
     }
-    // Use a timeout to ensure the target element has been rendered and is measurable
-    setTimeout(() => {
-      const targetRef = targetRefs?.[step.targetId];
-      if (targetRef && typeof targetRef.measure === 'function') {
-        targetRef.measure((x, y, width, height, pageX, pageY) => {
-          if (width > 0 && height > 0) {
-            setTargetLayout({ x: pageX, y: pageY, width, height });
-            if (scrollViewRef?.current?.scrollTo) {
-              // Scroll the target element into a comfortable view
-              let targetScrollY = Math.max(pageY - screenHeight / 2.5, 0);
-              scrollViewRef.current.scrollTo({
-                y: targetScrollY,
-                animated: true,
-              });
-            }
+    const targetRef = targetRefs?.[step.targetId];
+    if (targetRef && typeof targetRef.measure === "function") {
+      targetRef.measure((x, y, width, height, pageX, pageY) => {
+        if (width > 0 || height > 0) {
+          setTargetLayout({ x: pageX, y: pageY, width, height });
+          if (scrollViewRef?.current?.scrollTo) {
+            scrollViewRef.current.scrollTo({
+              y: Math.max(0, pageY - 200),
+              animated: true,
+            });
           }
-        });
-      }
-    }, 300);
+        }
+      });
+    }
   }, [currentStep, targetRefs, scrollViewRef]);
 
   useEffect(() => {
     if (isVisible) {
-      measureAndScrollToTarget();
+      const timer = setTimeout(measureAndScrollToTarget, 250);
+      return () => clearTimeout(timer);
     }
   }, [isVisible, currentStep, measureAndScrollToTarget]);
-
-  const handleNext = () => {
-    if (currentStep < ONBOARDING_STEPS.length - 1) {
-      setCurrentStep(currentStep + 1);
-    } else {
-      handleComplete();
-    }
-  };
-
-  const handlePrevious = () => {
-    if (currentStep > 0) setCurrentStep(currentStep - 1);
-  };
-
-  const handleComplete = () => {
-    Animated.timing(overlayOpacity, {
-      toValue: 0,
-      duration: 250,
-      useNativeDriver: true,
-    }).start(() => {
-      onComplete();
-    });
-  };
-
-  const handleSkip = handleComplete;
-
-  const getTooltipPosition = () => {
-    const step = ONBOARDING_STEPS[currentStep];
-    if (!step.targetId || !targetLayout || !tooltipMeasured) {
-      return {
-        top: screenHeight / 2 - tooltipLayout.height / 2,
-        left: screenWidth / 2 - tooltipLayout.width / 2,
-      };
-    }
-    const margin = 18;
-    let top, left;
-    switch (step.position) {
-      case "top":
-        top = targetLayout.y - tooltipLayout.height - margin;
-        left =
-          targetLayout.x + targetLayout.width / 2 - tooltipLayout.width / 2;
-        break;
-      case "bottom":
-        top = targetLayout.y + targetLayout.height + margin;
-        left =
-          targetLayout.x + targetLayout.width / 2 - tooltipLayout.width / 2;
-        break;
-      case "left":
-        top =
-          targetLayout.y + targetLayout.height / 2 - tooltipLayout.height / 2;
-        left = targetLayout.x - tooltipLayout.width - margin;
-        break;
-      case "right":
-        top =
-          targetLayout.y + targetLayout.height / 2 - tooltipLayout.height / 2;
-        left = targetLayout.x + targetLayout.width + margin;
-        break;
-      default:
-        top = screenHeight / 2 - tooltipLayout.height / 2;
-        left = screenWidth / 2 - tooltipLayout.width / 2;
-    }
-    top = Math.max(
-      margin,
-      Math.min(top, screenHeight - tooltipLayout.height - margin)
-    );
-    left = Math.max(
-      margin,
-      Math.min(left, screenWidth - tooltipLayout.width - margin)
-    );
-    return { top, left };
-  };
-
-  const getHighlightPosition = () => {
-    if (!targetLayout) return null;
-    const padding = 10;
-    return {
-      left: targetLayout.x - padding,
-      top: targetLayout.y - padding,
-      width: targetLayout.width + padding * 2,
-      height: targetLayout.height + padding * 2,
-    };
-  };
 
   if (!isVisible) return null;
 
   const step = ONBOARDING_STEPS[currentStep];
-  const tooltipPosition = getTooltipPosition();
-  const highlightPosition = getHighlightPosition();
+  const handleNext = () =>
+    currentStep < ONBOARDING_STEPS.length - 1
+      ? setCurrentStep(currentStep + 1)
+      : onComplete();
+  const handlePrevious = () =>
+    currentStep > 0 && setCurrentStep(currentStep - 1);
+  const highlightPosition = targetLayout
+    ? {
+        left: targetLayout.x - 8,
+        top: targetLayout.y - 8,
+        width: targetLayout.width + 16,
+        height: targetLayout.height + 16,
+      }
+    : null;
 
   return (
-    <Modal
-      visible={isVisible}
-      transparent={true}
-      animationType="fade"
-      statusBarTranslucent={true}
-    >
-      <Animated.View
-        style={[
-          {
-            flex: 1,
-            opacity: overlayOpacity,
-            backgroundColor: "rgba(15, 23, 42, 0.72)",
-          },
-        ]}
-      >
-        {step.targetId && highlightPosition && (
-          <Animated.View
-            style={{
-              position: "absolute",
-              borderRadius: 18,
-              borderWidth: 3,
-              borderColor: theme.colors.primary,
-              left: highlightPosition.left,
-              top: highlightPosition.top,
-              width: highlightPosition.width,
-              height: highlightPosition.height,
-              backgroundColor: "rgba(255,255,255,0.15)",
-              shadowColor: theme.colors.primary,
-              shadowOffset: { width: 0, height: 0 },
-              shadowOpacity: 0.5,
-              shadowRadius: 18,
-              elevation: 10,
-              opacity: highlightOpacity,
-            }}
+    <Modal visible={isVisible} transparent animationType="fade">
+      <View style={styles.onboardingOverlay}>
+        {highlightPosition && (
+          <View
+            style={[
+              styles.onboardingHighlight,
+              highlightPosition,
+              { borderColor: theme.colors.primary },
+            ]}
           />
         )}
-
         <View
           style={[
+            styles.onboardingTooltip,
             {
-              position: "absolute",
-              top: tooltipPosition.top,
-              left: tooltipPosition.left,
-              minWidth: Math.max(screenWidth * 0.68, 240),
-              maxWidth: Math.max(screenWidth * 0.92, 340),
-              borderRadius: 20,
-              backgroundColor: theme.colors.surface + "F2",
-              padding: 26,
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: 16 },
-              shadowOpacity: 0.17,
-              shadowRadius: 26,
-              elevation: 14,
-              borderWidth: 1.5,
-              borderColor: theme.colors.primary + "29",
-              alignItems: "center",
+              backgroundColor: theme.colors.surface,
+              borderColor: theme.colors.border,
             },
           ]}
-          onLayout={(event) => {
-            const { width, height } = event.nativeEvent.layout;
-            setTooltipLayout({ width, height });
-            setTooltipMeasured(true);
-          }}
         >
           <TouchableOpacity
-            style={{
-              position: "absolute",
-              top: 10,
-              right: 10,
-              zIndex: 3,
-              backgroundColor: theme.colors.background,
-              borderRadius: 22,
-              width: 32,
-              height: 32,
-              alignItems: "center",
-              justifyContent: "center",
-              elevation: 2,
-            }}
-            onPress={handleSkip}
+            style={[
+              styles.onboardingSkip,
+              { backgroundColor: theme.colors.buttonSecondary },
+            ]}
+            onPress={onComplete}
           >
-            <X size={20} color={theme.colors.textTertiary} />
+            <X size={18} color={theme.colors.textSecondary} />
           </TouchableOpacity>
-
-          <Text style={{ fontSize: 38, marginBottom: 6 }}>
-            {step.icon || "🎓"}
-          </Text>
-
+          <Text style={styles.onboardingIcon}>{step.icon || "🎓"}</Text>
           <Text
-            style={{
-              fontSize: 20,
-              fontWeight: "bold",
-              color: theme.colors.primary,
-              marginBottom: 10,
-              textAlign: "center",
-            }}
+            style={[styles.onboardingTitle, { color: theme.colors.primary }]}
           >
             {step.title}
           </Text>
-
           <Text
-            style={{
-              fontSize: 15,
-              color: theme.colors.textSecondary,
-              marginBottom: 16,
-              textAlign: "center",
-              lineHeight: 22,
-            }}
+            style={[
+              styles.onboardingDesc,
+              { color: theme.colors.textSecondary },
+            ]}
           >
             {step.description}
           </Text>
-
-          <View
-            style={{
-              flexDirection: "row",
-              gap: 7,
-              marginBottom: 18,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            {ONBOARDING_STEPS.map((_, i) => (
-              <View
-                key={i}
-                style={{
-                  width: currentStep === i ? 20 : 10,
-                  height: 10,
-                  borderRadius: 6,
-                  backgroundColor:
-                    currentStep === i
-                      ? theme.colors.primary
-                      : theme.colors.border,
-                  marginHorizontal: 2,
-                }}
-              />
-            ))}
-          </View>
-
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              width: "100%",
-              marginTop: 6,
-              gap: 12,
-            }}
-          >
+          <View style={styles.onboardingNav}>
             {currentStep > 0 && (
               <TouchableOpacity
+                style={[
+                  styles.onboardingButton,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    borderWidth: 1,
+                    borderColor: theme.colors.border,
+                  },
+                ]}
                 onPress={handlePrevious}
-                style={{
-                  flex: 1,
-                  backgroundColor: theme.colors.background,
-                  borderColor: theme.colors.primary,
-                  borderWidth: 1,
-                  paddingVertical: 12,
-                  borderRadius: 10,
-                  alignItems: "center",
-                  flexDirection: "row",
-                  justifyContent: "center",
-                  gap: 7,
-                }}
               >
                 <ArrowLeft size={16} color={theme.colors.primary} />
                 <Text
-                  style={{
-                    color: theme.colors.primary,
-                    fontWeight: "600",
-                    fontSize: 15,
-                  }}
+                  style={[
+                    styles.onboardingButtonText,
+                    { color: theme.colors.primary },
+                  ]}
                 >
-                  Previous
+                  Back
                 </Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity
+              style={[
+                styles.onboardingButton,
+                { backgroundColor: theme.colors.primary, flex: 1 },
+              ]}
               onPress={handleNext}
-              style={{
-                flex: 1,
-                backgroundColor: theme.colors.primary,
-                borderRadius: 10,
-                paddingVertical: 12,
-                alignItems: "center",
-                flexDirection: "row",
-                justifyContent: "center",
-                gap: 7,
-              }}
             >
-              <Text
-                style={{
-                  color: theme.colors.surface,
-                  fontWeight: "600",
-                  fontSize: 15,
-                }}
-              >
+              <Text style={[styles.onboardingButtonText, { color: "#FFF" }]}>
                 {currentStep === ONBOARDING_STEPS.length - 1
-                  ? "Get Started"
+                  ? "Finish"
                   : "Next"}
               </Text>
               {currentStep < ONBOARDING_STEPS.length - 1 && (
-                <ArrowRight size={16} color={theme.colors.surface} />
+                <ArrowRight size={16} color={"#FFF"} />
               )}
             </TouchableOpacity>
           </View>
         </View>
-      </Animated.View>
+      </View>
     </Modal>
   );
 };
 
-const Avatar = ({ name, email, size = 50, style, onPress, nativeID }) => {
+const Avatar = forwardRef(({ name, email, size = 50, style, onPress }, ref) => {
   const { theme } = useTheme();
-  const getInitials = useCallback((name, email) => {
-    if (name && name.trim()) {
+  const initials = useMemo(() => {
+    if (name && name.trim())
       return name
         .trim()
         .split(" ")
@@ -581,48 +290,31 @@ const Avatar = ({ name, email, size = 50, style, onPress, nativeID }) => {
         .join("")
         .toUpperCase()
         .slice(0, 2);
-    }
-    if (email) {
-      return email.charAt(0).toUpperCase();
-    }
+    if (email) return email.charAt(0).toUpperCase();
     return "U";
-  }, []);
+  }, [name, email]);
 
-  const getAvatarColor = useCallback(
-    (text) => {
-      const colors = [
-        theme.colors.primary,
-        theme.colors.success,
-        theme.colors.warning,
-        theme.colors.error,
-        theme.colors.textSecondary,
-        theme.colors.textTertiary,
-        theme.colors.primaryDark,
-        theme.colors.buttonSecondary,
-      ];
-      let hash = 0;
-      for (let i = 0; i < text.length; i++) {
-        hash = text.charCodeAt(i) + ((hash << 5) - hash);
-      }
-      return colors[Math.abs(hash) % colors.length];
-    },
-    [theme]
-  );
-
-  const initials = useMemo(
-    () => getInitials(name, email),
-    [name, email, getInitials]
-  );
-  const backgroundColor = useMemo(
-    () => getAvatarColor(name || email || "User"),
-    [name, email, getAvatarColor]
-  );
+  const backgroundColor = useMemo(() => {
+    const colors = [
+      theme.colors.primary,
+      theme.colors.success,
+      theme.colors.warning,
+      theme.colors.error,
+      theme.colors.primaryDark,
+    ];
+    let hash = 0;
+    for (let i = 0; i < (name || email || "").length; i++) {
+      hash = (name || email).charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return colors[Math.abs(hash) % colors.length];
+  }, [name, email, theme]);
 
   return (
     <TouchableOpacity
-      nativeID={nativeID}
+      ref={ref}
       onPress={onPress}
       style={[
+        style,
         {
           width: size,
           height: size,
@@ -634,7 +326,6 @@ const Avatar = ({ name, email, size = 50, style, onPress, nativeID }) => {
           borderColor: theme.colors.surface,
           elevation: 4,
         },
-        style,
       ]}
     >
       <Text
@@ -642,43 +333,32 @@ const Avatar = ({ name, email, size = 50, style, onPress, nativeID }) => {
           color: theme.colors.surface,
           fontSize: size * 0.4,
           fontWeight: "bold",
-          letterSpacing: 1,
         }}
       >
         {initials}
       </Text>
     </TouchableOpacity>
   );
-};
+});
 
-const BudgetBar = ({ label, spent, budget, color, icon, theme }) => {
+const BudgetBar = ({ label, spent, budget, color, theme }) => {
   const percent = budget > 0 ? Math.min((spent / budget) * 100, 100) : 0;
-  const isOverBudget = spent > budget && budget > 0;
-
   return (
-    <View
-      style={[
-        styles.budgetBarContainer,
-        {
-          backgroundColor: theme.colors.surface,
-          borderColor: theme.colors.border,
-        },
-      ]}
-    >
+    <View style={styles.budgetBarContainer}>
       <View style={styles.budgetBarHeader}>
-        {icon && <Text style={styles.budgetBarIcon}>{icon}</Text>}
-        <Text
-          style={[styles.budgetBarLabel, { color: theme.colors.textSecondary }]}
-        >
+        <Text style={[styles.budgetBarLabel, { color: theme.colors.text }]}>
           {label}
         </Text>
         <Text
           style={[
             styles.budgetBarAmount,
-            { color: isOverBudget ? theme.colors.error : theme.colors.primary },
+            { color: theme.colors.textSecondary },
           ]}
         >
-          ₹{spent.toFixed(0)} / ₹{budget.toFixed(0)}
+          ₹{spent.toFixed(0)} /{" "}
+          <Text style={{ color: theme.colors.textTertiary }}>
+            ₹{budget.toFixed(0)}
+          </Text>
         </Text>
       </View>
       <View
@@ -692,365 +372,209 @@ const BudgetBar = ({ label, spent, budget, color, icon, theme }) => {
             styles.budgetBarFill,
             {
               width: `${percent}%`,
-              backgroundColor: isOverBudget ? theme.colors.error : color,
+              backgroundColor: spent > budget ? theme.colors.error : color,
             },
           ]}
         />
       </View>
-      {isOverBudget && (
-        <Text style={[styles.budgetBarOverage, { color: theme.colors.error }]}>
-          Over budget by ₹{(spent - budget).toFixed(0)}
-        </Text>
-      )}
-      <Text
-        style={[styles.budgetBarPercent, { color: theme.colors.textTertiary }]}
-      >
-        {percent.toFixed(1)}% used
-      </Text>
     </View>
   );
 };
 
+const SectionHeader = ({ title, theme }) => (
+  <Text style={[styles.sectionHeader, { color: theme.colors.text }]}>
+    {title}
+  </Text>
+);
+
 export default function DashboardScreen({ navigation }) {
-  const route = useRoute();
   const { session } = useAuth();
   const { theme } = useTheme();
-  const nav = useNavigation();
-
+  const route = useRoute();
   const targetRefs = useRef({});
   const scrollViewRef = useRef(null);
 
-  const [expenses, setExpenses] = useState([]);
-  const [budgets, setBudgets] = useState([]);
-  const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [reminders, setReminders] = useState([]);
-  const [monthlyExpenses, setMonthlyExpenses] = useState(0);
-  const [showLogoutAlert, setShowLogoutAlert] = useState(false);
-  const [showDeleteAlert, setShowDeleteAlert] = useState(false);
-  const [expenseToDelete, setExpenseToDelete] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [expenses, setExpenses] = useState([]);
   const [incomes, setIncomes] = useState([]);
   const [investments, setInvestments] = useState([]);
+  const [budgets, setBudgets] = useState([]);
+  const [reminders, setReminders] = useState([]);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [expenseToDelete, setExpenseToDelete] = useState(null);
+  const [activeTab, setActiveTab] = useState("expenses");
+
+  const TRANSACTION_THEME = useMemo(
+    () => ({
+      expenses: { color: theme.colors.error },
+      income: { color: theme.colors.success },
+      investments: { color: theme.colors.primary },
+    }),
+    [theme]
+  );
 
   const setTargetRef = useCallback((id, ref) => {
-    if (ref && id) {
-      targetRefs.current[id] = ref;
-    }
+    if (ref && id) targetRefs.current[id] = ref;
   }, []);
 
-  const calculateStatistics = useCallback((expenseData) => {
-    const now = new Date();
-    setMonthlyExpenses(
-      expenseData
-        .filter((e) => {
-          if (!e.date) return false;
-          const d = new Date(e.date);
-          return (
-            d.getMonth() === now.getMonth() &&
-            d.getFullYear() === now.getFullYear()
-          );
-        })
-        .reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0)
-    );
-  }, []);
-
-  const getMonthlyCategorySpending = useCallback(
-    (category) => {
-      const now = new Date();
-      return expenses
-        .filter((expense) => {
-          if (expense.category !== category || !expense.date) return false;
-          const expenseDate = new Date(expense.date);
-          return (
-            expenseDate.getFullYear() === now.getFullYear() &&
-            expenseDate.getMonth() === now.getMonth()
-          );
-        })
-        .reduce((sum, expense) => sum + (parseFloat(expense.amount) || 0), 0);
-    },
-    [expenses]
-  );
-
-  const handleDelete = useCallback((expense) => {
-    setExpenseToDelete(expense);
-    setShowDeleteAlert(true);
-  }, []);
-
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    Promise.all([fetchExpenses(), fetchBudgets(), fetchReminders()]).finally(
-      () => setRefreshing(false)
-    );
-  }, []);
-
-  const renderExpenseItem = useCallback(
-    ({ item }) => (
-      <TransactionItem
-        item={item}
-        type="expense"
-        theme={theme}
-        onLongPress={() => handleDelete(item)}
-      />
-    ),
-    [handleDelete, theme]
-  );
-
-  const renderIncomeItem = useCallback(
-    ({ item }) => <TransactionItem item={item} type="income" theme={theme} />,
-    [theme]
-  );
-
-  const renderInvestmentItem = useCallback(
-    ({ item }) => (
-      <TransactionItem item={item} type="investment" theme={theme} />
-    ),
-    [theme]
-  );
-
-  const getPieChartData = useMemo(() => {
-    const categoryMap = {};
-    expenses.forEach((item) => {
-      const amount = parseFloat(item.amount);
-      if (!item.category || isNaN(amount) || amount <= 0) return;
-      categoryMap[item.category] = (categoryMap[item.category] || 0) + amount;
-    });
-    return Object.entries(categoryMap)
-      .filter(([cat, amt]) => cat && amt > 0)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 6)
-      .map(([category, amount], index) => {
-        const categoryObj = EXPENSE_CATEGORIES.find((c) => c.name === category);
-        return {
-          name: category,
-          amount: amount,
-          color:
-            categoryObj?.color || CHART_COLORS[index % CHART_COLORS.length],
-          legendFontColor: "#222",
-          legendFontSize: 14,
-          icon: categoryObj?.icon || "📝",
-        };
-      });
-  }, [expenses]);
-
-  const budgetProgress = useMemo(() => {
-    return budgets.map((budget) => {
-      const spent = getMonthlyCategorySpending(budget.category);
-      const categoryData = EXPENSE_CATEGORIES.find(
-        (cat) => cat.name === budget.category
-      );
-      return {
-        ...budget,
-        spent,
-        icon: categoryData?.icon || "📝",
-        color: categoryData?.color || "#747D8C",
-        isOverBudget: spent > parseFloat(budget.amount || 0),
-      };
-    });
-  }, [budgets, getMonthlyCategorySpending]);
-
-  const uniqueReminders = useMemo(() => {
-    return reminders
-      .sort((a, b) => {
-        const dateA = new Date(
-          `${a.next_due_date}T${a.reminder_time || "00:00"}`
-        );
-        const dateB = new Date(
-          `${b.next_due_date}T${b.reminder_time || "00:00"}`
-        );
-        return dateA - dateB;
-      })
-      .filter(
-        (rem, idx, arr) =>
-          arr.findIndex(
-            (r) =>
-              r.title === rem.title &&
-              r.next_due_date === rem.next_due_date &&
-              r.reminder_time === rem.reminder_time
-          ) === idx
-      );
-  }, [reminders]);
-
-  const overallMonthlyBudgetProgress = useMemo(() => {
-    const totalBudget = parseFloat(profile?.monthly_budget) || 0;
-    const spent = monthlyExpenses;
-    return {
-      total: totalBudget,
-      spent: spent,
-      isSet: totalBudget > 0,
-    };
-  }, [profile, monthlyExpenses]);
-
-  const fetchInvestments = async () => {
+  const fetchData = useCallback(async () => {
     try {
-      const { data, error } = await supabase
-        .from("investments")
-        .select("*")
-        .eq("user_id", session.user.id)
-        .order("date", { ascending: false });
-      if (!error) setInvestments(data || []);
-    } catch {}
-  };
-
-  const fetchIncomes = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("side_incomes")
-        .select("*")
-        .eq("user_id", session.user.id)
-        .order("date", { ascending: false });
-      if (!error) setIncomes(data || []);
-    } catch {}
-  };
-
-  const fetchProfile = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", session.user.id)
-        .single();
-      if (data) setProfile(data);
-      if (error && error.code !== "PGRST116") return;
-      if (data) {
-        setProfile(data);
-      } else {
-        const { data: newProfile } = await supabase
+      if (!session?.user?.id) return;
+      const [
+        profileRes,
+        expensesRes,
+        budgetsRes,
+        remindersRes,
+        incomesRes,
+        investmentsRes,
+      ] = await Promise.all([
+        supabase
           .from("profiles")
-          .insert([
-            {
-              id: session.user.id,
-              full_name: session.user.user_metadata?.full_name || "",
-              username: session.user.email?.split("@")[0] || "",
-              email: session.user.email,
-              created_at: new Date().toISOString(),
-            },
-          ])
-          .select()
-          .single();
-        if (newProfile) setProfile(newProfile);
-      }
-    } catch {}
-  };
+          .select("*")
+          .eq("id", session.user.id)
+          .single(),
+        supabase
+          .from("expenses")
+          .select("*")
+          .eq("user_id", session.user.id)
+          .order("date", { ascending: false }),
+        supabase.from("budgets").select("*").eq("user_id", session.user.id),
+        supabase
+          .from("payment_reminders")
+          .select("*")
+          .eq("user_id", session.user.id)
+          .eq("is_active", true)
+          .order("next_due_date", { ascending: true }),
+        supabase
+          .from("side_incomes")
+          .select("*")
+          .eq("user_id", session.user.id)
+          .order("date", { ascending: false }),
+        supabase
+          .from("investments")
+          .select("*")
+          .eq("user_id", session.user.id)
+          .order("date", { ascending: false }),
+      ]);
+      if (profileRes.data) setProfile(profileRes.data);
+      if (expensesRes.data) setExpenses(expensesRes.data);
+      if (budgetsRes.data) setBudgets(budgetsRes.data);
+      if (remindersRes.data) setReminders(remindersRes.data);
+      if (incomesRes.data) setIncomes(incomesRes.data);
+      if (investmentsRes.data) setInvestments(investmentsRes.data);
+    } catch (error) {
+      console.error("Error fetching data:", error.message);
+    }
+  }, [session]);
 
-  const fetchExpenses = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("expenses")
-        .select("*")
-        .eq("user_id", session.user.id)
-        .order("date", { ascending: false });
-      if (!error) {
-        setExpenses(data || []);
-        calculateStatistics(data || []);
-      }
-    } catch {}
-  };
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchData();
+    setRefreshing(false);
+  }, [fetchData]);
 
-  const fetchBudgets = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("budgets")
-        .select("*")
-        .eq("user_id", session.user.id);
-      if (!error) setBudgets(data || []);
-    } catch {}
-  };
-
-  const fetchReminders = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("payment_reminders")
-        .select("*")
-        .eq("user_id", session.user.id)
-        .eq("is_active", true)
-        .order("next_due_date", { ascending: true });
-      if (!error) setReminders(data || []);
-    } catch {}
-  };
+  const handleDelete = useCallback(async () => {
+    if (!expenseToDelete) return;
+    setExpenses((prev) => prev.filter((exp) => exp.id !== expenseToDelete.id));
+    await supabase.from("expenses").delete().eq("id", expenseToDelete.id);
+    setExpenseToDelete(null);
+  }, [expenseToDelete]);
 
   const completeOnboarding = async () => {
-    await setOnboardingCompleted();
+    await AsyncStorage.setItem(ONBOARDING_FLAG_KEY, "true");
     setShowOnboarding(false);
   };
 
-  const initializeData = async () => {
-    setLoading(true);
-    try {
-      await Promise.all([
-        fetchProfile(),
-        fetchExpenses(),
-        fetchBudgets(),
-        fetchReminders(),
-        fetchIncomes(),
-        fetchInvestments(),
-      ]).finally(() => setRefreshing(false));
-    } catch (error) {
-      RNAlert.alert(
-        "Error",
-        "Failed to load dashboard data. Please try again."
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const deleteExpense = async (expenseId) => {
-    try {
-      await supabase.from("expenses").delete().eq("id", expenseId);
-      await fetchExpenses();
-      RNAlert.alert("Success", "Expense deleted successfully!");
-    } catch {
-      RNAlert.alert("Error", "Failed to delete expense. Please try again.");
-    }
-  };
-
-  const handleLogout = async () => {
-    try {
-      setShowLogoutAlert(false);
-      await supabase.auth.signOut();
-    } catch {
-      RNAlert.alert("Error", "Failed to logout. Please try again.");
-    }
-  };
-
-  useEffect(() => {
-    let isMounted = true;
-    if (session?.user) {
-      initializeData();
-      if (route.params?.showOnboarding) {
-        setShowOnboarding(true);
-        navigation.setParams({ showOnboarding: undefined });
-        return;
-      }
-    }
-    return () => {
-      isMounted = false;
-    };
-  }, [session, route.params?.showOnboarding]);
-
   useFocusEffect(
     useCallback(() => {
-      if (session?.user) {
-        initializeData();
-      }
-    }, [session])
+      const initialize = async () => {
+        setLoading(true);
+        await fetchData();
+        setLoading(false);
+        const hasCompleted = await AsyncStorage.getItem(ONBOARDING_FLAG_KEY);
+        if (route.params?.showOnboarding || hasCompleted !== "true") {
+          setShowOnboarding(true);
+          navigation.setParams({ showOnboarding: undefined });
+        }
+      };
+      initialize();
+    }, [fetchData, route.params?.showOnboarding, navigation])
   );
 
-  useFocusEffect(
-    useCallback(() => {
+  const { monthlyTotal, todayTotal } = useMemo(() => {
+    const now = new Date();
+    const todayStr = now.toISOString().slice(0, 10);
+    let monthly = 0,
+      today = 0;
+    for (const exp of expenses) {
+      const expDate = new Date(exp.date);
       if (
-        navigation.getState().routes[navigation.getState().index].params
-          ?.showOnboarding
-      ) {
-        setShowOnboarding(true);
-        navigation.setParams({ showOnboarding: undefined });
-      }
-    }, [navigation])
-  );
+        expDate.getMonth() === now.getMonth() &&
+        expDate.getFullYear() === now.getFullYear()
+      )
+        monthly += Number(exp.amount) || 0;
+      if (exp.date === todayStr) today += Number(exp.amount) || 0;
+    }
+    return { monthlyTotal: monthly, todayTotal: today };
+  }, [expenses]);
 
-  if (loading || !session?.user) {
+  const budgetProgress = useMemo(() => {
+    const getSpent = (category) =>
+      expenses
+        .filter((exp) => exp.category === category)
+        .reduce((sum, exp) => sum + Number(exp.amount), 0);
+    return budgets.map((b) => ({ ...b, spent: getSpent(b.category) }));
+  }, [budgets, expenses]);
+
+  const renderTransactionList = () => {
+    const dataMap = {
+      expenses: expenses.slice(0, 5),
+      income: incomes.slice(0, 5),
+      investments: investments.slice(0, 5),
+    };
+    const data = dataMap[activeTab];
+    if (data.length === 0)
+      return (
+        <View style={[styles.card, { backgroundColor: theme.colors.surface }]}>
+          <Text
+            style={[
+              styles.emptyStateText,
+              { color: theme.colors.textSecondary },
+            ]}
+          >
+            No {activeTab} recorded yet.
+          </Text>
+        </View>
+      );
+    return (
+      <View
+        style={[
+          styles.card,
+          { backgroundColor: theme.colors.surface, padding: 0 },
+        ]}
+      >
+        <FlatList
+          data={data}
+          renderItem={({ item }) => (
+            <TransactionItem
+              item={item}
+              type={activeTab}
+              theme={theme}
+              onLongPress={() =>
+                activeTab === "expenses" && setExpenseToDelete(item)
+              }
+            />
+          )}
+          keyExtractor={(item) => item.id.toString()}
+          scrollEnabled={false}
+        />
+      </View>
+    );
+  };
+
+  if (loading)
     return (
       <View
         style={[
@@ -1059,44 +583,29 @@ export default function DashboardScreen({ navigation }) {
         ]}
       >
         <ActivityIndicator size="large" color={theme.colors.primary} />
-        <Text style={[styles.loadingText, { color: theme.colors.text }]}>
-          Loading your dashboard...
-        </Text>
       </View>
     );
-  }
-
-  const recentExpenses = expenses.slice(0, 5);
-  const today = new Date();
-  const todayString = today.toISOString().split("T")[0];
-  const todaysTotal = expenses
-    .filter((exp) => exp.date === todayString)
-    .reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0);
 
   return (
     <>
       <ScrollView
         ref={scrollViewRef}
         style={[styles.container, { backgroundColor: theme.colors.background }]}
+        contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
             colors={[theme.colors.primary]}
             tintColor={theme.colors.primary}
-            progressBackgroundColor={theme.colors.surface}
           />
         }
         showsVerticalScrollIndicator={false}
       >
         <View
           style={[
-            styles.header,
-            {
-              backgroundColor: theme.colors.surface,
-              borderBottomLeftRadius: Math.max(screenWidth * 0.06, 15),
-              borderBottomRightRadius: Math.max(screenWidth * 0.06, 15),
-            },
+            styles.unchangedHeader,
+            { backgroundColor: theme.colors.surface },
           ]}
         >
           <View style={styles.headerContent}>
@@ -1112,16 +621,29 @@ export default function DashboardScreen({ navigation }) {
               Let's keep your spending on Track
             </Text>
           </View>
-          <View style={styles.headerActions}>
+          <View
+            style={styles.headerActions}
+            ref={(ref) => setTargetRef("header-actions", ref)}
+          >
+            <TouchableOpacity
+              onPress={() => navigation.navigate("SmartInsights")}
+              style={[
+                styles.headerIconContainer,
+                { backgroundColor: theme.colors.borderLight },
+              ]}
+            >
+              <Sparkles color={theme.colors.primary} size={22} />
+            </TouchableOpacity>
+
             <Avatar
               name={profile?.full_name}
               email={profile?.email || session?.user?.email}
               size={44}
               onPress={() => navigation.navigate("Profile", { profile })}
-              ref={(ref) => setTargetRef("profile-avatar", ref)}
             />
           </View>
         </View>
+
         <View style={styles.statisticsContainer}>
           <View
             style={styles.statsContainer}
@@ -1138,7 +660,7 @@ export default function DashboardScreen({ navigation }) {
               ]}
             >
               <Text style={[styles.statValue, { color: theme.colors.primary }]}>
-                ₹{monthlyExpenses.toFixed(2)}
+                ₹{monthlyTotal.toFixed(2)}
               </Text>
               <Text
                 style={[
@@ -1159,7 +681,7 @@ export default function DashboardScreen({ navigation }) {
               ]}
             >
               <Text style={[styles.statValue, { color: theme.colors.primary }]}>
-                ₹{todaysTotal.toFixed(2)}
+                ₹{todayTotal.toFixed(2)}
               </Text>
               <Text
                 style={[
@@ -1180,35 +702,18 @@ export default function DashboardScreen({ navigation }) {
             </View>
           )}
         </View>
-        {uniqueReminders.length > 0 && (
+
+        {reminders.length > 0 && (
           <View
-            style={styles.remindersSection2}
+            style={styles.section}
             ref={(ref) => setTargetRef("reminders-section", ref)}
           >
-            <View style={styles.sectionHeader}>
-              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-                Payment Reminders
-              </Text>
-              <TouchableOpacity
-                onPress={() => navigation.navigate("PaymentReminder")}
-              >
-                <Text
-                  style={[
-                    styles.seeAllText,
-                    { color: theme.colors.textSecondary },
-                  ]}
-                >
-                  View All
-                </Text>
-              </TouchableOpacity>
-            </View>
+            <SectionHeader title="Upcoming Payments" theme={theme} />
             <Carousel
               width={screenWidth - 40}
-              height={190}
-              data={uniqueReminders}
-              mode="parallax"
-              autoPlay={true}
-              scrollAnimationDuration={800}
+              height={90}
+              data={reminders}
+              loop={false}
               renderItem={({ item }) => (
                 <ReminderCard
                   item={item}
@@ -1220,205 +725,76 @@ export default function DashboardScreen({ navigation }) {
         )}
 
         <View
-          style={styles.budgetSection}
+          style={styles.section}
           ref={(ref) => setTargetRef("budget-section", ref)}
         >
-          <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-              Budget Progress
-            </Text>
-            <TouchableOpacity
-              onPress={() => navigation.navigate("BudgetScreen")}
-            >
-              <Text
-                style={[
-                  styles.seeAllText,
-                  { color: theme.colors.textSecondary },
-                ]}
-              >
-                Manage Budgets
-              </Text>
-            </TouchableOpacity>
-          </View>
-          {overallMonthlyBudgetProgress.isSet ? (
-            <BudgetBar
-              label="Monthly Budget"
-              spent={overallMonthlyBudgetProgress.spent}
-              budget={overallMonthlyBudgetProgress.total}
-              color={theme.colors.primary}
-              icon="💰"
-              theme={theme}
-            />
-          ) : (
-            <View
-              style={[
-                styles.emptyBudgetState,
-                {
-                  backgroundColor: theme.colors.surface,
-                  borderColor: theme.colors.border,
-                },
-              ]}
-            >
+          <SectionHeader title="Budget Hub" theme={theme} />
+          <View
+            style={[styles.card, { backgroundColor: theme.colors.surface }]}
+          >
+            {budgetProgress.length > 0 ? (
+              budgetProgress
+                .slice(0, 4)
+                .map((b) => (
+                  <BudgetBar
+                    key={b.id}
+                    label={b.category}
+                    spent={b.spent}
+                    budget={Number(b.amount)}
+                    color={theme.colors.primary}
+                    theme={theme}
+                  />
+                ))
+            ) : (
               <Text
                 style={[
                   styles.emptyStateText,
                   { color: theme.colors.textSecondary },
                 ]}
               >
-                No Overall Budget Set
+                No budgets set yet.
               </Text>
-              <Text
-                style={[
-                  styles.emptyStateSubtext,
-                  { color: theme.colors.textTertiary },
-                ]}
-              >
-                Go to your Profile to set a monthly budget.
-              </Text>
-            </View>
-          )}
-          {budgets.length > 0 && (
-            <>
-              {budgetProgress
-                .sort((a, b) =>
-                  b.budget > 0 && a.budget > 0
-                    ? b.spent / b.budget - a.spent / a.budget
-                    : 0
-                )
-                .slice(0, 5)
-                .map((item) => (
-                  <BudgetBar
-                    key={item.id}
-                    label={item.category}
-                    spent={item.spent}
-                    budget={parseFloat(item.amount) || 0}
-                    color={item.color}
-                    icon={item.icon}
-                    theme={theme}
-                  />
-                ))}
-            </>
-          )}
+            )}
+          </View>
         </View>
 
-        <View style={styles.section} ref={(ref) => setTargetRef("recent-income-section", ref)}>
-          <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-              Recent Income
-            </Text>
-            <TouchableOpacity
-              onPress={() => navigation.navigate("IncomeManagement")}
-            >
-              <Text
+        <View
+          style={styles.section}
+          ref={(ref) => setTargetRef("recent-activity-section", ref)}
+        >
+          <SectionHeader title="Recent Activity" theme={theme} />
+          <View
+            style={[
+              styles.tabContainer,
+              { backgroundColor: theme.colors.borderLight },
+            ]}
+          >
+            {["expenses", "income", "investments"].map((tab) => (
+              <TouchableOpacity
+                key={tab}
+                onPress={() => setActiveTab(tab)}
                 style={[
-                  styles.seeAllText,
-                  { color: theme.colors.textSecondary },
+                  styles.tabButton,
+                  activeTab === tab && {
+                    backgroundColor: TRANSACTION_THEME[tab].color,
+                  },
                 ]}
               >
-                See All
-              </Text>
-            </TouchableOpacity>
+                <Text
+                  style={[
+                    styles.tabText,
+                    {
+                      color:
+                        activeTab === tab ? "#FFF" : theme.colors.textSecondary,
+                    },
+                  ]}
+                >
+                  {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
-          {incomes.length > 0 ? (
-            <FlatList
-              data={incomes.slice(0, 5)}
-              renderItem={renderIncomeItem}
-              keyExtractor={(item) =>
-                item.id?.toString() || Math.random().toString()
-              }
-              scrollEnabled={false}
-              showsVerticalScrollIndicator={false}
-            />
-          ) : (
-            <Text
-              style={[
-                styles.emptyStateText,
-                { color: theme.colors.textSecondary },
-              ]}
-            >
-              No income yet
-            </Text>
-          )}
-        </View>
-
-        <View style={styles.section} ref={(ref) => setTargetRef("recent-section", ref)}>
-          <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-              Recent Expenses
-            </Text>
-            <TouchableOpacity
-              onPress={() => navigation.navigate("AllExpenses")}
-            >
-              <Text
-                style={[
-                  styles.seeAllText,
-                  { color: theme.colors.textSecondary },
-                ]}
-              >
-                See All
-              </Text>
-            </TouchableOpacity>
-          </View>
-          {recentExpenses.length > 0 ? (
-            <FlatList
-              data={recentExpenses}
-              renderItem={renderExpenseItem}
-              keyExtractor={(item) =>
-                item.id?.toString() || Math.random().toString()
-              }
-              scrollEnabled={false}
-              showsVerticalScrollIndicator={false}
-            />
-          ) : (
-            <Text
-              style={[
-                styles.emptyStateText,
-                { color: theme.colors.textSecondary },
-              ]}
-            >
-              No expenses yet
-            </Text>
-          )}
-        </View>
-
-        <View style={styles.section} ref={(ref) => setTargetRef("investments-section", ref)}>
-          <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-              Recent Investments
-            </Text>
-            <TouchableOpacity
-              onPress={() => navigation.navigate("InvestmentsScreen")}
-            >
-              <Text
-                style={[
-                  styles.seeAllText,
-                  { color: theme.colors.textSecondary },
-                ]}
-              >
-                See All
-              </Text>
-            </TouchableOpacity>
-          </View>
-          {investments.length > 0 ? (
-            <FlatList
-              data={investments.slice(0, 5)}
-              renderItem={renderInvestmentItem}
-              keyExtractor={(item) =>
-                item.id?.toString() || Math.random().toString()
-              }
-              scrollEnabled={false}
-              showsVerticalScrollIndicator={false}
-            />
-          ) : (
-            <Text
-              style={[
-                styles.emptyStateText,
-                { color: theme.colors.textSecondary },
-              ]}
-            >
-              No investments yet
-            </Text>
-          )}
+          {renderTransactionList()}
         </View>
       </ScrollView>
 
@@ -1433,45 +809,16 @@ export default function DashboardScreen({ navigation }) {
         targetRefs={targetRefs.current}
         scrollViewRef={scrollViewRef}
       />
-
       <Alert
-        open={showDeleteAlert}
-        onConfirm={async () => {
-          setShowDeleteAlert(false);
-          if (expenseToDelete) {
-            await deleteExpense(expenseToDelete.id);
-            setExpenseToDelete(null);
-          }
-        }}
-        onCancel={() => {
-          setShowDeleteAlert(false);
-          setExpenseToDelete(null);
-        }}
+        open={!!expenseToDelete}
+        onConfirm={handleDelete}
+        onCancel={() => setExpenseToDelete(null)}
         title="Delete Expense"
-        message={`Are you sure you want to delete "${expenseToDelete?.title}"?`}
+        message={`Delete "${expenseToDelete?.title}"? This is permanent.`}
         confirmText="Delete"
-        cancelText="Cancel"
-        icon={<Trash2 color="#fff" size={40} />}
+        icon={<Trash2 color="#fff" size={32} />}
         iconBg={theme.colors.error}
         confirmColor={theme.colors.error}
-        confirmTextColor={theme.colors.surface}
-        cancelColor={theme.colors.surface}
-        cancelTextColor={theme.colors.textTertiary}
-      />
-      <Alert
-        open={showLogoutAlert}
-        onConfirm={handleLogout}
-        onCancel={() => setShowLogoutAlert(false)}
-        title="Logout"
-        message="Are you sure you want to logout?"
-        confirmText="Logout"
-        cancelText="Cancel"
-        icon={<LogOut color="#fff" size={40} />}
-        iconBg={theme.colors.error}
-        confirmColor={theme.colors.error}
-        confirmTextColor={theme.colors.surface}
-        cancelColor={theme.colors.surface}
-        cancelTextColor={theme.colors.textTertiary}
       />
     </>
   );
@@ -1479,10 +826,9 @@ export default function DashboardScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F9FBFC" },
+  scrollContent: { paddingBottom: 100, paddingTop: 20 },
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
-  loadingText: { marginTop: 16, fontSize: 16, fontWeight: "500" },
-
-  header: {
+  unchangedHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
@@ -1510,25 +856,33 @@ const styles = StyleSheet.create({
   headerActions: {
     flexDirection: "row",
     alignItems: "center",
-    gap: Math.max(screenWidth * 0.025, 8),
+    gap: 12,
   },
-
-  statisticsContainer: { flexDirection: "column", gap: 1, marginBottom: 10 },
+  headerIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  statisticsContainer: {
+    flexDirection: "column",
+    gap: 1,
+    marginBottom: 10,
+    paddingHorizontal: 20,
+  },
   statsContainer: {
     flexDirection: "row",
-    paddingHorizontal: Math.max(screenWidth * 0.04, 12),
     paddingTop: 10,
     gap: Math.max(screenWidth * 0.02, 8),
   },
   statCard: {
     flex: 1,
-    backgroundColor: "#fff",
     padding: Math.max(screenWidth * 0.03, 10),
     borderRadius: Math.max(screenWidth * 0.04, 14),
     alignItems: "center",
     minHeight: Math.max(screenWidth * 0.22, 90),
     borderWidth: 2,
-    borderColor: "rgba(6, 182, 212, 0.1)",
     justifyContent: "center",
     elevation: 2,
   },
@@ -1546,130 +900,103 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     lineHeight: 16,
   },
-  chartsContainer: {
-    marginHorizontal: Math.max(screenWidth * 0.035, 10),
-    marginVertical: Math.max(screenWidth * 0.02, 8),
-  },
-
-  remindersSection2: {
-    paddingHorizontal: Math.max(screenWidth * 0.04, 12),
-  },
-
-  sectionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: Math.max(screenWidth * 0.04, 12),
-  },
-  sectionTitle: { fontSize: 20, fontWeight: "700" },
-  seeAllText: { fontSize: 14, color: "#06b6d4", fontWeight: "600" },
-
-  budgetSection: {
-    paddingHorizontal: Math.max(screenWidth * 0.04, 12),
-  },
-  budgetBarContainer: {
-    marginBottom: Math.max(screenWidth * 0.04, 12),
-    backgroundColor: "#fff",
-    borderRadius: Math.max(screenWidth * 0.04, 14),
-    padding: Math.max(screenWidth * 0.035, 10),
+  chartsContainer: { marginVertical: Math.max(screenWidth * 0.02, 8) },
+  section: { marginTop: 24, paddingHorizontal: 20 },
+  sectionHeader: { fontSize: 22, fontWeight: "700", marginBottom: 16 },
+  card: {
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
     borderWidth: 1,
-    borderColor: "rgba(51, 65, 85, 0.1)",
+    borderColor: "#EEE",
     elevation: 2,
-  },
-  budgetBarHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: Math.max(screenWidth * 0.025, 8),
-  },
-  budgetBarIcon: {
-    fontSize: Math.max(Math.min(screenWidth * 0.05, 22), 16),
-    marginRight: Math.max(screenWidth * 0.02, 7),
-  },
-  budgetBarLabel: {
-    flex: 1,
-    fontSize: Math.max(Math.min(screenWidth * 0.04, 16), 12),
-    fontWeight: "600",
-  },
-  budgetBarAmount: {
-    fontSize: Math.max(Math.min(screenWidth * 0.035, 15), 10),
-    fontWeight: "700",
-    letterSpacing: -0.2,
-  },
-  budgetBarTrack: {
-    height: Math.max(screenWidth * 0.018, 8),
-    backgroundColor: "#f5f7fa",
-    borderRadius: 4,
-    overflow: "hidden",
-    marginBottom: Math.max(screenWidth * 0.02, 8),
-  },
-  budgetBarFill: { height: "100%", borderRadius: 4 },
-  budgetBarOverage: {
-    fontSize: Math.max(Math.min(screenWidth * 0.03, 13), 9),
-    fontWeight: "600",
-    marginTop: 4,
-  },
-  budgetBarPercent: {
-    fontSize: Math.max(Math.min(screenWidth * 0.03, 13), 9),
-    fontWeight: "500",
-  },
-
-  emptyBudgetState: {
-    backgroundColor: "#fff",
-    borderRadius: Math.max(screenWidth * 0.04, 14),
-    padding: Math.max(screenWidth * 0.07, 18),
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "rgba(51, 65, 85, 0.1)",
-    elevation: 1,
-    marginBottom: 12,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
   },
   emptyStateText: {
-    color: "#888",
-    marginTop: 12,
-    textAlign: "center",
     fontSize: 14,
-  },
-  emptyStateSubtext: {
-    fontSize: Math.max(Math.min(screenWidth * 0.035, 14), 9),
-    color: "#334155",
     textAlign: "center",
-    opacity: 0.7,
+    paddingVertical: 24,
+    fontStyle: "italic",
   },
-
-  section: { paddingHorizontal: 16, marginTop: 18 },
-
-  expenseItem: {
+  budgetBarContainer: { paddingVertical: 8 },
+  budgetBarHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: "#fff",
-    padding: Math.max(screenWidth * 0.035, 10),
-    borderRadius: Math.max(screenWidth * 0.03, 10),
-    marginBottom: Math.max(screenWidth * 0.025, 8),
+    marginBottom: 8,
+  },
+  budgetBarLabel: { fontSize: 15, fontWeight: "600" },
+  budgetBarAmount: { fontSize: 14, fontWeight: "500" },
+  budgetBarTrack: { height: 8, borderRadius: 4, overflow: "hidden" },
+  budgetBarFill: { height: "100%" },
+  tabContainer: {
+    flexDirection: "row",
+    borderRadius: 12,
+    padding: 4,
+    marginBottom: 16,
+  },
+  tabButton: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  tabText: { fontSize: 14, fontWeight: "600" },
+  onboardingOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.85)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  onboardingHighlight: {
+    position: "absolute",
+    borderRadius: 16,
+    borderWidth: 3,
+    backgroundColor: "rgba(255,255,255,0.1)",
+  },
+  onboardingTooltip: {
+    borderRadius: 16,
+    padding: 24,
+    margin: 24,
+    maxWidth: screenWidth - 48,
+    alignItems: "center",
+    elevation: 10,
     borderWidth: 1,
-    borderColor: "rgba(51, 65, 85, 0.1)",
-    elevation: 1,
   },
-  expenseInfo: { flex: 1 },
-  expenseTitle: {
-    fontSize: Math.max(Math.min(screenWidth * 0.04, 16), 10),
-    fontWeight: "600",
-    marginBottom: 4,
+  onboardingSkip: {
+    position: "absolute",
+    top: 12,
+    right: 12,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: "center",
+    alignItems: "center",
   },
-  expenseDate: {
-    fontSize: Math.max(Math.min(screenWidth * 0.03, 12), 8),
-    fontWeight: "500",
-    marginBottom: 2,
-    opacity: 0.7,
+  onboardingIcon: { fontSize: 48, marginBottom: 12 },
+  onboardingTitle: {
+    fontSize: 22,
+    fontWeight: "bold",
+    textAlign: "center",
+    marginBottom: 8,
   },
-  expenseCategory: {
-    fontSize: Math.max(Math.min(screenWidth * 0.03, 12), 8),
-    fontWeight: "500",
-    opacity: 0.6,
+  onboardingDesc: {
+    fontSize: 15,
+    textAlign: "center",
+    lineHeight: 22,
+    marginBottom: 24,
   },
-  expenseAmount: {
-    fontSize: Math.max(Math.min(screenWidth * 0.04, 16), 11),
-    fontWeight: "700",
-    letterSpacing: -0.2,
+  onboardingNav: { flexDirection: "row", width: "100%", gap: 12 },
+  onboardingButton: {
+    flexDirection: "row",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 6,
   },
+  onboardingButtonText: { fontSize: 16, fontWeight: "bold" },
 });

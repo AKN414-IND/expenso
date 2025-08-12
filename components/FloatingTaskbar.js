@@ -1,118 +1,144 @@
-// components/FloatingTaskbar.js
 import React from "react";
-import { View, TouchableOpacity, Text, StyleSheet, Dimensions } from "react-native";
+import {
+  View,
+  TouchableOpacity,
+  Text,
+  StyleSheet,
+  Dimensions,
+} from "react-native";
+import { useNavigationState } from "@react-navigation/native";
+import {
+  Wallet,
+  TrendingUp,
+  Bell,
+  List,
+  Plus,
+} from "lucide-react-native";
 
 const screenWidth = Dimensions.get("window").width;
 
-const FloatingTaskbar = ({ theme, navigation, setTargetRef }) => (
-  <View style={styles.taskbarContainer}>
-    <View style={[styles.taskbar, { backgroundColor: theme.colors.surface }]} ref={ref => setTargetRef("taskbar", ref)}>
+// Updated array to include only the requested navigation items
+const NAV_ITEMS = [
+  { name: "BudgetScreen", label: "Budgets", Icon: Wallet, refId: "budget-btn" },
+  { name: "InvestmentsScreen", label: "Invest", Icon: TrendingUp, refId: "investment-btn" },
+  { name: "PaymentReminder", label: "Reminder", Icon: Bell, refId: "reminders-btn" },
+  { name: "AllExpenses", label: "Activity", Icon: List, refId: "expenses-btn" },
+];
+
+const FloatingTaskbar = ({ theme, navigation, setTargetRef }) => {
+  const currentRouteName = useNavigationState(
+    (state) => state.routes[state.index].name
+  );
+
+  // This automatically creates a balanced 2x2 layout
+  const leftItems = NAV_ITEMS.slice(0, 2);
+  const rightItems = NAV_ITEMS.slice(2);
+
+  const NavItem = ({ item }) => {
+    const isActive = currentRouteName === item.name;
+    const color = isActive ? theme.colors.primary : theme.colors.textSecondary;
+
+    return (
       <TouchableOpacity
-        style={[styles.actionButton, { backgroundColor: theme.colors.buttonSecondary }]}
-        onPress={() => navigation.navigate("BudgetScreen")}
+        style={styles.navItem}
+        onPress={() => navigation.navigate(item.name)}
         activeOpacity={0.7}
-        ref={ref => setTargetRef("budget-btn", ref)}
+        ref={(ref) => setTargetRef(item.refId, ref)}
       >
-        <Text style={styles.actionIcon}>💰</Text>
+        <item.Icon color={color} size={24} strokeWidth={isActive ? 2.5 : 2} />
+        <Text style={[styles.navLabel, { color }]}>{item.label}</Text>
       </TouchableOpacity>
-      <TouchableOpacity
-        style={[styles.actionButton, { backgroundColor: theme.colors.buttonSecondary }]}
-        onPress={() => navigation.navigate("InvestmentsScreen")}
-        activeOpacity={0.7}
-        ref={ref => setTargetRef("investment-btn", ref)}
-      >
-        <Text style={styles.actionIcon}>📈</Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={[styles.actionButton, { backgroundColor: theme.colors.buttonSecondary }]}
-        onPress={() => navigation.navigate("PaymentReminder")}
-        activeOpacity={0.7}
-        ref={ref => setTargetRef("reminders-btn", ref)}
-      >
-        <Text style={styles.actionIcon}>🔔</Text>
-      </TouchableOpacity>
+    );
+  };
+
+  return (
+    <View style={styles.container} ref={(ref) => setTargetRef("taskbar", ref)}>
       <TouchableOpacity
         style={[styles.addButton, { backgroundColor: theme.colors.primary }]}
         onPress={() => navigation.navigate("AddExpense")}
         activeOpacity={0.8}
-        ref={ref => setTargetRef("add-button", ref)}
+        ref={(ref) => setTargetRef("add-button", ref)}
       >
-        <Text style={styles.addIcon}>+</Text>
+        <Plus color="#FFF" size={32} strokeWidth={3} />
       </TouchableOpacity>
-      <TouchableOpacity
-        style={[styles.actionButton, { backgroundColor: theme.colors.buttonSecondary }]}
-        onPress={() => navigation.navigate("AllExpenses")}
-        activeOpacity={0.7}
-        ref={ref => setTargetRef("expenses-btn", ref)}
-      >
-        <Text style={styles.actionIcon}>📊</Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={[styles.actionButton, { backgroundColor: theme.colors.buttonSecondary }]}
-        onPress={() => navigation.navigate("SmartInsights")}
-        activeOpacity={0.7}
-        ref={ref => setTargetRef("insights-btn", ref)}
-      >
-        <Text style={styles.actionIcon}>🧠</Text>
-      </TouchableOpacity>
+
+      <View style={[styles.taskbar, { backgroundColor: theme.colors.surface }]}>
+        <View style={styles.navItemGroup}>
+          {leftItems.map((item) => (
+            <NavItem item={item} key={item.name} />
+          ))}
+        </View>
+
+        <View style={{ width: 80 }} />
+
+        <View style={styles.navItemGroup}>
+          {rightItems.map((item) => (
+            <NavItem item={item} key={item.name} />
+          ))}
+        </View>
+      </View>
     </View>
-  </View>
-);
+  );
+};
 
 const styles = StyleSheet.create({
-  taskbarContainer: {
+  container: {
     position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: "transparent",
-    paddingHorizontal: Math.max(screenWidth * 0.03, 8),
-    paddingBottom: Math.max(screenWidth * 0.06, 20),
+    alignItems: "center",
+    height: 90,
+    paddingBottom: Math.max(screenWidth * 0.05, 20),
   },
   taskbar: {
+    position: "absolute",
+    bottom: 0,
+    width: "95%",
+    height: 65,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    borderRadius: Math.max(screenWidth * 0.07, 24),
-    paddingHorizontal: Math.max(screenWidth * 0.04, 14),
-    paddingVertical: Math.max(screenWidth * 0.022, 8),
-    elevation: 10,
+    borderRadius: 32.5,
+    paddingHorizontal: 5,
+    elevation: 12,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.1,
+    shadowRadius: 15,
     borderWidth: 1,
-    borderColor: "rgba(51, 65, 85, 0.1)",
+    borderColor: "rgba(200, 200, 200, 0.2)",
   },
-  actionButton: {
+  navItemGroup: {
+    flex: 1,
+    flexDirection: "row",
+    justifyContent: "space-around",
     alignItems: "center",
-    paddingVertical: Math.max(screenWidth * 0.012, 6),
-    paddingHorizontal: Math.max(screenWidth * 0.025, 8),
-    borderRadius: Math.max(screenWidth * 0.04, 15),
-    backgroundColor: "transparent",
   },
-  actionIcon: {
-    fontSize: Math.max(Math.min(screenWidth * 0.045, 19), 12),
-    marginBottom: 4,
+  navItem: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    padding: 5,
+  },
+  navLabel: {
+    fontSize: 11,
+    fontWeight: "600",
   },
   addButton: {
-    backgroundColor: "#06b6d4",
-    width: Math.max(Math.min(screenWidth * 0.14, 56), 38),
-    height: Math.max(Math.min(screenWidth * 0.14, 56), 38),
-    borderRadius: Math.max(Math.min(screenWidth * 0.07, 28), 19),
+    position: "absolute",
+    top: 0,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     justifyContent: "center",
     alignItems: "center",
-    elevation: 8,
-    shadowColor: "#06b6d4",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    elevation: 15,
+    zIndex: 1,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.2,
     shadowRadius: 8,
-  },
-  addIcon: {
-    fontSize: Math.max(Math.min(screenWidth * 0.07, 28), 18),
-    color: "#fff",
-    fontWeight: "300",
-    lineHeight: 32,
   },
 });
 
