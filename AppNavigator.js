@@ -39,7 +39,7 @@ export default function AppNavigator() {
         setHasCompletedOnboarding(value === "true");
       } catch (error) {
         console.error("Error checking onboarding status:", error);
-        setHasCompletedOnboarding(false); // Default to showing onboarding on error
+        setHasCompletedOnboarding(false); 
       }
     };
     checkOnboardingStatus();

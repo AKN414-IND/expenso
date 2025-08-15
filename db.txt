@@ -1,0 +1,356 @@
+-- -----------------------------------------------------------------------------
+-- Expense Tracker - Production Database Schema
+-- -----------------------------------------------------------------------------
+-- This script is designed to be idempotent, meaning it can be run multiple
+-- times without causing errors. It sets up tables, indexes, security policies,
+-- functions, and triggers for a comprehensive expense tracking application.
+-- -----------------------------------------------------------------------------
+
+-- === 1. EXTENSIONS ===
+-- Enable the UUID extension to generate unique identifiers for our records.
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- === 2. TABLE CREATION ===
+
+-- Profiles Table: Stores user-specific information and preferences.
+CREATE TABLE IF NOT EXISTS public.profiles (
+    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    full_name TEXT,
+    username TEXT UNIQUE,
+    email TEXT UNIQUE NOT NULL,
+    monthly_income DECIMAL(12, 2),
+    total_investments DECIMAL(12, 2),
+    monthly_budget DECIMAL(12, 2),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Investments Table: Tracks user investments.
+CREATE TABLE IF NOT EXISTS public.investments (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    amount DECIMAL(12, 2) NOT NULL CHECK (amount > 0),
+    type TEXT NOT NULL CHECK (type IN ('Stocks', 'Mutual Funds', 'FD', 'Crypto', 'Gold', 'Bonds', 'Real Estate', 'Others')),
+    date DATE NOT NULL,
+    description TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Expenses Table: Logs all user expenses.
+CREATE TABLE IF NOT EXISTS public.expenses (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    amount DECIMAL(12, 2) NOT NULL CHECK (amount > 0),
+    category TEXT NOT NULL CHECK (category IN (
+        'Food & Dining', 'Transportation', 'Shopping', 'Entertainment',
+        'Bills & Utilities', 'Healthcare', 'Travel', 'Education',
+        'Groceries', 'Investments', 'Other'
+    )),
+    date DATE NOT NULL,
+    description TEXT,
+    investment_id UUID REFERENCES public.investments(id) ON DELETE SET NULL, -- Use SET NULL to avoid losing expense data if investment is deleted
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Budgets Table: Allows users to set spending limits for categories.
+CREATE TABLE IF NOT EXISTS public.budgets (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    category TEXT NOT NULL,
+    amount DECIMAL(12, 2) NOT NULL CHECK (amount > 0),
+    period TEXT NOT NULL CHECK (period IN ('weekly', 'monthly', 'yearly')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(user_id, category, period) -- Ensure only one budget per category per period for a user
+);
+
+-- Side Incomes Table: Tracks sources of income.
+CREATE TABLE IF NOT EXISTS public.side_incomes (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    source TEXT NOT NULL,
+    description TEXT,
+    amount DECIMAL(12, 2) NOT NULL CHECK (amount > 0),
+    date DATE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Payment Reminders Table: Stores upcoming payment reminders.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'payment_frequency') THEN
+    CREATE TYPE payment_frequency AS ENUM ('daily', 'weekly', 'monthly', 'quarterly', 'half_yearly', 'yearly', 'custom');
+  END IF;
+END$$;
+
+CREATE TABLE IF NOT EXISTS public.payment_reminders (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    description TEXT,
+    amount DECIMAL(12, 2) NOT NULL CHECK (amount >= 0),
+    category TEXT NOT NULL DEFAULT 'Other',
+    frequency payment_frequency NOT NULL,
+    next_due_date DATE NOT NULL,
+    reminder_time TIME WITHOUT TIME ZONE NOT NULL DEFAULT '09:00:00',
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    custom_interval INTEGER,
+    notification_id TEXT,
+    last_paid_date DATE,
+    notification_enabled BOOLEAN DEFAULT TRUE,
+    timezone TEXT NOT NULL DEFAULT 'Asia/Kolkata',
+    tags TEXT[] DEFAULT '{}',
+    color TEXT,
+    icon TEXT,
+    payee TEXT,
+    pay_url TEXT,
+    priority SMALLINT NOT NULL DEFAULT 2 CHECK (priority BETWEEN 1 AND 3),
+    remind_at TIMESTAMPTZ,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- === 3. INDEXES ===
+-- Create indexes to speed up common queries.
+
+-- Profiles
+CREATE INDEX IF NOT EXISTS idx_profiles_user_id ON public.profiles(id);
+
+-- Investments
+CREATE INDEX IF NOT EXISTS idx_investments_user_id_date ON public.investments(user_id, date DESC);
+CREATE INDEX IF NOT EXISTS idx_investments_user_type ON public.investments(user_id, type);
+
+-- Expenses
+CREATE INDEX IF NOT EXISTS idx_expenses_user_id_date ON public.expenses(user_id, date DESC);
+CREATE INDEX IF NOT EXISTS idx_expenses_user_category ON public.expenses(user_id, category);
+CREATE INDEX IF NOT EXISTS idx_expenses_investment_id ON public.expenses(investment_id);
+
+-- Budgets
+CREATE INDEX IF NOT EXISTS idx_budgets_user_id ON public.budgets(user_id);
+
+-- Side Incomes
+CREATE INDEX IF NOT EXISTS idx_side_incomes_user_id_date ON public.side_incomes(user_id, date DESC);
+
+-- Payment Reminders
+CREATE INDEX IF NOT EXISTS idx_payment_reminders_user_id ON public.payment_reminders(user_id);
+CREATE INDEX IF NOT EXISTS idx_reminders_active_next_due ON public.payment_reminders(user_id, next_due_date) WHERE is_active = true;
+CREATE INDEX IF NOT EXISTS idx_reminders_notify_queue ON public.payment_reminders(remind_at) WHERE notification_enabled = true AND is_active = true;
+CREATE INDEX IF NOT EXISTS idx_reminders_tags_gin ON public.payment_reminders USING GIN (tags);
+
+
+-- === 4. ROW LEVEL SECURITY (RLS) ===
+-- Enable RLS and define policies to ensure users can only access their own data.
+
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.investments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.expenses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.budgets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.side_incomes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.payment_reminders ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies to prevent errors on re-runs
+DROP POLICY IF EXISTS "Users can manage their own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Users can manage their own investments" ON public.investments;
+DROP POLICY IF EXISTS "Users can manage their own expenses" ON public.expenses;
+DROP POLICY IF EXISTS "Users can manage their own budgets" ON public.budgets;
+DROP POLICY IF EXISTS "Users can manage their own side_incomes" ON public.side_incomes;
+DROP POLICY IF EXISTS "Users can manage their own payment_reminders" ON public.payment_reminders;
+
+
+-- Create policies for each table
+CREATE POLICY "Users can manage their own profile" ON public.profiles FOR ALL USING (auth.uid() = id) WITH CHECK (auth.uid() = id);
+CREATE POLICY "Users can manage their own investments" ON public.investments FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can manage their own expenses" ON public.expenses FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can manage their own budgets" ON public.budgets FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can manage their own side_incomes" ON public.side_incomes FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can manage their own payment_reminders" ON public.payment_reminders FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+
+-- === 5. FUNCTIONS & TRIGGERS ===
+
+-- Function to automatically update the 'updated_at' timestamp on any row modification.
+CREATE OR REPLACE FUNCTION public.update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Triggers to call the update_updated_at_column function for each table.
+DROP TRIGGER IF EXISTS trigger_profiles_updated_at ON public.profiles;
+CREATE TRIGGER trigger_profiles_updated_at BEFORE UPDATE ON public.profiles FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS trigger_investments_updated_at ON public.investments;
+CREATE TRIGGER trigger_investments_updated_at BEFORE UPDATE ON public.investments FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS trigger_expenses_updated_at ON public.expenses;
+CREATE TRIGGER trigger_expenses_updated_at BEFORE UPDATE ON public.expenses FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS trigger_budgets_updated_at ON public.budgets;
+CREATE TRIGGER trigger_budgets_updated_at BEFORE UPDATE ON public.budgets FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS trigger_side_incomes_updated_at ON public.side_incomes;
+CREATE TRIGGER trigger_side_incomes_updated_at BEFORE UPDATE ON public.side_incomes FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Function to automatically create an expense when a new investment is added.
+CREATE OR REPLACE FUNCTION public.create_investment_expense()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO public.expenses (user_id, title, amount, category, date, description, investment_id)
+    VALUES (NEW.user_id, NEW.title, NEW.amount, 'Investments', NEW.date, 'Investment: ' || NEW.type, NEW.id);
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Function to update the corresponding expense when an investment is updated.
+CREATE OR REPLACE FUNCTION public.update_investment_expense()
+RETURNS TRIGGER AS $$
+BEGIN
+    UPDATE public.expenses
+    SET
+        title = NEW.title,
+        amount = NEW.amount,
+        date = NEW.date,
+        description = 'Investment: ' || NEW.type,
+        updated_at = NOW()
+    WHERE investment_id = NEW.id AND user_id = NEW.user_id;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Triggers for investment-expense synchronization.
+DROP TRIGGER IF EXISTS trigger_create_investment_expense ON public.investments;
+CREATE TRIGGER trigger_create_investment_expense AFTER INSERT ON public.investments FOR EACH ROW EXECUTE FUNCTION create_investment_expense();
+
+DROP TRIGGER IF EXISTS trigger_update_investment_expense ON public.investments;
+CREATE TRIGGER trigger_update_investment_expense AFTER UPDATE ON public.investments FOR EACH ROW EXECUTE FUNCTION update_investment_expense();
+
+-- Function and trigger for setting payment reminder fields
+CREATE OR REPLACE FUNCTION public.tg_payment_reminders_set_fields()
+RETURNS TRIGGER AS $$
+DECLARE
+  hh int;
+  mm int;
+  base_ts timestamptz;
+BEGIN
+  NEW.updated_at := now();
+  IF NEW.next_due_date IS NOT NULL AND NEW.reminder_time IS NOT NULL THEN
+    SELECT extract(hour from NEW.reminder_time)::int, extract(minute from NEW.reminder_time)::int INTO hh, mm;
+    base_ts := make_timestamptz(
+      extract(year from NEW.next_due_date)::int,
+      extract(month from NEW.next_due_date)::int,
+      extract(day from NEW.next_due_date)::int,
+      hh, mm, 0,
+      NEW.timezone
+    );
+    NEW.remind_at := base_ts;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_update_payment_reminder_timestamp ON public.payment_reminders;
+CREATE TRIGGER trg_update_payment_reminder_timestamp BEFORE INSERT OR UPDATE ON public.payment_reminders FOR EACH ROW EXECUTE FUNCTION public.tg_payment_reminders_set_fields();
+
+
+-- === 6. REMOTE PROCEDURE CALLS (RPCs) ===
+
+-- RPC to mark a reminder as paid and roll it to the next due date.
+CREATE OR REPLACE FUNCTION public.mark_paid_and_roll(p_id uuid)
+RETURNS public.payment_reminders
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
+AS $$
+DECLARE
+  r public.payment_reminders;
+  next_date date;
+BEGIN
+  SELECT * INTO r FROM public.payment_reminders WHERE id = p_id AND user_id = auth.uid() FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Reminder not found or not owned by user'; END IF;
+
+  next_date := CASE r.frequency
+    WHEN 'daily' THEN r.next_due_date + INTERVAL '1 day'
+    WHEN 'weekly' THEN r.next_due_date + INTERVAL '7 day'
+    WHEN 'monthly' THEN r.next_due_date + INTERVAL '1 month'
+    WHEN 'quarterly' THEN r.next_due_date + INTERVAL '3 month'
+    WHEN 'half_yearly' THEN r.next_due_date + INTERVAL '6 month'
+    WHEN 'yearly' THEN r.next_due_date + INTERVAL '1 year'
+    WHEN 'custom' THEN r.next_due_date + (r.custom_interval || ' day')::interval
+    ELSE r.next_due_date + INTERVAL '1 month'
+  END;
+
+  UPDATE public.payment_reminders
+  SET
+    last_paid_date = CURRENT_DATE,
+    next_due_date = next_date,
+    is_active = true
+  WHERE id = p_id
+  RETURNING * INTO r;
+  RETURN r;
+END;
+$$;
+
+-- RPC to snooze a reminder by a specified number of days.
+CREATE OR REPLACE FUNCTION public.snooze_reminder(p_id uuid, p_days int)
+RETURNS public.payment_reminders
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
+AS $$
+DECLARE
+  r public.payment_reminders;
+BEGIN
+  UPDATE public.payment_reminders
+  SET next_due_date = GREATEST(CURRENT_DATE, next_due_date) + (p_days || ' day')::interval
+  WHERE id = p_id AND user_id = auth.uid()
+  RETURNING * INTO r;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Reminder not found or not owned by user'; END IF;
+  RETURN r;
+END;
+$$;
+
+
+-- Grant permissions for authenticated users to execute RPCs.
+GRANT EXECUTE ON FUNCTION public.mark_paid_and_roll(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.snooze_reminder(uuid, int) TO authenticated;
+
+
+-- === 7. SMART INSIGHTS & ANALYTICS FUNCTIONS ===
+-- These functions provide advanced data analysis for the "Smart Insights" feature.
+
+-- Function to get a monthly summary of expenses by category.
+CREATE OR REPLACE FUNCTION get_monthly_expense_summary(user_uuid UUID, target_month DATE)
+RETURNS TABLE (category TEXT, total_amount DECIMAL, expense_count BIGINT) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT e.category, SUM(e.amount), COUNT(*)
+    FROM public.expenses e
+    WHERE e.user_id = user_uuid AND DATE_TRUNC('month', e.date) = DATE_TRUNC('month', target_month)
+    GROUP BY e.category ORDER BY SUM(e.amount) DESC;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Function to get a summary of the investment portfolio by type.
+CREATE OR REPLACE FUNCTION get_investment_portfolio_summary(user_uuid UUID)
+RETURNS TABLE (investment_type TEXT, total_amount DECIMAL, investment_count BIGINT, avg_amount DECIMAL) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT i.type, SUM(i.amount), COUNT(*), AVG(i.amount)
+    FROM public.investments i
+    WHERE i.user_id = user_uuid
+    GROUP BY i.type ORDER BY SUM(i.amount) DESC;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
+-- Grant execute permissions for analytics functions
+GRANT EXECUTE ON FUNCTION public.get_monthly_expense_summary(UUID, DATE) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_investment_portfolio_summary(UUID) TO authenticated;
+
+
+-- -----------------------------------------------------------------------------
+-- END OF SCRIPT
+-- -----------------------------------------------------------------------------
