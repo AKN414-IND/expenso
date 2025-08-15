@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { useTheme } from "../context/ThemeContext";
 import { useAuth } from "../context/AuthContext";
-import { ArrowLeft, Download, Trash2, FileText } from "lucide-react-native";
+import { ArrowLeft, Download, Trash2 } from "lucide-react-native";
 import { supabase } from "../lib/supabase";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
@@ -202,6 +202,7 @@ export default function DataManagementScreen({ navigation }) {
         open: true,
         title: "Date Range Required",
         message: "Please select a start and end date for the report.",
+        onConfirm: () => setAlertProps({ open: false }),
         confirmText: "OK",
       });
       return;
@@ -209,7 +210,6 @@ export default function DataManagementScreen({ navigation }) {
     setIsLoading(true);
 
     try {
-      // Fetch all data concurrently
       const [
         { data: profileData, error: profileError },
         { data: expensesData, error: expensesError },
@@ -243,18 +243,9 @@ export default function DataManagementScreen({ navigation }) {
         supabase.from("budgets").select("*").eq("user_id", session.user.id),
       ]);
 
-      if (
-        profileError ||
-        expensesError ||
-        incomesError ||
-        investmentsError ||
-        budgetsError
-      ) {
-        throw new Error(
-          profileError?.message ||
-            expensesError?.message ||
-            "Failed to fetch data."
-        );
+      const errors = [profileError, expensesError, incomesError, investmentsError, budgetsError].filter(Boolean);
+      if (errors.length > 0) {
+        throw new Error(errors.map(e => e.message).join('\n'));
       }
 
       const reportData = {
@@ -266,7 +257,6 @@ export default function DataManagementScreen({ navigation }) {
       };
 
       const htmlContent = generateProfessionalReportHTML(reportData);
-
       const { uri } = await Print.printToFileAsync({ html: htmlContent });
 
       if (await Sharing.isAvailableAsync()) {
@@ -274,19 +264,50 @@ export default function DataManagementScreen({ navigation }) {
           mimeType: "application/pdf",
           dialogTitle: "Expenso Financial Report",
         });
-      } else {
-        Alert.alert(
-          "Sharing Not Available",
-          "Your report has been generated but cannot be shared from this device."
-        );
       }
     } catch (error) {
-      console.error("Export Error:", error);
       setAlertProps({
         open: true,
         title: "Export Failed",
         message: error.message || "An unexpected error occurred.",
+        onConfirm: () => setAlertProps({ open: false }),
         confirmText: "OK",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeleteAllData = async () => {
+    setIsLoading(true);
+    try {
+      // Call the Supabase RPC function
+      const { data, error } = await supabase.rpc('delete_user_data');
+
+      if (error) {
+        throw error;
+      }
+      
+      // Show success message
+      setAlertProps({
+        open: true,
+        title: "Success",
+        message: "All your financial data has been deleted successfully.",
+        confirmText: "Great!",
+        onConfirm: () => {
+          setAlertProps({ open: false });
+          // Optionally, navigate away or refresh the app state
+          navigation.navigate("Dashboard"); 
+        },
+      });
+
+    } catch (error) {
+      setAlertProps({
+        open: true,
+        title: "Deletion Failed",
+        message: error.message || "An unexpected error occurred while deleting your data.",
+        confirmText: "OK",
+        onConfirm: () => setAlertProps({ open: false }),
       });
     } finally {
       setIsLoading(false);
@@ -298,18 +319,15 @@ export default function DataManagementScreen({ navigation }) {
       open: true,
       title: "Delete All Data",
       message:
-        "This is irreversible. Are you sure you want to delete ALL your application data?",
+        "This is irreversible. Are you sure you want to delete ALL your application data? Your account will not be deleted.",
       confirmText: "Delete",
       cancelText: "Cancel",
       icon: <Trash2 color="#fff" size={40} />,
       iconBg: theme.colors.error,
       confirmColor: theme.colors.error,
-      onConfirm: async () => {
-        setIsLoading(true);
-        // Add your data deletion logic here, e.g., calling Supabase RPC function
-        console.log("Deleting all user data...");
-        setIsLoading(false);
-        setAlertProps({ open: false });
+      onConfirm: () => {
+        setAlertProps({ open: false }); // Close the confirmation alert
+        handleDeleteAllData(); // Proceed with deletion
       },
       onCancel: () => setAlertProps({ open: false }),
     });
@@ -376,9 +394,16 @@ export default function DataManagementScreen({ navigation }) {
           <TouchableOpacity
             style={[s.actionButton, { backgroundColor: theme.colors.error }]}
             onPress={confirmDeleteAllData}
+            disabled={isLoading}
           >
-            <Trash2 color="#fff" size={18} style={{ marginRight: 8 }} />
-            <Text style={s.actionButtonText}>Delete All Data</Text>
+            {isLoading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <Trash2 color="#fff" size={18} style={{ marginRight: 8 }} />
+                <Text style={s.actionButtonText}>Delete All Data</Text>
+              </>
+            )}
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -404,10 +429,7 @@ export default function DataManagementScreen({ navigation }) {
           }}
         />
       )}
-      <Alert
-        {...alertProps}
-        onConfirm={() => setAlertProps((p) => ({ ...p, open: false }))}
-      />
+      <Alert {...alertProps} />
     </View>
   );
 }

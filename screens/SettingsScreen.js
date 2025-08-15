@@ -63,20 +63,8 @@ export default function SettingsScreen({ navigation }) {
           description="Export or delete your application data."
           onPress={() => navigation.navigate("DataManagement")}
         />
-        <SettingsItem
-          theme={theme}
-          icon={<Lock color={theme.colors.primary} size={22} />}
-          title="Security & Privacy"
-          description="Password, 2FA, and privacy settings."
-          onPress={() => navigation.navigate("SecurityPrivacy")}
-        />
-         <SettingsItem
-          theme={theme}
-          icon={<HelpCircle color={theme.colors.primary} size={22} />}
-          title="Help & Support"
-          description="Replay the app tour or get help."
-          onPress={() => navigation.navigate("Dashboard", { showOnboarding: true })}
-        />
+        
+         
       </ScrollView>
     </View>
   );
