@@ -31,7 +31,6 @@ import {
   Sparkles,
 } from "lucide-react-native";
 import Carousel from "react-native-reanimated-carousel";
-import ReminderCard from "../components/ReminderCard";
 import {
   useFocusEffect,
   useRoute,
@@ -131,6 +130,135 @@ const ONBOARDING_STEPS = [
 ];
 
 const ONBOARDING_FLAG_KEY = "onboarding_completed";
+
+// --- Simple Reminder Card for Dashboard ---
+const SimpleReminderCard = ({ item, onPress, theme }) => {
+  const formatAmount = (amount) => {
+    if (!amount) return "N/A";
+    return `₹${parseFloat(amount).toLocaleString("en-IN", {
+      maximumFractionDigits: 0,
+    })}`;
+  };
+
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    const day = date.getDate();
+    const month = date
+      .toLocaleString("default", { month: "short" })
+      .toUpperCase();
+    return { day, month };
+  };
+
+  const { day, month } = formatDate(item.next_due_date);
+  const priorityColor =
+    item.priority === 1
+      ? theme.colors.error
+      : item.priority === 3
+      ? theme.colors.success
+      : theme.colors.warning;
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      style={[
+        styles.simpleCard,
+        {
+          backgroundColor: theme.colors.surface,
+          shadowColor: theme.colors.shadow,
+          borderColor: theme.colors.border,
+        },
+      ]}
+    >
+      <View style={[styles.simpleCardDate, { borderLeftColor: priorityColor }]}>
+        <Text style={[styles.simpleCardDay, { color: theme.colors.text }]}>
+          {day}
+        </Text>
+        <Text
+          style={[
+            styles.simpleCardMonth,
+            { color: theme.colors.textSecondary },
+          ]}
+        >
+          {month}
+        </Text>
+      </View>
+      <View style={styles.simpleCardDetails}>
+        <Text
+          style={[styles.simpleCardTitle, { color: theme.colors.text }]}
+          numberOfLines={1}
+        >
+          {item.title}
+        </Text>
+        <Text
+          style={[styles.simpleCardAmount, { color: theme.colors.primary }]}
+        >
+          {formatAmount(item.amount)}
+        </Text>
+      </View>
+    </TouchableOpacity>
+  );
+};
+
+// --- Redesigned Budget Grid Item ---
+const BudgetGridItem = ({ item, theme, onPress, style }) => {
+  const budgetAmount = Number(item.amount);
+  const spentAmount = Number(item.spent);
+  const remaining = budgetAmount - spentAmount;
+  const percent =
+    budgetAmount > 0 ? Math.min((spentAmount / budgetAmount) * 100, 100) : 0;
+
+  const getStatusColor = () => {
+    if (percent >= 100) return theme.colors.error;
+    if (percent >= 75) return theme.colors.warning;
+    return theme.colors.success;
+  };
+
+  const statusColor = getStatusColor();
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      style={[
+        styles.budgetGridItem,
+        {
+          backgroundColor: theme.colors.surface,
+          borderColor: theme.colors.borderLight,
+        },
+        style,
+      ]}
+    >
+      <Text
+        style={[
+          styles.budgetItemCategory,
+          { color: theme.colors.textSecondary },
+        ]}
+      >
+        {item.category}
+      </Text>
+      <Text style={[styles.budgetItemRemaining, { color: theme.colors.text }]}>
+        ₹{remaining.toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+      </Text>
+      <Text
+        style={[styles.budgetItemLabel, { color: theme.colors.textSecondary }]}
+      >
+        {remaining >= 0 ? "left to spend" : "overspent"}
+      </Text>
+      <View
+        style={[
+          styles.budgetItemProgressBarTrack,
+          { backgroundColor: theme.colors.borderLight },
+        ]}
+      >
+        <View
+          style={[
+            styles.budgetItemProgressBarFill,
+            { width: `${percent}%`, backgroundColor: statusColor },
+          ]}
+        />
+      </View>
+    </TouchableOpacity>
+  );
+};
 
 const DashboardOnboarding = ({
   isVisible,
@@ -342,46 +470,6 @@ const Avatar = forwardRef(({ name, email, size = 50, style, onPress }, ref) => {
   );
 });
 
-const BudgetBar = ({ label, spent, budget, color, theme }) => {
-  const percent = budget > 0 ? Math.min((spent / budget) * 100, 100) : 0;
-  return (
-    <View style={styles.budgetBarContainer}>
-      <View style={styles.budgetBarHeader}>
-        <Text style={[styles.budgetBarLabel, { color: theme.colors.text }]}>
-          {label}
-        </Text>
-        <Text
-          style={[
-            styles.budgetBarAmount,
-            { color: theme.colors.textSecondary },
-          ]}
-        >
-          ₹{spent.toFixed(0)} /{" "}
-          <Text style={{ color: theme.colors.textTertiary }}>
-            ₹{budget.toFixed(0)}
-          </Text>
-        </Text>
-      </View>
-      <View
-        style={[
-          styles.budgetBarTrack,
-          { backgroundColor: theme.colors.borderLight },
-        ]}
-      >
-        <View
-          style={[
-            styles.budgetBarFill,
-            {
-              width: `${percent}%`,
-              backgroundColor: spent > budget ? theme.colors.error : color,
-            },
-          ]}
-        />
-      </View>
-    </View>
-  );
-};
-
 const SectionHeader = ({ title, theme }) => (
   <Text style={[styles.sectionHeader, { color: theme.colors.text }]}>
     {title}
@@ -529,6 +617,14 @@ export default function DashboardScreen({ navigation }) {
     return budgets.map((b) => ({ ...b, spent: getSpent(b.category) }));
   }, [budgets, expenses]);
 
+  const budgetPairs = useMemo(() => {
+    const pairs = [];
+    for (let i = 0; i < budgetProgress.length; i += 2) {
+      pairs.push(budgetProgress.slice(i, i + 2));
+    }
+    return pairs;
+  }, [budgetProgress]);
+
   const renderTransactionList = () => {
     const dataMap = {
       expenses: expenses.slice(0, 5),
@@ -603,23 +699,10 @@ export default function DashboardScreen({ navigation }) {
         }
         showsVerticalScrollIndicator={false}
       >
-        <View
-          style={[
-            styles.header,
-            { backgroundColor: theme.colors.surface },
-          ]}
-        >
+        <View style={styles.header}>
           <View style={styles.headerContent}>
             <Text style={[styles.welcomeText, { color: theme.colors.text }]}>
               Good Morning, {profile?.full_name || "User"}!
-            </Text>
-            <Text
-              style={[
-                styles.subGreeting,
-                { color: theme.colors.textSecondary },
-              ]}
-            >
-              Let's keep your spending on Track
             </Text>
           </View>
           <View
@@ -716,8 +799,9 @@ export default function DashboardScreen({ navigation }) {
               data={reminders}
               loop={false}
               renderItem={({ item }) => (
-                <ReminderCard
+                <SimpleReminderCard
                   item={item}
+                  theme={theme}
                   onPress={() => navigation.navigate("PaymentReminder")}
                 />
               )}
@@ -730,23 +814,37 @@ export default function DashboardScreen({ navigation }) {
           ref={(ref) => setTargetRef("budget-section", ref)}
         >
           <SectionHeader title="Budget Hub" theme={theme} />
-          <View
-            style={[styles.card, { backgroundColor: theme.colors.surface }]}
-          >
-            {budgetProgress.length > 0 ? (
-              budgetProgress
-                .slice(0, 4)
-                .map((b) => (
-                  <BudgetBar
-                    key={b.id}
-                    label={b.category}
-                    spent={b.spent}
-                    budget={Number(b.amount)}
-                    color={theme.colors.primary}
-                    theme={theme}
-                  />
-                ))
-            ) : (
+          {budgetPairs.length > 0 ? (
+            <Carousel
+              loop={false}
+              width={screenWidth - 40}
+              height={140}
+              data={budgetPairs}
+              renderItem={({ item: pair }) => (
+                <View style={styles.budgetCarouselItemContainer}>
+                  {pair[0] && (
+                    <BudgetGridItem
+                      item={pair[0]}
+                      theme={theme}
+                      onPress={() => navigation.navigate("BudgetScreen")}
+                      style={{ width: (screenWidth - 40) / 2 - 8 }}
+                    />
+                  )}
+                  {pair[1] && (
+                    <BudgetGridItem
+                      item={pair[1]}
+                      theme={theme}
+                      onPress={() => navigation.navigate("BudgetScreen")}
+                      style={{ width: (screenWidth - 40) / 2 - 8 }}
+                    />
+                  )}
+                </View>
+              )}
+            />
+          ) : (
+            <View
+              style={[styles.card, { backgroundColor: theme.colors.surface }]}
+            >
               <Text
                 style={[
                   styles.emptyStateText,
@@ -755,8 +853,8 @@ export default function DashboardScreen({ navigation }) {
               >
                 No budgets set yet.
               </Text>
-            )}
-          </View>
+            </View>
+          )}
         </View>
 
         <View
@@ -829,24 +927,21 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F9FBFC" },
   scrollContent: { paddingBottom: 100, paddingTop: 20 },
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
+  // Redesigned Header
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: Math.max(screenWidth * 0.05, 16),
-    paddingTop: Math.max(screenHeight * 0.0, 33),
+    paddingTop: Math.max(screenHeight * 0.0, 45), // Increased top padding
     paddingBottom: Math.max(screenHeight * 0.03, 18),
+    backgroundColor: "transparent", // Make header blend with background
   },
   headerContent: { flex: 1 },
   welcomeText: {
-    fontSize: Math.max(Math.min(screenWidth * 0.05, 22), 14),
-    fontWeight: "700",
+    fontSize: Math.max(Math.min(screenWidth * 0.06, 26), 18), // Larger font size
+    fontWeight: "800", // Bolder
     letterSpacing: -0.5,
-    marginBottom: 4,
-  },
-  subGreeting: {
-    fontSize: Math.max(Math.min(screenWidth * 0.035, 16), 11),
-    fontWeight: "500",
   },
   headerActions: {
     flexDirection: "row",
@@ -915,17 +1010,43 @@ const styles = StyleSheet.create({
     paddingVertical: 24,
     fontStyle: "italic",
   },
-  budgetBarContainer: { paddingVertical: 8 },
-  budgetBarHeader: {
+  // Budget Carousel Styles
+  budgetCarouselItemContainer: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
+    paddingVertical: 4, // Add vertical padding to show shadow
+  },
+  budgetGridItem: {
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+  },
+  budgetItemCategory: {
+    fontSize: 14,
+    fontWeight: "600",
     marginBottom: 8,
   },
-  budgetBarLabel: { fontSize: 15, fontWeight: "600" },
-  budgetBarAmount: { fontSize: 14, fontWeight: "500" },
-  budgetBarTrack: { height: 8, borderRadius: 4, overflow: "hidden" },
-  budgetBarFill: { height: "100%" },
+  budgetItemRemaining: {
+    fontSize: 22,
+    fontWeight: "800",
+    letterSpacing: -0.5,
+  },
+  budgetItemLabel: {
+    fontSize: 12,
+    marginBottom: 12,
+  },
+  budgetItemProgressBarTrack: {
+    height: 6,
+    borderRadius: 3,
+    overflow: "hidden",
+  },
+  budgetItemProgressBarFill: {
+    height: "100%",
+  },
   tabContainer: {
     flexDirection: "row",
     borderRadius: 12,
@@ -994,4 +1115,47 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   onboardingButtonText: { fontSize: 16, fontWeight: "bold" },
+  // Styles for SimpleReminderCard
+  simpleCard: {
+    borderRadius: 16,
+    elevation: 2,
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    flexDirection: "row",
+    overflow: "hidden",
+    borderWidth: 1,
+    height: 80, // Set a fixed height for consistency in the carousel
+  },
+  simpleCardDate: {
+    paddingHorizontal: 16,
+    justifyContent: "center",
+    alignItems: "center",
+    borderLeftWidth: 5,
+  },
+  simpleCardDay: {
+    fontSize: 24,
+    fontWeight: "800",
+  },
+  simpleCardMonth: {
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+    marginTop: 2,
+  },
+  simpleCardDetails: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    justifyContent: "center",
+  },
+  simpleCardTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    marginBottom: 6,
+  },
+  simpleCardAmount: {
+    fontSize: 16,
+    fontWeight: "800",
+  },
 });
