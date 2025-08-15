@@ -1,19 +1,14 @@
+// components/ReminderCard.js
+
 import React from "react";
-import { TouchableOpacity, View, Text, StyleSheet } from "react-native";
-import { Bell, AlertCircle, Calendar } from "lucide-react-native";
+import { TouchableOpacity, View, Text, StyleSheet, Linking } from "react-native";
+import { ExternalLink, CheckSquare, Clock, Pencil, Trash2 } from "lucide-react-native";
 import { useTheme } from "../context/ThemeContext";
 
-const hexWithAlpha = (hex, alpha = 0.2) => {
-  if (!hex || !hex.startsWith("#")) return hex;
-  const a = Math.round(alpha * 255)
-    .toString(16)
-    .padStart(2, "0");
-  return `${hex}${a}`;
-};
-
-const ReminderCard = ({ item, onPress }) => {
+const ReminderCard = ({ item, onEdit, onMarkPaid, onSnooze, onDelete }) => {
   const { theme } = useTheme();
 
+  // --- Helper Functions ---
   const getDaysUntilDue = (dueDate) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -23,147 +18,151 @@ const ReminderCard = ({ item, onPress }) => {
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   };
 
-  const getReminderPriority = (daysUntil) => {
-    if (daysUntil < 0) {
-      return {
-        color: theme.colors.error,
-        backgroundColor: hexWithAlpha(theme.colors.error, 0.12),
-        label: `${Math.abs(daysUntil)} days Overdue`,
-        icon: <AlertCircle size={28} color={theme.colors.error} />,
-      };
-    }
-    if (daysUntil === 0) {
-      return {
-        color: theme.colors.warning,
-        backgroundColor: hexWithAlpha(theme.colors.warning, 0.12),
-        label: "Due Today",
-        icon: <Bell size={28} color={theme.colors.warning} />,
-      };
-    }
-    if (daysUntil <= 3) {
-      return {
-        color: theme.colors.warning,
-        backgroundColor: hexWithAlpha(theme.colors.warning, 0.12),
-        label: `Due in ${daysUntil} days`,
-        icon: <Bell size={28} color={theme.colors.warning} />,
-      };
-    }
-    return {
-      color: theme.colors.primary,
-      backgroundColor: hexWithAlpha(theme.colors.primary, 0.09),
-      label: `Due in ${daysUntil} days`,
-      icon: <Bell size={28} color={theme.colors.primary} />,
-    };
-  };
-
-  const formatDate = (dateString) => {
-    if (!dateString) return "";
-    return new Date(dateString).toLocaleDateString("en-US", {
-      month: "long",
-      day: "numeric",
-    });
-  };
-
   const formatAmount = (amount) => {
     if (!amount) return "N/A";
-    return `₹${parseFloat(amount).toLocaleString("en-IN", {
-      maximumFractionDigits: 0,
-    })}`;
+    return `₹${parseFloat(amount).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
   };
+  
+  const formatDate = (dateString) => {
+      const date = new Date(dateString);
+      const day = date.getDate();
+      const month = date.toLocaleString('default', { month: 'short' }).toUpperCase();
+      return { day, month };
+  }
 
-  const daysUntil = getDaysUntilDue(item.next_due_date);
-  const priority = getReminderPriority(daysUntil);
+  const { day, month } = formatDate(item.next_due_date);
+  const priorityColor = item.priority === 1 ? theme.colors.error : item.priority === 3 ? theme.colors.success : theme.colors.border;
 
   return (
-    <TouchableOpacity
-      style={[
-        styles.card,
-        {
-          backgroundColor: theme.colors.surface,
-          borderColor: theme.colors.border,
-          shadowColor: theme.colors.shadow,
-        },
-      ]}
-      activeOpacity={0.8}
-      onPress={onPress}
-    >
-      <View
-        style={[
-          styles.iconContainer,
-          { backgroundColor: priority.backgroundColor },
-        ]}
-      >
-        {priority.icon}
-      </View>
+    <View style={[ styles.card, { backgroundColor: theme.colors.surface, shadowColor: theme.colors.shadow }]}>
+        {/* Main content area, pressable for editing */}
+        <TouchableOpacity activeOpacity={0.8} onPress={onEdit}>
+            <View style={styles.contentContainer}>
+                {/* Date and Priority Section */}
+                <View style={[styles.dateSection, { borderLeftColor: priorityColor }]}>
+                    <Text style={[styles.dateDay, { color: theme.colors.text }]}>{day}</Text>
+                    <Text style={[styles.dateMonth, { color: theme.colors.textSecondary }]}>{month}</Text>
+                </View>
 
-      <View style={styles.contentContainer}>
-        <View style={styles.header}>
-          <Text
-            style={[styles.title, { color: theme.colors.text }]}
-            numberOfLines={1}
-          >
-            {item.title}
-          </Text>
-          <Text style={[styles.amount, { color: priority.color }]}>
-            {formatAmount(item.amount)}
-          </Text>
-        </View>
+                {/* Details Section */}
+                <View style={styles.detailsSection}>
+                    <View style={styles.header}>
+                        <View style={[styles.iconContainer, { backgroundColor: item.color ? `${item.color}20` : theme.colors.background }]}>
+                            <Text style={styles.iconText}>{item.icon || '💰'}</Text>
+                        </View>
+                        <View style={styles.titleContainer}>
+                            <Text style={[styles.title, { color: theme.colors.text }]} numberOfLines={1}>{item.title}</Text>
+                            {item.payee && <Text style={[styles.payee, { color: theme.colors.textSecondary }]}>{item.payee}</Text>}
+                        </View>
+                        <Text style={[styles.amount, { color: theme.colors.primary }]}>{formatAmount(item.amount)}</Text>
+                    </View>
+                    {item.tags?.length > 0 && (
+                        <View style={styles.tagsContainer}>
+                        {item.tags.map(tag => (
+                            <View key={tag} style={[styles.tag, { backgroundColor: theme.colors.borderLight }]}>
+                            <Text style={[styles.tagText, { color: theme.colors.textSecondary }]}>{tag}</Text>
+                            </View>
+                        ))}
+                        </View>
+                    )}
+                </View>
+            </View>
+        </TouchableOpacity>
 
-        <View style={styles.footer}>
-          <View style={styles.detailGroup}>
-            <Calendar size={14} color={theme.colors.textTertiary} />
-            <Text
-              style={[styles.detailText, { color: theme.colors.textSecondary }]}
-            >
-              {formatDate(item.next_due_date)}
-            </Text>
-          </View>
-          <Text style={[styles.statusText, { color: priority.color }]}>
-            {priority.label}
-          </Text>
+        {/* Action Bar */}
+        <View style={styles.actionBar}>
+            {item.pay_url && item.is_active ? (
+                <TouchableOpacity
+                    style={[styles.payButton, { backgroundColor: theme.colors.primary }]}
+                    onPress={(e) => { e.stopPropagation(); Linking.openURL(item.pay_url); }}
+                >
+                    <Text style={[styles.payButtonText, { color: theme.colors.onPrimary }]}>Pay Now</Text>
+                    <ExternalLink size={14} color={theme.colors.onPrimary} />
+                </TouchableOpacity>
+            ) : (
+                <Text style={[styles.statusText, { color: !item.is_active ? theme.colors.success : theme.colors.textSecondary }]}>
+                    {!item.is_active ? "Paid" : `Due in ${getDaysUntilDue(item.next_due_date)} days`}
+                </Text>
+            )}
+
+            <View style={styles.actionIcons}>
+                <TouchableOpacity style={styles.actionButton} onPress={onMarkPaid}>
+                    <CheckSquare size={20} color={item.is_active ? theme.colors.textSecondary : theme.colors.success} />
+                </TouchableOpacity>
+                 <TouchableOpacity style={styles.actionButton} onPress={onSnooze}>
+                    <Clock size={20} color={theme.colors.textSecondary} />
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.actionButton} onPress={onEdit}>
+                    <Pencil size={20} color={theme.colors.textSecondary} />
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.actionButton} onPress={onDelete}>
+                    <Trash2 size={20} color={theme.colors.error} />
+                </TouchableOpacity>
+            </View>
         </View>
-      </View>
-    </TouchableOpacity>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   card: {
-    flexDirection: "row",
-    alignItems: "center",
     borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
+    marginBottom: 12,
     elevation: 2,
     shadowOpacity: 0.05,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
   },
+  contentContainer: {
+    flexDirection: 'row',
+  },
+  dateSection: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderLeftWidth: 5,
+  },
+  dateDay: { fontSize: 24, fontWeight: '800' },
+  dateMonth: { fontSize: 12, fontWeight: '700', letterSpacing: 0.5, marginTop: 2 },
+  detailsSection: { flex: 1, paddingVertical: 12, paddingRight: 16, paddingLeft: 10 },
+  header: { flexDirection: 'row', alignItems: 'center' },
   iconContainer: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 16,
+    width: 40, height: 40, borderRadius: 20,
+    justifyContent: 'center', alignItems: 'center',
+    marginRight: 10,
   },
-  contentContainer: { flex: 1, justifyContent: "center" },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 8,
+  iconText: { fontSize: 20 },
+  titleContainer: { flex: 1, marginRight: 8 },
+  title: { fontSize: 16, fontWeight: '700' },
+  payee: { fontSize: 12, fontWeight: '500', marginTop: 2 },
+  amount: { fontSize: 16, fontWeight: '800' },
+  tagsContainer: { flexDirection: 'row', gap: 6, marginTop: 10, flexWrap: 'wrap' },
+  tag: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
+  tagText: { fontSize: 11, fontWeight: '600' },
+  actionBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#EEEEEE' // Use a light border from theme if available
   },
-  title: { fontSize: 17, fontWeight: "700", flex: 1, marginRight: 8 },
-  amount: { fontSize: 17, fontWeight: "800" },
-  footer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+  payButton: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10,
   },
-  detailGroup: { flexDirection: "row", alignItems: "center", gap: 6 },
-  detailText: { fontSize: 13, fontWeight: "500" },
-  statusText: { fontSize: 13, fontWeight: "600" },
+  payButtonText: { fontWeight: '700', fontSize: 13 },
+  statusText: { fontSize: 13, fontWeight: '600' },
+  actionIcons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  actionButton: {
+    padding: 8,
+  }
 });
 
 export default ReminderCard;

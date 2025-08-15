@@ -1,3 +1,4 @@
+// App.js
 import React, { useEffect } from "react";
 import { LogBox } from "react-native";
 import * as Notifications from "expo-notifications";
@@ -6,7 +7,7 @@ import Toast, { BaseToast, ErrorToast } from "react-native-toast-message";
 import { AuthProvider } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import AppNavigator from "./AppNavigator";
-import { navigationRef } from "./navigation"; // ← moved here
+import { navigationRef } from "./navigation";
 
 // Configure how notifications are handled when the app is in the foreground
 Notifications.setNotificationHandler({
