@@ -1,8 +1,14 @@
 // components/TransactionItem.js
 import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from "react-native";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Platform,
+} from "react-native";
 
-// This array can be moved to a separate constants file in a larger application.
+// Category colors can stay fixed (brand-like) or be themed; keeping them fixed per your original approach.
 const EXPENSE_CATEGORIES = [
   { name: "Food & Dining", icon: "🍽️", color: "#FF6B6B" },
   { name: "Transportation", icon: "🚗", color: "#4ECDC4" },
@@ -23,7 +29,6 @@ const TransactionItem = ({
   onLongPress,
   theme,
 }) => {
-  // --- Derive Display Data based on Type ---
   let icon = "📝";
   let iconBgColor = "#747D8C";
   let title = item.title || "Untitled";
@@ -34,9 +39,9 @@ const TransactionItem = ({
     title = item.source || "Income";
   } else if (type === "investment") {
     icon = "📈";
-    iconBgColor = theme.colors.info || theme.colors.success;
+    iconBgColor = theme.colors.success;
     title = item.title || "Investment";
-  } else { // 'expense'
+  } else {
     const catObj = EXPENSE_CATEGORIES.find((c) => c.name === item.category);
     if (catObj) {
       icon = catObj.icon;
@@ -44,23 +49,23 @@ const TransactionItem = ({
     }
   }
 
-  // --- Format Date and Amount ---
   const date =
     item.date && !isNaN(new Date(item.date))
-      ? new Date(item.date).toLocaleDateString('en-GB', { // en-GB for DD-MM-YYYY
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric',
+      ? new Date(item.date).toLocaleDateString("en-GB", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
         })
       : "No date";
 
   const formatAmount = (amount) => {
     const num = parseFloat(amount) || 0;
-    // Formats amount and places the currency symbol at the end, as per the reference image.
-    return num.toLocaleString('en-IN', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    }) + '₹';
+    return (
+      num.toLocaleString("en-IN", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }) + "₹"
+    );
   };
 
   return (
@@ -69,7 +74,7 @@ const TransactionItem = ({
         styles.container,
         {
           backgroundColor: theme.colors.surface,
-          // The shadow is now more defined, matching the reference style.
+          borderColor: theme.colors.border,
           ...styles.shadow,
         },
       ]}
@@ -77,14 +82,15 @@ const TransactionItem = ({
       onPress={onPress}
       activeOpacity={0.8}
     >
-      {/* Icon: A rounded square with a solid background color. */}
       <View style={[styles.iconContainer, { backgroundColor: iconBgColor }]}>
         <Text style={styles.iconText}>{icon}</Text>
       </View>
 
-      {/* Info: Title and Date */}
       <View style={styles.infoContainer}>
-        <Text style={[styles.title, { color: theme.colors.textPrimary }]} numberOfLines={1}>
+        <Text
+          style={[styles.title, { color: theme.colors.text }]}
+          numberOfLines={1}
+        >
           {title}
         </Text>
         <Text style={[styles.date, { color: theme.colors.textSecondary }]}>
@@ -92,9 +98,8 @@ const TransactionItem = ({
         </Text>
       </View>
 
-      {/* Amount */}
       <View style={styles.amountContainer}>
-        <Text style={[styles.amount, { color: theme.colors.textPrimary }]}>
+        <Text style={[styles.amount, { color: theme.colors.text }]}>
           {formatAmount(item.amount)}
         </Text>
       </View>
@@ -109,9 +114,9 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 16,
     marginBottom: 12,
+    borderWidth: 1,
   },
   shadow: {
-    // A more pronounced, cross-platform shadow similar to the image.
     ...Platform.select({
       ios: {
         shadowColor: "#000",
@@ -119,44 +124,23 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.07,
         shadowRadius: 10,
       },
-      android: {
-        elevation: 4,
-      },
+      android: { elevation: 4 },
     }),
   },
   iconContainer: {
     width: 48,
     height: 48,
-    borderRadius: 12, // Rounded square
+    borderRadius: 12,
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
   },
-  iconText: {
-    fontSize: 22,
-    // Note: Emojis have their own color and cannot be styled with 'color'.
-    // For monochrome icons, a library like react-native-vector-icons would be needed.
-  },
-  infoContainer: {
-    flex: 1, // Takes up available space to push amount to the right
-    justifyContent: "center",
-  },
-  title: {
-    fontSize: 16,
-    fontWeight: "700", // Bolder title
-    marginBottom: 4,
-  },
-  date: {
-    fontSize: 13,
-    opacity: 0.7,
-  },
-  amountContainer: {
-    paddingLeft: 10, // Ensure space between info and amount
-  },
-  amount: {
-    fontSize: 16,
-    fontWeight: "600",
-  },
+  iconText: { fontSize: 22 },
+  infoContainer: { flex: 1, justifyContent: "center" },
+  title: { fontSize: 16, fontWeight: "700", marginBottom: 4 },
+  date: { fontSize: 13, opacity: 0.7 },
+  amountContainer: { paddingLeft: 10 },
+  amount: { fontSize: 16, fontWeight: "600" },
 });
 
 export default TransactionItem;

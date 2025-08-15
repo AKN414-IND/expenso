@@ -1,8 +1,15 @@
-import React from 'react';
-import { Modal, View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
+import React from "react";
+import {
+  Modal,
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Dimensions,
+} from "react-native";
 import { useTheme } from "../context/ThemeContext";
 
-const { width } = Dimensions.get('window');
+const { width } = Dimensions.get("window");
 
 const Alert = ({
   open,
@@ -25,58 +32,78 @@ const Alert = ({
       animationType="fade"
       onRequestClose={onCancel}
     >
-      <View style={styles.overlay}>
-        <View style={[
-          styles.container,
-          {
-            backgroundColor: theme.colors.surface,
-            borderColor: theme.colors.border,
-          }
-        ]}>
+      <View style={[styles.overlay, { backgroundColor: theme.colors.overlay }]}>
+        <View
+          style={[
+            styles.container,
+            {
+              backgroundColor: theme.colors.surface,
+              borderColor: theme.colors.border,
+              shadowColor: theme.colors.shadow,
+            },
+          ]}
+        >
           {icon && (
-            <View style={[
-              styles.iconWrapper,
-              {
-                backgroundColor: iconBg || theme.colors.primary,
-                shadowColor: iconBg || theme.colors.primary,
-              }
-            ]}>
+            <View
+              style={[
+                styles.iconWrapper,
+                {
+                  backgroundColor: iconBg || theme.colors.primary,
+                  shadowColor: iconBg || theme.colors.primary,
+                },
+              ]}
+            >
               {icon}
             </View>
           )}
-          <Text style={[styles.title, { color: theme.colors.text }]}>{title}</Text>
-          <Text style={[styles.message, { color: theme.colors.textSecondary }]}>{message}</Text>
-          
+
+          <Text style={[styles.title, { color: theme.colors.text }]}>
+            {title}
+          </Text>
+          <Text style={[styles.message, { color: theme.colors.textSecondary }]}>
+            {message}
+          </Text>
+
           <View style={styles.buttonContainer}>
             {onCancel && (
               <TouchableOpacity
                 style={[
                   styles.button,
                   styles.cancelButton,
-                  { backgroundColor: theme.colors.buttonSecondary }
+                  { backgroundColor: theme.colors.buttonSecondary },
                 ]}
                 onPress={onCancel}
                 activeOpacity={0.8}
               >
-                <Text style={[
-                  styles.buttonText,
-                  styles.cancelButtonText,
-                  { color: theme.colors.text }
-                ]}>{cancelText}</Text>
+                <Text
+                  style={[
+                    styles.buttonText,
+                    styles.cancelButtonText,
+                    { color: theme.colors.buttonSecondaryText },
+                  ]}
+                >
+                  {cancelText}
+                </Text>
               </TouchableOpacity>
             )}
+
             <TouchableOpacity
               style={[
                 styles.button,
-                { backgroundColor: confirmColor || theme.colors.primary }
+                { backgroundColor: confirmColor || theme.colors.primary },
               ]}
               onPress={onConfirm}
               activeOpacity={0.85}
             >
-              <Text style={[
-                styles.buttonText,
-                styles.confirmButtonText,
-              ]}>{confirmText}</Text>
+              <Text
+                style={[
+                  styles.buttonText,
+                  styles.confirmButtonText,
+                  { color: theme.colors.onPrimary },
+                ]}
+              >
+                {confirmText}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -86,18 +113,13 @@ const Alert = ({
 };
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.6)',
-  },
+  overlay: { flex: 1, alignItems: "center", justifyContent: "center" },
   container: {
     width: width * 0.85,
     maxWidth: 340,
     borderRadius: 24,
     padding: 24,
-    alignItems: 'center',
+    alignItems: "center",
     shadowOpacity: 0.1,
     shadowRadius: 10,
     elevation: 8,
@@ -107,8 +129,8 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: 16,
     shadowOpacity: 0.2,
     shadowRadius: 8,
@@ -116,36 +138,27 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 20,
-    fontWeight: '700',
+    fontWeight: "700",
     marginBottom: 8,
-    textAlign: 'center',
+    textAlign: "center",
   },
   message: {
     fontSize: 15,
-    textAlign: 'center',
+    textAlign: "center",
     lineHeight: 22,
     marginBottom: 24,
   },
-  buttonContainer: {
-    flexDirection: 'row',
-    width: '100%',
-    gap: 12,
-  },
+  buttonContainer: { flexDirection: "row", width: "100%", gap: 12 },
   button: {
     flex: 1,
     borderRadius: 12,
     paddingVertical: 14,
-    alignItems: 'center',
+    alignItems: "center",
   },
-  buttonText: {
-    fontWeight: '700',
-    fontSize: 16,
-  },
+  buttonText: { fontWeight: "700", fontSize: 16 },
   cancelButton: {},
   cancelButtonText: {},
-  confirmButtonText: {
-    color: '#fff',
-  },
+  confirmButtonText: {},
 });
 
 export default Alert;

@@ -3,25 +3,31 @@ import { TouchableOpacity, View, Text, StyleSheet } from "react-native";
 import { Bell, AlertCircle, Calendar } from "lucide-react-native";
 import { useTheme } from "../context/ThemeContext";
 
+const hexWithAlpha = (hex, alpha = 0.2) => {
+  if (!hex || !hex.startsWith("#")) return hex;
+  const a = Math.round(alpha * 255)
+    .toString(16)
+    .padStart(2, "0");
+  return `${hex}${a}`;
+};
+
 const ReminderCard = ({ item, onPress }) => {
   const { theme } = useTheme();
 
-  // Helper function to calculate days until the due date
   const getDaysUntilDue = (dueDate) => {
     const today = new Date();
-    today.setHours(0, 0, 0, 0); // Normalize today's date
+    today.setHours(0, 0, 0, 0);
     const due = new Date(dueDate);
-    due.setHours(0, 0, 0, 0); // Normalize due date
+    due.setHours(0, 0, 0, 0);
     const diffTime = due.getTime() - today.getTime();
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   };
 
-  // Simplified priority logic to match the new UI style
   const getReminderPriority = (daysUntil) => {
     if (daysUntil < 0) {
       return {
         color: theme.colors.error,
-        backgroundColor: theme.colors.error + "20", // Light background for the icon
+        backgroundColor: hexWithAlpha(theme.colors.error, 0.12),
         label: `${Math.abs(daysUntil)} days Overdue`,
         icon: <AlertCircle size={28} color={theme.colors.error} />,
       };
@@ -29,7 +35,7 @@ const ReminderCard = ({ item, onPress }) => {
     if (daysUntil === 0) {
       return {
         color: theme.colors.warning,
-        backgroundColor: theme.colors.warning + "20",
+        backgroundColor: hexWithAlpha(theme.colors.warning, 0.12),
         label: "Due Today",
         icon: <Bell size={28} color={theme.colors.warning} />,
       };
@@ -37,20 +43,19 @@ const ReminderCard = ({ item, onPress }) => {
     if (daysUntil <= 3) {
       return {
         color: theme.colors.warning,
-        backgroundColor: theme.colors.warning + "20",
+        backgroundColor: hexWithAlpha(theme.colors.warning, 0.12),
         label: `Due in ${daysUntil} days`,
         icon: <Bell size={28} color={theme.colors.warning} />,
       };
     }
     return {
       color: theme.colors.primary,
-      backgroundColor: theme.colors.primary + "15",
+      backgroundColor: hexWithAlpha(theme.colors.primary, 0.09),
       label: `Due in ${daysUntil} days`,
       icon: <Bell size={28} color={theme.colors.primary} />,
     };
   };
 
-  // Formatting functions remain useful
   const formatDate = (dateString) => {
     if (!dateString) return "";
     return new Date(dateString).toLocaleDateString("en-US", {
@@ -75,6 +80,7 @@ const ReminderCard = ({ item, onPress }) => {
         styles.card,
         {
           backgroundColor: theme.colors.surface,
+          borderColor: theme.colors.border,
           shadowColor: theme.colors.shadow,
         },
       ]}
@@ -128,7 +134,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: "#EEE",
     elevation: 2,
     shadowOpacity: 0.05,
     shadowRadius: 10,
@@ -142,45 +147,23 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginRight: 16,
   },
-  contentContainer: {
-    flex: 1,
-    justifyContent: "center",
-  },
+  contentContainer: { flex: 1, justifyContent: "center" },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
     marginBottom: 8,
   },
-  title: {
-    fontSize: 17,
-    fontWeight: "700",
-    flex: 1,
-    marginRight: 8,
-  },
-  amount: {
-    fontSize: 17,
-    fontWeight: "800",
-  },
+  title: { fontSize: 17, fontWeight: "700", flex: 1, marginRight: 8 },
+  amount: { fontSize: 17, fontWeight: "800" },
   footer: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
-  detailGroup: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  detailText: {
-    fontSize: 13,
-    fontWeight: "500",
-  },
-  statusText: {
-    fontSize: 13,
-    fontWeight: "600",
-  },
+  detailGroup: { flexDirection: "row", alignItems: "center", gap: 6 },
+  detailText: { fontSize: 13, fontWeight: "500" },
+  statusText: { fontSize: 13, fontWeight: "600" },
 });
-
 
 export default ReminderCard;
