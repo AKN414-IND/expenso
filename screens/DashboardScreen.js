@@ -44,88 +44,63 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 const screenWidth = Dimensions.get("window").width;
 const screenHeight = Dimensions.get("window").height;
 
-// --- Onboarding Configuration (Updated for New UI) ---
+// --- Onboarding Configuration (Redesigned for Contextual Tooltips) ---
 const ONBOARDING_STEPS = [
   {
     id: "welcome",
-    title: "Welcome to Your Financial Hub! 🎉",
+    title: "Welcome to Expenso! �",
     description:
-      "Let's take a quick tour to see how you can master your money.",
-    targetId: null,
+      "Let's quickly walk through the key features to get you started on managing your finances.",
+    targetId: null, // No target for the welcome message
     position: "center",
-    icon: "🚀",
-  },
-  {
-    id: "profile",
-    title: "Your Profile & Insights",
-    description:
-      "Tap the 'Insights' icon for smart analysis or your avatar for account details.",
-    targetId: "header-actions",
-    position: "bottom",
-    icon: "👤",
   },
   {
     id: "quick-stats",
-    title: "At-a-Glance Stats",
+    title: "Your Financial Snapshot",
     description:
-      "Instantly see your total spending for the current month and today.",
+      "Here, you can instantly see your total spending for the current month and today. No more guessing!",
     targetId: "stats-container",
-    position: "bottom",
-    icon: "📊",
+    position: "bottom", // Tooltip will appear below the element
   },
   {
     id: "heatmap",
-    title: "Spending Heatmap",
+    title: "Visualize Your Spending",
     description:
-      "Visualize your daily spending habits. Darker squares mean more spending!",
+      "This heatmap shows your spending patterns at a glance. Darker days mean more spending.",
     targetId: "chart-container",
     position: "bottom",
-    icon: "🔥",
-  },
-  {
-    id: "reminders",
-    title: "Never Miss a Bill",
-    description:
-      "Your upcoming reminders appear here. Swipe through them to see them all.",
-    targetId: "reminders-section",
-    position: "top",
-    icon: "🔔",
   },
   {
     id: "budget",
-    title: "Stay on Budget",
+    title: "Stay Within Your Budget",
     description:
-      "Quickly monitor your spending against your category budgets right here.",
+      "Keep an eye on your category budgets here. We'll show you how much you have left to spend.",
     targetId: "budget-section",
-    position: "top",
-    icon: "💰",
+    position: "top", // Tooltip will appear above the element
   },
   {
     id: "recent-activity",
-    title: "Recent Activity",
+    title: "Track Your Transactions",
     description:
-      "All your latest transactions are organized here. Tap the tabs to switch between expenses, income, and investments.",
+      "Your latest expenses, income, and investments are listed here. Tap the tabs to switch views.",
     targetId: "recent-activity-section",
     position: "top",
-    icon: "📚",
   },
   {
     id: "taskbar",
-    title: "Quick Actions",
+    title: "Add a Transaction",
     description:
-      "This navigation bar gives you one-tap access to key features. Tap the '+' to add a new transaction.",
+      "This is the most important button! Tap the '+' to log a new expense, income, or investment.",
     targetId: "taskbar",
     position: "top",
-    icon: "⚡️",
   },
   {
     id: "complete",
-    title: "You're All Set! ✅",
+    title: "You're All Set! 🚀",
     description:
-      "You're ready to take charge of your finances. Start by adding your first transaction!",
+      "You're ready to take control of your finances. Start by adding your first transaction now!",
     targetId: null,
     position: "center",
-    icon: "🎯",
   },
 ];
 
@@ -260,6 +235,7 @@ const BudgetGridItem = ({ item, theme, onPress, style }) => {
   );
 };
 
+// --- Redesigned Onboarding Component ---
 const DashboardOnboarding = ({
   isVisible,
   onComplete,
@@ -273,17 +249,23 @@ const DashboardOnboarding = ({
   const measureAndScrollToTarget = useCallback(() => {
     const step = ONBOARDING_STEPS[currentStep];
     if (!step.targetId) {
-      setTargetLayout(null);
+      setTargetLayout(null); // Center-aligned steps have no target
       return;
     }
     const targetRef = targetRefs?.[step.targetId];
     if (targetRef && typeof targetRef.measure === "function") {
       targetRef.measure((x, y, width, height, pageX, pageY) => {
+        // Ensure measurement is valid before setting state
         if (width > 0 || height > 0) {
           setTargetLayout({ x: pageX, y: pageY, width, height });
+          // Scroll the target element into a comfortable view
           if (scrollViewRef?.current?.scrollTo) {
+            const yOffset =
+              step.position === "top"
+                ? pageY - screenHeight * 0.5
+                : pageY - 150;
             scrollViewRef.current.scrollTo({
-              y: Math.max(0, pageY - 200),
+              y: Math.max(0, yOffset),
               animated: true,
             });
           }
@@ -294,6 +276,7 @@ const DashboardOnboarding = ({
 
   useEffect(() => {
     if (isVisible) {
+      // Delay measurement to allow UI to render
       const timer = setTimeout(measureAndScrollToTarget, 250);
       return () => clearTimeout(timer);
     }
@@ -302,12 +285,16 @@ const DashboardOnboarding = ({
   if (!isVisible) return null;
 
   const step = ONBOARDING_STEPS[currentStep];
+  const isCentered = step.position === "center" || !targetLayout;
+
   const handleNext = () =>
     currentStep < ONBOARDING_STEPS.length - 1
       ? setCurrentStep(currentStep + 1)
       : onComplete();
   const handlePrevious = () =>
     currentStep > 0 && setCurrentStep(currentStep - 1);
+
+  // --- Dynamic Positioning Logic ---
   const highlightPosition = targetLayout
     ? {
         left: targetLayout.x - 8,
@@ -316,6 +303,42 @@ const DashboardOnboarding = ({
         height: targetLayout.height + 16,
       }
     : null;
+
+  const getTooltipPosition = () => {
+    if (isCentered) return styles.onboardingTooltipCenter;
+
+    const tooltipBaseStyle = {
+      position: "absolute",
+      left: 20,
+      right: 20,
+      marginHorizontal: "auto",
+    };
+
+    if (step.position === "bottom") {
+      return {
+        ...tooltipBaseStyle,
+        top: targetLayout.y + targetLayout.height + 12,
+      };
+    }
+    if (step.position === "top") {
+      return {
+        ...tooltipBaseStyle,
+        bottom: screenHeight - targetLayout.y + 12,
+      };
+    }
+    return styles.onboardingTooltipCenter;
+  };
+
+  const getArrowPosition = () => {
+    if (isCentered) return null;
+    const arrowBaseStyle = {
+      position: "absolute",
+      left: targetLayout.x + targetLayout.width / 2 - 10,
+    };
+    if (step.position === "bottom") return { ...arrowBaseStyle, top: -10 };
+    if (step.position === "top") return { ...arrowBaseStyle, bottom: -10 };
+    return null;
+  };
 
   return (
     <Modal visible={isVisible} transparent animationType="fade">
@@ -336,18 +359,30 @@ const DashboardOnboarding = ({
               backgroundColor: theme.colors.surface,
               borderColor: theme.colors.border,
             },
+            getTooltipPosition(), // Apply dynamic positioning
           ]}
         >
-          <TouchableOpacity
-            style={[
-              styles.onboardingSkip,
-              { backgroundColor: theme.colors.buttonSecondary },
-            ]}
-            onPress={onComplete}
-          >
+          {!isCentered && (
+            <View
+              style={[
+                styles.tooltipArrow,
+                getArrowPosition(),
+                step.position === "bottom"
+                  ? {
+                      borderBottomColor: theme.colors.surface,
+                      ...styles.tooltipArrowUp,
+                    }
+                  : {
+                      borderTopColor: theme.colors.surface,
+                      ...styles.tooltipArrowDown,
+                    },
+              ]}
+            />
+          )}
+
+          <TouchableOpacity style={styles.onboardingSkip} onPress={onComplete}>
             <X size={18} color={theme.colors.textSecondary} />
           </TouchableOpacity>
-          <Text style={styles.onboardingIcon}>{step.icon || "🎓"}</Text>
           <Text
             style={[styles.onboardingTitle, { color: theme.colors.primary }]}
           >
@@ -394,7 +429,7 @@ const DashboardOnboarding = ({
             >
               <Text style={[styles.onboardingButtonText, { color: "#FFF" }]}>
                 {currentStep === ONBOARDING_STEPS.length - 1
-                  ? "Finish"
+                  ? "Get Started"
                   : "Next"}
               </Text>
               {currentStep < ONBOARDING_STEPS.length - 1 && (
@@ -1060,26 +1095,33 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   tabText: { fontSize: 14, fontWeight: "600" },
+
+  // --- Redesigned Onboarding Styles ---
   onboardingOverlay: {
     flex: 1,
     backgroundColor: "rgba(15, 23, 42, 0.85)",
-    justifyContent: "center",
-    alignItems: "center",
   },
   onboardingHighlight: {
     position: "absolute",
     borderRadius: 16,
     borderWidth: 3,
-    backgroundColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
+    zIndex: 1,
   },
   onboardingTooltip: {
     borderRadius: 16,
     padding: 24,
-    margin: 24,
-    maxWidth: screenWidth - 48,
-    alignItems: "center",
     elevation: 10,
     borderWidth: 1,
+    zIndex: 2,
+    maxWidth: 400,
+  },
+  onboardingTooltipCenter: {
+    position: "absolute",
+    top: "50%",
+    left: 20,
+    right: 20,
+    transform: [{ translateY: -100 }], // Adjust based on tooltip height
   },
   onboardingSkip: {
     position: "absolute",
@@ -1090,17 +1132,17 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     justifyContent: "center",
     alignItems: "center",
+    zIndex: 3,
   },
-  onboardingIcon: { fontSize: 48, marginBottom: 12 },
   onboardingTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: "bold",
-    textAlign: "center",
+    textAlign: "left",
     marginBottom: 8,
   },
   onboardingDesc: {
     fontSize: 15,
-    textAlign: "center",
+    textAlign: "left",
     lineHeight: 22,
     marginBottom: 24,
   },
@@ -1115,6 +1157,25 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   onboardingButtonText: { fontSize: 16, fontWeight: "bold" },
+  tooltipArrow: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 10,
+    borderRightWidth: 10,
+    borderStyle: "solid",
+    backgroundColor: "transparent",
+    borderLeftColor: "transparent",
+    borderRightColor: "transparent",
+  },
+  tooltipArrowUp: {
+    // For tooltips at the bottom, arrow points up
+    borderBottomWidth: 10,
+  },
+  tooltipArrowDown: {
+    // For tooltips at the top, arrow points down
+    borderTopWidth: 10,
+  },
+
   // Styles for SimpleReminderCard
   simpleCard: {
     borderRadius: 16,
