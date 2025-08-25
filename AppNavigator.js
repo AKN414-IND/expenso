@@ -3,9 +3,15 @@ import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { ActivityIndicator, View } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { GestureHandlerRootView } from "react-native-gesture-handler"; // NEW: Import Gesture Handler
 
 import { useAuth } from "./context/AuthContext";
 import { navigationRef } from "./navigation";
+
+// --- NEW: Import Easter Egg Components ---
+import { KonamiGestureWrapper } from "./components/KonamiGestureWrapper";
+import { HolidayWrapper } from "./components/HolidayEffect";
+import SecretScreen from "./screens/SecretScreen";
 
 // Core Screens
 import OnboardingScreen from "./screens/OnboardingScreen";
@@ -24,8 +30,6 @@ import AppearanceScreen from "./screens/AppearanceScreen";
 import DataManagementScreen from "./screens/DataManagementScreen";
 import SecurityPrivacyScreen from "./screens/SecurityPrivacyScreen";
 
-
-
 const Stack = createNativeStackNavigator();
 
 export default function AppNavigator() {
@@ -39,7 +43,7 @@ export default function AppNavigator() {
         setHasCompletedOnboarding(value === "true");
       } catch (error) {
         console.error("Error checking onboarding status:", error);
-        setHasCompletedOnboarding(false); 
+        setHasCompletedOnboarding(false);
       }
     };
     checkOnboardingStatus();
@@ -48,8 +52,7 @@ export default function AppNavigator() {
   const handleOnboardingFinish = () => {
     setHasCompletedOnboarding(true);
   };
-  
-  // Display a loading indicator while checking auth or onboarding status
+
   if (loading || hasCompletedOnboarding === null) {
     return (
       <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
@@ -59,38 +62,51 @@ export default function AppNavigator() {
   }
 
   return (
-    <NavigationContainer ref={navigationRef}>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {!hasCompletedOnboarding ? (
-          // Onboarding Flow
-          <Stack.Screen name="Onboarding">
-            {(props) => <OnboardingScreen {...props} onFinish={handleOnboardingFinish} />}
-          </Stack.Screen>
-        ) : session ? (
-          <>
-            
-            <Stack.Screen name="Dashboard" component={DashboardScreen} />
-            <Stack.Screen name="AddExpense" component={AIExpenseScreen} />
-            <Stack.Screen name="AllExpenses" component={AllExpenses} />
-            <Stack.Screen name="BudgetScreen" component={BudgetScreen} />
-            <Stack.Screen name="Profile" component={ProfileScreen} />
-            <Stack.Screen name="SmartInsights" component={SmartInsightsScreen} />
-            <Stack.Screen name="InvestmentsScreen" component={InvestmentsScreen} />
-            <Stack.Screen name="PaymentReminder" component={PaymentReminderScreen} />
-            
-            
-            <Stack.Screen name="Settings" component={SettingsScreen} />
-            <Stack.Screen name="Appearance" component={AppearanceScreen} />
-            <Stack.Screen name="DataManagement" component={DataManagementScreen} />
-            <Stack.Screen name="SecurityPrivacy" component={SecurityPrivacyScreen} />
-          </>
-        ) : (
-          <>
-            <Stack.Screen name="Auth" component={AuthScreen} />
-            <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
-          </>
-        )}
-      </Stack.Navigator>
-    </NavigationContainer>
+    // NEW: Wrap entire app in GestureHandlerRootView
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <NavigationContainer ref={navigationRef}>
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+          {!hasCompletedOnboarding ? (
+            <Stack.Screen name="Onboarding">
+              {(props) => <OnboardingScreen {...props} onFinish={handleOnboardingFinish} />}
+            </Stack.Screen>
+          ) : session ? (
+            <>
+              {/* NEW: Wrap DashboardScreen with the Easter Egg components */}
+              <Stack.Screen name="Dashboard">
+                {(props) => (
+                  <KonamiGestureWrapper>
+                    <HolidayWrapper>
+                      <DashboardScreen {...props} />
+                    </HolidayWrapper>
+                  </KonamiGestureWrapper>
+                )}
+              </Stack.Screen>
+
+              <Stack.Screen name="AddExpense" component={AIExpenseScreen} />
+              <Stack.Screen name="AllExpenses" component={AllExpenses} />
+              <Stack.Screen name="BudgetScreen" component={BudgetScreen} />
+              <Stack.Screen name="Profile" component={ProfileScreen} />
+              <Stack.Screen name="SmartInsights" component={SmartInsightsScreen} />
+              <Stack.Screen name="InvestmentsScreen" component={InvestmentsScreen} />
+              <Stack.Screen name="PaymentReminder" component={PaymentReminderScreen} />
+
+              <Stack.Screen name="Settings" component={SettingsScreen} />
+              <Stack.Screen name="Appearance" component={AppearanceScreen} />
+              <Stack.Screen name="DataManagement" component={DataManagementScreen} />
+              <Stack.Screen name="SecurityPrivacy" component={SecurityPrivacyScreen} />
+
+              {/* NEW: Add the SecretScreen to the stack */}
+              <Stack.Screen name="SecretScreen" component={SecretScreen} />
+            </>
+          ) : (
+            <>
+              <Stack.Screen name="Auth" component={AuthScreen} />
+              <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+            </>
+          )}
+        </Stack.Navigator>
+      </NavigationContainer>
+    </GestureHandlerRootView>
   );
 }
