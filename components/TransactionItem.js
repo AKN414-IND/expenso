@@ -1,14 +1,16 @@
 // components/TransactionItem.js
-import React from "react";
+import React, { useRef } from "react"; // NEW: import useRef
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
   Platform,
+  Pressable, // NEW: import Pressable for the icon tap
+  Animated, // NEW: import Animated for the jiggle effect
 } from "react-native";
+import * as Haptics from "expo-haptics"; // NEW: import Haptics for feedback
 
-// Category colors can stay fixed (brand-like) or be themed; keeping them fixed per your original approach.
 const EXPENSE_CATEGORIES = [
   { name: "Food & Dining", icon: "🍽️", color: "#FF6B6B" },
   { name: "Transportation", icon: "🚗", color: "#4ECDC4" },
@@ -29,6 +31,42 @@ const TransactionItem = ({
   onLongPress,
   theme,
 }) => {
+  // --- NEW: Easter Egg Animation Setup ---
+  const jiggleAnim = useRef(new Animated.Value(0)).current;
+
+  const handleIconPress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    jiggleAnim.setValue(0); // Reset animation
+    Animated.sequence([
+      Animated.timing(jiggleAnim, {
+        toValue: 1,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(jiggleAnim, {
+        toValue: -1,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(jiggleAnim, {
+        toValue: 1,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(jiggleAnim, {
+        toValue: 0,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const jiggleInterpolation = jiggleAnim.interpolate({
+    inputRange: [-1, 0, 1],
+    outputRange: ["-10deg", "0deg", "10deg"],
+  });
+  // --- End of Easter Egg Setup ---
+
   let icon = "📝";
   let iconBgColor = "#747D8C";
   let title = item.title || "Untitled";
@@ -60,13 +98,21 @@ const TransactionItem = ({
 
   const formatAmount = (amount) => {
     const num = parseFloat(amount) || 0;
+    const isNegative = num < 0 && type === "expense";
+    const prefix = isNegative ? "" : type === "expense" ? "-" : "+";
+
     return (
-      num.toLocaleString("en-IN", {
+      prefix +
+      " ₹" +
+      Math.abs(num).toLocaleString("en-IN", {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
-      }) + "₹"
+      })
     );
   };
+
+  const amountColor =
+    type === "expense" ? theme.colors.error : theme.colors.success;
 
   return (
     <TouchableOpacity
@@ -82,9 +128,20 @@ const TransactionItem = ({
       onPress={onPress}
       activeOpacity={0.8}
     >
-      <View style={[styles.iconContainer, { backgroundColor: iconBgColor }]}>
-        <Text style={styles.iconText}>{icon}</Text>
-      </View>
+      {/* NEW: Wrapped the icon in a Pressable to trigger the easter egg */}
+      <Pressable onPress={handleIconPress}>
+        <Animated.View
+          style={[
+            styles.iconContainer,
+            {
+              backgroundColor: iconBgColor,
+              transform: [{ rotate: jiggleInterpolation }], // Apply animation here
+            },
+          ]}
+        >
+          <Text style={styles.iconText}>{icon}</Text>
+        </Animated.View>
+      </Pressable>
 
       <View style={styles.infoContainer}>
         <Text
@@ -99,7 +156,8 @@ const TransactionItem = ({
       </View>
 
       <View style={styles.amountContainer}>
-        <Text style={[styles.amount, { color: theme.colors.text }]}>
+        {/* NEW: Updated amount text to use color based on type */}
+        <Text style={[styles.amount, { color: amountColor }]}>
           {formatAmount(item.amount)}
         </Text>
       </View>
@@ -140,7 +198,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 16, fontWeight: "700", marginBottom: 4 },
   date: { fontSize: 13, opacity: 0.7 },
   amountContainer: { paddingLeft: 10 },
-  amount: { fontSize: 16, fontWeight: "600" },
+  amount: { fontSize: 16, fontWeight: "600", letterSpacing: 0.5 },
 });
 
 export default TransactionItem;

@@ -1,13 +1,15 @@
-import React from "react";
+import React, { useState, useRef, useEffect } from "react"; // NEW: Add useState, useRef, useEffect
 import {
   View,
   TouchableOpacity,
   Text,
   StyleSheet,
   Dimensions,
+  Animated, // NEW: Import Animated
 } from "react-native";
 import { useNavigationState } from "@react-navigation/native";
 import { Wallet, TrendingUp, Bell, List, Plus } from "lucide-react-native";
+import * as Haptics from "expo-haptics"; // NEW: Import Haptics
 
 const screenWidth = Dimensions.get("window").width;
 
@@ -32,6 +34,68 @@ const FloatingTaskbar = ({ theme, navigation, setTargetRef }) => {
   const currentRouteName = useNavigationState(
     (state) => state.routes[state.index].name
   );
+  // --- NEW: Easter Egg State & Animation Setup ---
+  const [isMorphed, setIsMorphed] = useState(false);
+  const morphAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.spring(morphAnim, {
+      toValue: isMorphed ? 1 : 0,
+      useNativeDriver: true,
+      bounciness: 8,
+    }).start();
+  }, [isMorphed]);
+
+  const handleLongPress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setIsMorphed(!isMorphed);
+  };
+
+  // Interpolations for the Plus icon
+  const plusIconStyle = {
+    opacity: morphAnim.interpolate({
+      inputRange: [0, 0.5],
+      outputRange: [1, 0],
+    }),
+    transform: [
+      {
+        scale: morphAnim.interpolate({
+          inputRange: [0, 1],
+          outputRange: [1, 0.5],
+        }),
+      },
+      {
+        rotate: morphAnim.interpolate({
+          inputRange: [0, 1],
+          outputRange: ["0deg", "90deg"],
+        }),
+      },
+    ],
+  };
+
+  // Interpolations for the Rupee icon
+  const rupeeIconStyle = {
+    opacity: morphAnim.interpolate({
+      inputRange: [0.5, 1],
+      outputRange: [0, 1],
+    }),
+    transform: [
+      {
+        scale: morphAnim.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0.5, 1],
+        }),
+      },
+      {
+        rotate: morphAnim.interpolate({
+          inputRange: [0, 1],
+          outputRange: ["-90deg", "0deg"],
+        }),
+      },
+    ],
+  };
+  // --- End of Easter Egg Setup ---
+
   const leftItems = NAV_ITEMS.slice(0, 2);
   const rightItems = NAV_ITEMS.slice(2);
 
@@ -63,10 +127,17 @@ const FloatingTaskbar = ({ theme, navigation, setTargetRef }) => {
           },
         ]}
         onPress={() => navigation.navigate("AddExpense")}
+        onLongPress={handleLongPress} // NEW: Added long press handler
         activeOpacity={0.8}
         ref={(ref) => setTargetRef("add-button", ref)}
       >
-        <Plus color={theme.colors.onPrimary} size={32} strokeWidth={3} />
+        {/* NEW: Replaced the single Plus icon with two animated views */}
+        <Animated.View style={[styles.iconWrapper, plusIconStyle]}>
+          <Plus color={theme.colors.onPrimary} size={32} strokeWidth={3} />
+        </Animated.View>
+        <Animated.View style={[styles.iconWrapper, rupeeIconStyle]}>
+          <Text style={styles.rupeeText}>₹</Text>
+        </Animated.View>
       </TouchableOpacity>
 
       <View
@@ -145,6 +216,17 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
+  },
+  // --- NEW: Styles for the animated icons ---
+  iconWrapper: {
+    position: "absolute",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  rupeeText: {
+    fontSize: 32,
+    color: "white",
+    fontWeight: "bold",
   },
 });
 

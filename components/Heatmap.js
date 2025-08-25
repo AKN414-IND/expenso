@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from "react";
+import React, { useState, useMemo, useRef, useEffect, memo } from "react";
 import {
   View,
   Text,
@@ -8,8 +8,11 @@ import {
   Pressable,
   Dimensions,
   Animated,
+  Easing,
 } from "react-native";
 import { useTheme } from "../context/ThemeContext";
+import * as Haptics from "expo-haptics";
+import { Accelerometer } from "expo-sensors";
 
 const CELL_MARGIN = 3;
 const DAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
@@ -26,19 +29,155 @@ function getColor(amount, max, theme) {
   if (!amount || max === 0) return theme.colors.surface;
   const percent = Math.min(amount / max, 1);
   if (percent === 0) return theme.colors.surface;
-  if (percent < 0.15) return theme.colors.card; // very low
-  if (percent < 0.3) return theme.colors.textTertiary; // low accent
+  if (percent < 0.15) return theme.colors.card;
+  if (percent < 0.3) return theme.colors.textTertiary;
   if (percent < 0.5) return hexWithAlpha(theme.colors.primary, 0.67);
   if (percent < 0.7) return theme.colors.primary;
   if (percent < 0.9) return theme.colors.warning;
   return theme.colors.error;
 }
 
+const RainEffect = () => {
+  const drops = useMemo(() => Array.from({ length: 30 }), []);
+
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      {drops.map((_, i) => (
+        <Raindrop key={i} />
+      ))}
+    </View>
+  );
+};
+
+const Raindrop = () => {
+  const { theme } = useTheme();
+  const anim = useRef(new Animated.Value(0)).current;
+  const screenHeight = Dimensions.get("window").height;
+  const startX = useMemo(() => Math.random() * Dimensions.get("window").width, []);
+  const duration = useMemo(() => 2000 + Math.random() * 1500, []);
+
+  useEffect(() => {
+    Animated.timing(anim, {
+      toValue: 1,
+      duration,
+      easing: Easing.linear,
+      useNativeDriver: true,
+    }).start();
+  }, [anim, duration]);
+
+  const translateY = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-50, screenHeight],
+  });
+
+  const opacity = anim.interpolate({
+    inputRange: [0, 0.8, 1],
+    outputRange: [1, 1, 0],
+  });
+
+  const transform = [{ translateY }, { translateX: startX }];
+
+  return (
+    <Animated.Text
+      style={{
+        position: "absolute",
+        top: 0,
+        left: 0,
+        fontSize: 24,
+        color: theme.colors.primary,
+        opacity,
+        transform,
+      }}
+    >
+      ₹
+    </Animated.Text>
+  );
+};
+
+const CalendarCell = memo(({ cell, theme, isSelected, onPress, cellSize }) => {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 0.9,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  if (!cell) {
+    return (
+      <View
+        style={[
+          styles.cell,
+          {
+            width: cellSize,
+            height: cellSize,
+            backgroundColor: "transparent",
+            borderWidth: 0,
+          },
+        ]}
+      />
+    );
+  }
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      activeOpacity={0.8}
+    >
+      <Animated.View
+        style={[
+          styles.cell,
+          {
+            width: cellSize,
+            height: cellSize,
+            backgroundColor: cell.color,
+            borderColor: isSelected ? theme.colors.primary : theme.colors.border,
+            shadowColor: cell.amount > 0 ? theme.colors.primary : "transparent",
+            borderWidth: isSelected ? 3 : 1.5,
+            zIndex: isSelected ? 2 : 1,
+            elevation: isSelected ? 8 : 2,
+            transform: [{ scale: scaleAnim }],
+          },
+        ]}
+      >
+        <Text
+          style={[
+            styles.cellText,
+            {
+              color: cell.amount > 0 ? theme.colors.text : theme.colors.textTertiary,
+              fontWeight: isSelected ? "900" : "600",
+              fontSize: isSelected ? 15 : 11,
+            },
+          ]}
+        >
+          {cell.day}
+        </Text>
+      </Animated.View>
+    </TouchableOpacity>
+  );
+});
+
 const CalendarHeatmap = ({ expenses }) => {
   const { theme } = useTheme();
   const [selected, setSelected] = useState(null);
   const [showLegend, setShowLegend] = useState(false);
-  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const [displayDate, setDisplayDate] = useState(new Date());
+  const gridOpacityAnim = useRef(new Animated.Value(1)).current;
+  const [isRaining, setIsRaining] = useState(false);
+
+  const slideAnim = useRef(
+    new Animated.Value(Dimensions.get("window").height)
+  ).current;
 
   const CELL_SIZE = useMemo(() => {
     const w = Dimensions.get("window").width;
@@ -46,9 +185,8 @@ const CalendarHeatmap = ({ expenses }) => {
     return Math.floor((w - margins) / 7) * 0.8;
   }, []);
 
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth();
+  const year = displayDate.getFullYear();
+  const month = displayDate.getMonth();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
 
   const { weeks, maxSpending } = useMemo(() => {
@@ -60,14 +198,11 @@ const CalendarHeatmap = ({ expenses }) => {
       byDay[e.date] += parseFloat(e.amount) || 0;
       if (!byCat[e.date]) byCat[e.date] = {};
       const cat = e.category || "Other";
-      byCat[e.date][cat] =
-        (byCat[e.date][cat] || 0) + (parseFloat(e.amount) || 0);
+      byCat[e.date][cat] = (byCat[e.date][cat] || 0) + (parseFloat(e.amount) || 0);
     });
     let max = 0;
     for (let i = 1; i <= daysInMonth; i++) {
-      const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(
-        i
-      ).padStart(2, "0")}`;
+      const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(i).padStart(2, "0")}`;
       max = Math.max(max, byDay[dateStr] || 0);
     }
     const firstDay = new Date(year, month, 1).getDay();
@@ -77,10 +212,7 @@ const CalendarHeatmap = ({ expenses }) => {
       const week = [];
       for (let w = 0; w < 7; w++) {
         if (day > 0 && day <= daysInMonth) {
-          const dateStr = `${year}-${String(month + 1).padStart(
-            2,
-            "0"
-          )}-${String(day).padStart(2, "0")}`;
+          const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
           week.push({
             day,
             dateStr,
@@ -96,18 +228,61 @@ const CalendarHeatmap = ({ expenses }) => {
       newWeeks.push(week);
     }
     return { weeks: newWeeks, maxSpending: max };
-  }, [expenses, theme]);
+  }, [expenses, theme, displayDate]);
+
+  useEffect(() => {
+    let subscription;
+    const startAccelerometer = async () => {
+      await Accelerometer.requestPermissionsAsync();
+      subscription = Accelerometer.addListener(({ x, y, z }) => {
+        const magnitude = Math.sqrt(x * x + y * y + z * z);
+        if (magnitude > 2.5 && !isRaining) {
+          setIsRaining(true);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          setTimeout(() => setIsRaining(false), 3500);
+        }
+      });
+    };
+    startAccelerometer();
+    return () => subscription && subscription.remove();
+  }, [isRaining]);
 
   const showModal = (cell) => {
     setSelected(cell);
-    fadeAnim.setValue(0);
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 220,
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Animated.spring(slideAnim, {
+      toValue: 0,
       useNativeDriver: true,
+      bounciness: 4,
     }).start();
   };
-  const closeModal = () => setSelected(null);
+
+  const closeModal = () => {
+    Animated.timing(slideAnim, {
+      toValue: Dimensions.get("window").height,
+      duration: 250,
+      easing: Easing.out(Easing.ease),
+      useNativeDriver: true,
+    }).start(() => setSelected(null));
+  };
+
+  const changeMonth = (direction) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Animated.timing(gridOpacityAnim, {
+      toValue: 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(() => {
+      const newDate = new Date(displayDate.setMonth(displayDate.getMonth() + direction));
+      setDisplayDate(new Date(newDate));
+      Animated.timing(gridOpacityAnim, {
+        toValue: 1,
+        duration: 200,
+        delay: 50,
+        useNativeDriver: true,
+      }).start();
+    });
+  };
 
   const formatDate = (iso) => {
     const d = new Date(iso);
@@ -138,23 +313,22 @@ const CalendarHeatmap = ({ expenses }) => {
         },
       ]}
     >
+      {isRaining && <RainEffect />}
+
       <View style={styles.headerRow}>
-        <View>
+        <TouchableOpacity style={styles.navBtn} onPress={() => changeMonth(-1)}>
+          <Text style={[styles.navBtnText, { color: theme.colors.primary }]}>◀</Text>
+        </TouchableOpacity>
+        <View style={{ alignItems: "center" }}>
           <Text style={[styles.title, { color: theme.colors.primary }]}>
-            {now.toLocaleString("default", { month: "long" })} {year}
+            {displayDate.toLocaleString("default", { month: "long" })} {year}
           </Text>
           <Text style={[styles.subtitle, { color: theme.colors.textTertiary }]}>
             Tap any day to see details
           </Text>
         </View>
-        <TouchableOpacity
-          style={[
-            styles.legendBtn,
-            { backgroundColor: theme.colors.buttonSecondary },
-          ]}
-          onPress={() => setShowLegend(true)}
-        >
-          <Text style={{ color: theme.colors.text, fontWeight: "600" }}>i</Text>
+        <TouchableOpacity style={styles.navBtn} onPress={() => changeMonth(1)}>
+          <Text style={[styles.navBtnText, { color: theme.colors.primary }]}>▶</Text>
         </TouchableOpacity>
       </View>
 
@@ -169,79 +343,24 @@ const CalendarHeatmap = ({ expenses }) => {
         ))}
       </View>
 
-      <View style={styles.gridWrap}>
+      <Animated.View style={[styles.gridWrap, { opacity: gridOpacityAnim }]}>
         {weeks.map((week, i) => (
           <View key={`week-${i}`} style={styles.row}>
-            {week.map((cell, j) =>
-              cell ? (
-                <TouchableOpacity
-                  key={`cell-${i}-${j}-${cell.day}`}
-                  style={[
-                    styles.cell,
-                    {
-                      width: CELL_SIZE,
-                      height: CELL_SIZE,
-                      backgroundColor: cell.color,
-                      borderColor: theme.colors.border,
-                      shadowColor:
-                        cell.amount > 0 ? theme.colors.primary : "transparent",
-                      borderWidth:
-                        selected && selected.dateStr === cell.dateStr ? 3 : 1.5,
-                      borderStyle:
-                        selected && selected.dateStr === cell.dateStr
-                          ? "solid"
-                          : "dashed",
-                      zIndex:
-                        selected && selected.dateStr === cell.dateStr ? 2 : 1,
-                      elevation:
-                        selected && selected.dateStr === cell.dateStr ? 6 : 2,
-                    },
-                  ]}
-                  onPress={() => showModal(cell)}
-                  activeOpacity={0.7}
-                >
-                  <Text
-                    style={[
-                      styles.cellText,
-                      {
-                        color:
-                          cell.amount > 0
-                            ? theme.colors.text
-                            : theme.colors.textTertiary,
-                        fontWeight:
-                          selected && selected.dateStr === cell.dateStr
-                            ? "800"
-                            : "600",
-                        fontSize:
-                          selected && selected.dateStr === cell.dateStr
-                            ? 15
-                            : 11,
-                      },
-                    ]}
-                  >
-                    {cell.day}
-                  </Text>
-                </TouchableOpacity>
-              ) : (
-                <View
-                  key={`empty-${i}-${j}`}
-                  style={[
-                    styles.cell,
-                    {
-                      width: CELL_SIZE,
-                      height: CELL_SIZE,
-                      backgroundColor: "transparent",
-                      borderWidth: 0,
-                    },
-                  ]}
-                />
-              )
-            )}
+            {week.map((cell, j) => (
+              <CalendarCell
+                key={`cell-${i}-${j}-${cell?.day}`}
+                cell={cell}
+                theme={theme}
+                isSelected={selected && selected.dateStr === cell?.dateStr}
+                onPress={() => showModal(cell)}
+                cellSize={CELL_SIZE}
+              />
+            ))}
           </View>
         ))}
-      </View>
+      </Animated.View>
 
-      {/* Legend */}
+      
       <Modal
         visible={showLegend}
         transparent
@@ -364,11 +483,10 @@ const CalendarHeatmap = ({ expenses }) => {
         </Pressable>
       </Modal>
 
-      {/* Bottom Sheet */}
       <Modal
         visible={!!selected}
         transparent
-        animationType="fade"
+        animationType="none"
         onRequestClose={closeModal}
       >
         <Pressable
@@ -383,8 +501,8 @@ const CalendarHeatmap = ({ expenses }) => {
               styles.modalContent,
               {
                 backgroundColor: theme.colors.surface,
-                opacity: fadeAnim,
                 shadowColor: theme.colors.shadow,
+                transform: [{ translateY: slideAnim }],
               },
             ]}
           >
@@ -399,7 +517,7 @@ const CalendarHeatmap = ({ expenses }) => {
                 <Text
                   style={[styles.modalTitle, { color: theme.colors.primary }]}
                 >
-                  {formatDate(selected.dateStr)}
+                  {formatDate(selected.dateStr)} 
                 </Text>
                 <Text
                   style={[styles.modalAmount, { color: theme.colors.text }]}
@@ -498,22 +616,39 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.07,
     shadowRadius: 15,
     alignItems: "center",
+    overflow: "hidden",
   },
   headerRow: {
     width: "100%",
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "flex-end",
-    marginBottom: 6,
+    alignItems: "center",
+    marginBottom: 16,
   },
   title: {
     fontWeight: "800",
     fontSize: 22,
-    marginBottom: 2,
     letterSpacing: 0.3,
   },
   subtitle: { fontSize: 13, fontWeight: "500", marginTop: 2 },
-  legendBtn: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 8 },
+  navBtn: {
+    padding: 10,
+  },
+  navBtnText: {
+    fontSize: 20,
+    fontWeight: "bold",
+  },
+  legendBtn: {
+    position: "absolute",
+    top: 18,
+    right: 18,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: "center",
+    alignItems: "center",
+    elevation: 6,
+  },
   weekLabels: {
     width: "100%",
     flexDirection: "row",
@@ -530,9 +665,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1.5,
-    transitionProperty: "all",
-    transitionDuration: "180ms",
-    transitionTimingFunction: "ease-in-out",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 2,
   },
   cellText: { fontSize: 11, fontWeight: "600", letterSpacing: 0.2 },
   infoModalOverlay: { flex: 1, justifyContent: "center", alignItems: "center" },
