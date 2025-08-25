@@ -13,11 +13,15 @@ import {
   FlatList,
   StyleSheet,
   ActivityIndicator,
-  ScrollView,
   RefreshControl,
   Dimensions,
   Modal,
 } from "react-native";
+// MODIFICATION: Import DraggableFlatList and extra hooks/components
+import DraggableFlatList, {
+  ScaleDecorator,
+} from "react-native-draggable-flatlist";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
@@ -29,6 +33,9 @@ import {
   ArrowLeft,
   ArrowRight,
   Sparkles,
+  // MODIFICATION: Add new icons for the UI
+  LayoutGrid,
+  GripVertical,
 } from "lucide-react-native";
 import Carousel from "react-native-reanimated-carousel";
 import {
@@ -44,11 +51,12 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 const screenWidth = Dimensions.get("window").width;
 const screenHeight = Dimensions.get("window").height;
 
-// --- Onboarding Configuration (Redesigned for Contextual Tooltips) ---
+// --- Onboarding Configuration ---
+// ... (Your existing ONBOARDING_STEPS configuration remains unchanged)
 const ONBOARDING_STEPS = [
   {
     id: "welcome",
-    title: "Welcome to Expenso! �",
+    title: "Welcome to Expenso! ",
     description:
       "Let's quickly walk through the key features to get you started on managing your finances.",
     targetId: null, // No target for the welcome message
@@ -103,10 +111,19 @@ const ONBOARDING_STEPS = [
     position: "center",
   },
 ];
-
 const ONBOARDING_FLAG_KEY = "onboarding_completed";
 
-// --- Simple Reminder Card for Dashboard ---
+// --- MODIFICATION: Constants for layout persistence ---
+const LAYOUT_STORAGE_KEY = "@dashboard_layout_order";
+const DEFAULT_ORDER = [
+  { key: "stats", isVisible: true },
+  { key: "reminders", isVisible: true },
+  { key: "budgets", isVisible: true },
+  { key: "activity", isVisible: true },
+];
+
+// --- Sub-components (SimpleReminderCard, BudgetGridItem, etc.) remain unchanged ---
+// ... (Paste your existing SimpleReminderCard component here)
 const SimpleReminderCard = ({ item, onPress, theme }) => {
   const formatAmount = (amount) => {
     if (!amount) return "N/A";
@@ -173,8 +190,7 @@ const SimpleReminderCard = ({ item, onPress, theme }) => {
     </TouchableOpacity>
   );
 };
-
-// --- Redesigned Budget Grid Item ---
+// ... (Paste your existing BudgetGridItem component here)
 const BudgetGridItem = ({ item, theme, onPress, style }) => {
   const budgetAmount = Number(item.amount);
   const spentAmount = Number(item.spent);
@@ -234,8 +250,7 @@ const BudgetGridItem = ({ item, theme, onPress, style }) => {
     </TouchableOpacity>
   );
 };
-
-// --- Redesigned Onboarding Component ---
+// ... (Paste your existing DashboardOnboarding component here)
 const DashboardOnboarding = ({
   isVisible,
   onComplete,
@@ -259,13 +274,13 @@ const DashboardOnboarding = ({
         if (width > 0 || height > 0) {
           setTargetLayout({ x: pageX, y: pageY, width, height });
           // Scroll the target element into a comfortable view
-          if (scrollViewRef?.current?.scrollTo) {
+          if (scrollViewRef?.current?.scrollToOffset) {
             const yOffset =
               step.position === "top"
                 ? pageY - screenHeight * 0.5
                 : pageY - 150;
-            scrollViewRef.current.scrollTo({
-              y: Math.max(0, yOffset),
+            scrollViewRef.current.scrollToOffset({
+              offset: Math.max(0, yOffset),
               animated: true,
             });
           }
@@ -442,7 +457,7 @@ const DashboardOnboarding = ({
     </Modal>
   );
 };
-
+// ... (Paste your existing Avatar and SectionHeader components here)
 const Avatar = forwardRef(({ name, email, size = 50, style, onPress }, ref) => {
   const { theme } = useTheme();
   const initials = useMemo(() => {
@@ -504,7 +519,6 @@ const Avatar = forwardRef(({ name, email, size = 50, style, onPress }, ref) => {
     </TouchableOpacity>
   );
 });
-
 const SectionHeader = ({ title, theme }) => (
   <Text style={[styles.sectionHeader, { color: theme.colors.text }]}>
     {title}
@@ -516,7 +530,8 @@ export default function DashboardScreen({ navigation }) {
   const { theme } = useTheme();
   const route = useRoute();
   const targetRefs = useRef({});
-  const scrollViewRef = useRef(null);
+  // MODIFICATION: Use a ref for the DraggableFlatList
+  const flatListRef = useRef(null);
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -529,6 +544,10 @@ export default function DashboardScreen({ navigation }) {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [expenseToDelete, setExpenseToDelete] = useState(null);
   const [activeTab, setActiveTab] = useState("expenses");
+
+  // MODIFICATION: Add state for layout editing and component order
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [componentOrder, setComponentOrder] = useState(DEFAULT_ORDER);
 
   const TRANSACTION_THEME = useMemo(
     () => ({
@@ -544,6 +563,7 @@ export default function DashboardScreen({ navigation }) {
   }, []);
 
   const fetchData = useCallback(async () => {
+    // ... (fetchData logic remains the same)
     try {
       if (!session?.user?.id) return;
       const [
@@ -600,6 +620,7 @@ export default function DashboardScreen({ navigation }) {
   }, [fetchData]);
 
   const handleDelete = useCallback(async () => {
+    // ... (handleDelete logic remains the same)
     if (!expenseToDelete) return;
     setExpenses((prev) => prev.filter((exp) => exp.id !== expenseToDelete.id));
     await supabase.from("expenses").delete().eq("id", expenseToDelete.id);
@@ -615,6 +636,17 @@ export default function DashboardScreen({ navigation }) {
     useCallback(() => {
       const initialize = async () => {
         setLoading(true);
+
+        // MODIFICATION: Load layout from AsyncStorage
+        try {
+          const savedLayout = await AsyncStorage.getItem(LAYOUT_STORAGE_KEY);
+          if (savedLayout) {
+            setComponentOrder(JSON.parse(savedLayout));
+          }
+        } catch (e) {
+          console.error("Failed to load layout from storage.", e);
+        }
+
         await fetchData();
         setLoading(false);
         const hasCompleted = await AsyncStorage.getItem(ONBOARDING_FLAG_KEY);
@@ -628,6 +660,7 @@ export default function DashboardScreen({ navigation }) {
   );
 
   const { monthlyTotal, todayTotal } = useMemo(() => {
+    // ... (memoized calculation remains the same)
     const now = new Date();
     const todayStr = now.toISOString().slice(0, 10);
     let monthly = 0,
@@ -645,6 +678,7 @@ export default function DashboardScreen({ navigation }) {
   }, [expenses]);
 
   const budgetProgress = useMemo(() => {
+    // ... (memoized calculation remains the same)
     const getSpent = (category) =>
       expenses
         .filter((exp) => exp.category === category)
@@ -653,6 +687,7 @@ export default function DashboardScreen({ navigation }) {
   }, [budgets, expenses]);
 
   const budgetPairs = useMemo(() => {
+    // ... (memoized calculation remains the same)
     const pairs = [];
     for (let i = 0; i < budgetProgress.length; i += 2) {
       pairs.push(budgetProgress.slice(i, i + 2));
@@ -661,6 +696,7 @@ export default function DashboardScreen({ navigation }) {
   }, [budgetProgress]);
 
   const renderTransactionList = () => {
+    // ... (renderTransactionList logic remains the same)
     const dataMap = {
       expenses: expenses.slice(0, 5),
       income: incomes.slice(0, 5),
@@ -706,63 +742,10 @@ export default function DashboardScreen({ navigation }) {
     );
   };
 
-  if (loading)
-    return (
-      <View
-        style={[
-          styles.loadingContainer,
-          { backgroundColor: theme.colors.background },
-        ]}
-      >
-        <ActivityIndicator size="large" color={theme.colors.primary} />
-      </View>
-    );
-
-  return (
-    <>
-      <ScrollView
-        ref={scrollViewRef}
-        style={[styles.container, { backgroundColor: theme.colors.background }]}
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={[theme.colors.primary]}
-            tintColor={theme.colors.primary}
-          />
-        }
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.header}>
-          <View style={styles.headerContent}>
-            <Text style={[styles.welcomeText, { color: theme.colors.text }]}>
-              Good Morning, {profile?.full_name || "User"}!
-            </Text>
-          </View>
-          <View
-            style={styles.headerActions}
-            ref={(ref) => setTargetRef("header-actions", ref)}
-          >
-            <TouchableOpacity
-              onPress={() => navigation.navigate("SmartInsights")}
-              style={[
-                styles.headerIconContainer,
-                { backgroundColor: theme.colors.borderLight },
-              ]}
-            >
-              <Sparkles color={theme.colors.primary} size={22} />
-            </TouchableOpacity>
-
-            <Avatar
-              name={profile?.full_name}
-              email={profile?.email || session?.user?.email}
-              size={44}
-              onPress={() => navigation.navigate("Profile", { profile })}
-            />
-          </View>
-        </View>
-
+  // MODIFICATION: Map of components to render based on key
+  const componentsMap = useMemo(
+    () => ({
+      stats: (
         <View style={styles.statisticsContainer}>
           <View
             style={styles.statsContainer}
@@ -821,29 +804,29 @@ export default function DashboardScreen({ navigation }) {
             </View>
           )}
         </View>
-
-        {reminders.length > 0 && (
-          <View
-            style={styles.section}
-            ref={(ref) => setTargetRef("reminders-section", ref)}
-          >
-            <SectionHeader title="Upcoming Payments" theme={theme} />
-            <Carousel
-              width={screenWidth - 40}
-              height={90}
-              data={reminders}
-              loop={false}
-              renderItem={({ item }) => (
-                <SimpleReminderCard
-                  item={item}
-                  theme={theme}
-                  onPress={() => navigation.navigate("PaymentReminder")}
-                />
-              )}
-            />
-          </View>
-        )}
-
+      ),
+      reminders: reminders.length > 0 && (
+        <View
+          style={styles.section}
+          ref={(ref) => setTargetRef("reminders-section", ref)}
+        >
+          <SectionHeader title="Upcoming Payments" theme={theme} />
+          <Carousel
+            width={screenWidth - 40}
+            height={90}
+            data={reminders}
+            loop={false}
+            renderItem={({ item }) => (
+              <SimpleReminderCard
+                item={item}
+                theme={theme}
+                onPress={() => navigation.navigate("PaymentReminder")}
+              />
+            )}
+          />
+        </View>
+      ),
+      budgets: (
         <View
           style={styles.section}
           ref={(ref) => setTargetRef("budget-section", ref)}
@@ -891,7 +874,8 @@ export default function DashboardScreen({ navigation }) {
             </View>
           )}
         </View>
-
+      ),
+      activity: (
         <View
           style={styles.section}
           ref={(ref) => setTargetRef("recent-activity-section", ref)}
@@ -930,35 +914,179 @@ export default function DashboardScreen({ navigation }) {
           </View>
           {renderTransactionList()}
         </View>
-      </ScrollView>
+      ),
+    }),
+    [
+      theme,
+      monthlyTotal,
+      todayTotal,
+      expenses,
+      reminders,
+      budgetPairs,
+      activeTab,
+      navigation,
+      setTargetRef,
+      renderTransactionList,
+    ]
+  );
 
-      <FloatingTaskbar
-        theme={theme}
-        navigation={navigation}
-        setTargetRef={setTargetRef}
-      />
-      <DashboardOnboarding
-        isVisible={showOnboarding}
-        onComplete={completeOnboarding}
-        targetRefs={targetRefs.current}
-        scrollViewRef={scrollViewRef}
-      />
-      <Alert
-        open={!!expenseToDelete}
-        onConfirm={handleDelete}
-        onCancel={() => setExpenseToDelete(null)}
-        title="Delete Expense"
-        message={`Delete "${expenseToDelete?.title}"? This is permanent.`}
-        confirmText="Delete"
-        icon={<Trash2 color="#fff" size={32} />}
-        iconBg={theme.colors.error}
-        confirmColor={theme.colors.error}
-      />
-    </>
+  // MODIFICATION: Render item function for DraggableFlatList
+  const renderDashboardItem = useCallback(
+    ({ item, drag, isActive }) => {
+      const componentToRender = componentsMap[item.key];
+
+      if (!componentToRender) return null; // Don't render if component is null/false
+
+      return (
+        <ScaleDecorator>
+          <View
+            style={[
+              styles.draggableItemContainer,
+              isActive && { backgroundColor: theme.colors.borderLight },
+            ]}
+          >
+            {isEditMode && (
+              <TouchableOpacity
+                onLongPress={drag}
+                disabled={isActive}
+                style={styles.dragHandle}
+              >
+                <GripVertical size={24} color={theme.colors.textSecondary} />
+              </TouchableOpacity>
+            )}
+            <View style={{ flex: 1 }}>{componentToRender}</View>
+          </View>
+        </ScaleDecorator>
+      );
+    },
+    [componentsMap, isEditMode, theme]
+  );
+
+  if (loading)
+    return (
+      <View
+        style={[
+          styles.loadingContainer,
+          { backgroundColor: theme.colors.background },
+        ]}
+      >
+        <ActivityIndicator size="large" color={theme.colors.primary} />
+      </View>
+    );
+
+  return (
+    // MODIFICATION: Wrap the screen in GestureHandlerRootView
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <View
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
+      >
+        <DraggableFlatList
+          ref={flatListRef}
+          data={componentOrder.filter((item) => item.isVisible)}
+          renderItem={renderDashboardItem}
+          keyExtractor={(item) => item.key}
+          onDragEnd={async ({ data }) => {
+            setComponentOrder(data);
+            try {
+              await AsyncStorage.setItem(
+                LAYOUT_STORAGE_KEY,
+                JSON.stringify(data)
+              );
+            } catch (e) {
+              console.error("Failed to save layout.", e);
+            }
+          }}
+          // MODIFICATION: Add ListHeaderComponent for the static header
+          ListHeaderComponent={
+            <View style={styles.header}>
+              <View style={styles.headerContent}>
+                <Text
+                  style={[styles.welcomeText, { color: theme.colors.text }]}
+                >
+                  Good Morning, {profile?.full_name || "User"}!
+                </Text>
+              </View>
+              <View
+                style={styles.headerActions}
+                ref={(ref) => setTargetRef("header-actions", ref)}
+              >
+                <TouchableOpacity
+                  onPress={() => setIsEditMode(!isEditMode)}
+                  style={[
+                    styles.headerIconContainer,
+                    {
+                      backgroundColor: isEditMode
+                        ? theme.colors.primary
+                        : theme.colors.borderLight,
+                    },
+                  ]}
+                >
+                  <LayoutGrid
+                    color={isEditMode ? "#FFF" : theme.colors.primary}
+                    size={22}
+                  />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => navigation.navigate("SmartInsights")}
+                  style={[
+                    styles.headerIconContainer,
+                    { backgroundColor: theme.colors.borderLight },
+                  ]}
+                >
+                  <Sparkles color={theme.colors.primary} size={22} />
+                </TouchableOpacity>
+
+                <Avatar
+                  name={profile?.full_name}
+                  email={profile?.email || session?.user?.email}
+                  size={44}
+                  onPress={() => navigation.navigate("Profile", { profile })}
+                />
+              </View>
+            </View>
+          }
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[theme.colors.primary]}
+              tintColor={theme.colors.primary}
+            />
+          }
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        />
+
+        <FloatingTaskbar
+          theme={theme}
+          navigation={navigation}
+          setTargetRef={setTargetRef}
+        />
+        <DashboardOnboarding
+          isVisible={showOnboarding}
+          onComplete={completeOnboarding}
+          targetRefs={targetRefs.current}
+          scrollViewRef={flatListRef} // MODIFICATION: Pass flatListRef
+        />
+        <Alert
+          open={!!expenseToDelete}
+          onConfirm={handleDelete}
+          onCancel={() => setExpenseToDelete(null)}
+          title="Delete Expense"
+          message={`Delete "${expenseToDelete?.title}"? This is permanent.`}
+          confirmText="Delete"
+          icon={<Trash2 color="#fff" size={32} />}
+          iconBg={theme.colors.error}
+          confirmColor={theme.colors.error}
+        />
+      </View>
+    </GestureHandlerRootView>
   );
 }
 
 const styles = StyleSheet.create({
+  // ... (Your existing styles remain mostly the same)
   container: { flex: 1, backgroundColor: "#F9FBFC" },
   scrollContent: { paddingBottom: 100, paddingTop: 20 },
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
@@ -1218,5 +1346,16 @@ const styles = StyleSheet.create({
   simpleCardAmount: {
     fontSize: 16,
     fontWeight: "800",
+  },
+
+  // MODIFICATION: Add styles for draggable items
+  draggableItemContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  dragHandle: {
+    paddingHorizontal: 10,
+    justifyContent: "center",
+    alignItems: "center",
   },
 });
