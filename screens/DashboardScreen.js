@@ -17,7 +17,6 @@ import {
   Dimensions,
   Modal,
 } from "react-native";
-// MODIFICATION: Import DraggableFlatList and extra hooks/components
 import DraggableFlatList, {
   ScaleDecorator,
 } from "react-native-draggable-flatlist";
@@ -25,7 +24,6 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
-
 import Alert from "../components/Alert";
 import {
   Trash2,
@@ -33,16 +31,13 @@ import {
   ArrowLeft,
   ArrowRight,
   Sparkles,
-  // MODIFICATION: Add new icons for the UI
   LayoutGrid,
   GripVertical,
+  Eye,
+  EyeOff,
 } from "lucide-react-native";
 import Carousel from "react-native-reanimated-carousel";
-import {
-  useFocusEffect,
-  useRoute,
-  useNavigation,
-} from "@react-navigation/native";
+import { useFocusEffect, useRoute } from "@react-navigation/native";
 import CalendarHeatmap from "../components/Heatmap";
 import FloatingTaskbar from "../components/FloatingTaskbar";
 import TransactionItem from "../components/TransactionItem";
@@ -51,15 +46,26 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 const screenWidth = Dimensions.get("window").width;
 const screenHeight = Dimensions.get("window").height;
 
-// --- Onboarding Configuration ---
-// ... (Your existing ONBOARDING_STEPS configuration remains unchanged)
+const TAGLINES = [
+  "Let’s track your money 🚀",
+  "Your finances, at a glance 💡",
+  "Stay on top of every rupee 💸",
+  "Smart moves start here 📊",
+  "Your money, your control 🔑",
+  "Keep spending in check ✅",
+  "Budget smarter, live better 🌱",
+  "Money made simple ✨",
+  "Ready to master your finances? ⚡",
+  "Every expense counts 🧾",
+];
+
 const ONBOARDING_STEPS = [
   {
     id: "welcome",
     title: "Welcome to Expenso! ",
     description:
       "Let's quickly walk through the key features to get you started on managing your finances.",
-    targetId: null, // No target for the welcome message
+    targetId: null,
     position: "center",
   },
   {
@@ -68,7 +74,7 @@ const ONBOARDING_STEPS = [
     description:
       "Here, you can instantly see your total spending for the current month and today. No more guessing!",
     targetId: "stats-container",
-    position: "bottom", // Tooltip will appear below the element
+    position: "bottom",
   },
   {
     id: "heatmap",
@@ -84,7 +90,7 @@ const ONBOARDING_STEPS = [
     description:
       "Keep an eye on your category budgets here. We'll show you how much you have left to spend.",
     targetId: "budget-section",
-    position: "top", // Tooltip will appear above the element
+    position: "top",
   },
   {
     id: "recent-activity",
@@ -112,8 +118,6 @@ const ONBOARDING_STEPS = [
   },
 ];
 const ONBOARDING_FLAG_KEY = "onboarding_completed";
-
-// --- MODIFICATION: Constants for layout persistence ---
 const LAYOUT_STORAGE_KEY = "@dashboard_layout_order";
 const DEFAULT_ORDER = [
   { key: "stats", isVisible: true },
@@ -122,25 +126,20 @@ const DEFAULT_ORDER = [
   { key: "activity", isVisible: true },
 ];
 
-// --- Sub-components (SimpleReminderCard, BudgetGridItem, etc.) remain unchanged ---
-// ... (Paste your existing SimpleReminderCard component here)
 const SimpleReminderCard = ({ item, onPress, theme }) => {
-  const formatAmount = (amount) => {
-    if (!amount) return "N/A";
-    return `₹${parseFloat(amount).toLocaleString("en-IN", {
-      maximumFractionDigits: 0,
-    })}`;
-  };
-
+  const formatAmount = (amount) =>
+    amount
+      ? `₹${parseFloat(amount).toLocaleString("en-IN", {
+          maximumFractionDigits: 0,
+        })}`
+      : "N/A";
   const formatDate = (dateString) => {
     const date = new Date(dateString);
-    const day = date.getDate();
-    const month = date
-      .toLocaleString("default", { month: "short" })
-      .toUpperCase();
-    return { day, month };
+    return {
+      day: date.getDate(),
+      month: date.toLocaleString("default", { month: "short" }).toUpperCase(),
+    };
   };
-
   const { day, month } = formatDate(item.next_due_date);
   const priorityColor =
     item.priority === 1
@@ -148,7 +147,6 @@ const SimpleReminderCard = ({ item, onPress, theme }) => {
       : item.priority === 3
       ? theme.colors.success
       : theme.colors.warning;
-
   return (
     <TouchableOpacity
       onPress={onPress}
@@ -190,22 +188,19 @@ const SimpleReminderCard = ({ item, onPress, theme }) => {
     </TouchableOpacity>
   );
 };
-// ... (Paste your existing BudgetGridItem component here)
+
 const BudgetGridItem = ({ item, theme, onPress, style }) => {
   const budgetAmount = Number(item.amount);
   const spentAmount = Number(item.spent);
   const remaining = budgetAmount - spentAmount;
   const percent =
     budgetAmount > 0 ? Math.min((spentAmount / budgetAmount) * 100, 100) : 0;
-
-  const getStatusColor = () => {
-    if (percent >= 100) return theme.colors.error;
-    if (percent >= 75) return theme.colors.warning;
-    return theme.colors.success;
-  };
-
-  const statusColor = getStatusColor();
-
+  const statusColor =
+    percent >= 100
+      ? theme.colors.error
+      : percent >= 75
+      ? theme.colors.warning
+      : theme.colors.success;
   return (
     <TouchableOpacity
       onPress={onPress}
@@ -250,7 +245,7 @@ const BudgetGridItem = ({ item, theme, onPress, style }) => {
     </TouchableOpacity>
   );
 };
-// ... (Paste your existing DashboardOnboarding component here)
+
 const DashboardOnboarding = ({
   isVisible,
   onComplete,
@@ -264,16 +259,14 @@ const DashboardOnboarding = ({
   const measureAndScrollToTarget = useCallback(() => {
     const step = ONBOARDING_STEPS[currentStep];
     if (!step.targetId) {
-      setTargetLayout(null); // Center-aligned steps have no target
+      setTargetLayout(null);
       return;
     }
     const targetRef = targetRefs?.[step.targetId];
     if (targetRef && typeof targetRef.measure === "function") {
       targetRef.measure((x, y, width, height, pageX, pageY) => {
-        // Ensure measurement is valid before setting state
         if (width > 0 || height > 0) {
           setTargetLayout({ x: pageX, y: pageY, width, height });
-          // Scroll the target element into a comfortable view
           if (scrollViewRef?.current?.scrollToOffset) {
             const yOffset =
               step.position === "top"
@@ -291,7 +284,6 @@ const DashboardOnboarding = ({
 
   useEffect(() => {
     if (isVisible) {
-      // Delay measurement to allow UI to render
       const timer = setTimeout(measureAndScrollToTarget, 250);
       return () => clearTimeout(timer);
     }
@@ -309,7 +301,6 @@ const DashboardOnboarding = ({
   const handlePrevious = () =>
     currentStep > 0 && setCurrentStep(currentStep - 1);
 
-  // --- Dynamic Positioning Logic ---
   const highlightPosition = targetLayout
     ? {
         left: targetLayout.x - 8,
@@ -321,26 +312,22 @@ const DashboardOnboarding = ({
 
   const getTooltipPosition = () => {
     if (isCentered) return styles.onboardingTooltipCenter;
-
     const tooltipBaseStyle = {
       position: "absolute",
       left: 20,
       right: 20,
       marginHorizontal: "auto",
     };
-
-    if (step.position === "bottom") {
+    if (step.position === "bottom")
       return {
         ...tooltipBaseStyle,
         top: targetLayout.y + targetLayout.height + 12,
       };
-    }
-    if (step.position === "top") {
+    if (step.position === "top")
       return {
         ...tooltipBaseStyle,
         bottom: screenHeight - targetLayout.y + 12,
       };
-    }
     return styles.onboardingTooltipCenter;
   };
 
@@ -374,7 +361,7 @@ const DashboardOnboarding = ({
               backgroundColor: theme.colors.surface,
               borderColor: theme.colors.border,
             },
-            getTooltipPosition(), // Apply dynamic positioning
+            getTooltipPosition(),
           ]}
         >
           {!isCentered && (
@@ -394,7 +381,6 @@ const DashboardOnboarding = ({
               ]}
             />
           )}
-
           <TouchableOpacity style={styles.onboardingSkip} onPress={onComplete}>
             <X size={18} color={theme.colors.textSecondary} />
           </TouchableOpacity>
@@ -457,22 +443,24 @@ const DashboardOnboarding = ({
     </Modal>
   );
 };
-// ... (Paste your existing Avatar and SectionHeader components here)
+
 const Avatar = forwardRef(({ name, email, size = 50, style, onPress }, ref) => {
   const { theme } = useTheme();
-  const initials = useMemo(() => {
-    if (name && name.trim())
-      return name
-        .trim()
-        .split(" ")
-        .map((n) => n[0])
-        .join("")
-        .toUpperCase()
-        .slice(0, 2);
-    if (email) return email.charAt(0).toUpperCase();
-    return "U";
-  }, [name, email]);
-
+  const initials = useMemo(
+    () =>
+      name && name.trim()
+        ? name
+            .trim()
+            .split(" ")
+            .map((n) => n[0])
+            .join("")
+            .toUpperCase()
+            .slice(0, 2)
+        : email
+        ? email.charAt(0).toUpperCase()
+        : "U",
+    [name, email]
+  );
   const backgroundColor = useMemo(() => {
     const colors = [
       theme.colors.primary,
@@ -482,12 +470,10 @@ const Avatar = forwardRef(({ name, email, size = 50, style, onPress }, ref) => {
       theme.colors.primaryDark,
     ];
     let hash = 0;
-    for (let i = 0; i < (name || email || "").length; i++) {
+    for (let i = 0; i < (name || email || "").length; i++)
       hash = (name || email).charCodeAt(i) + ((hash << 5) - hash);
-    }
     return colors[Math.abs(hash) % colors.length];
   }, [name, email, theme]);
-
   return (
     <TouchableOpacity
       ref={ref}
@@ -519,6 +505,7 @@ const Avatar = forwardRef(({ name, email, size = 50, style, onPress }, ref) => {
     </TouchableOpacity>
   );
 });
+
 const SectionHeader = ({ title, theme }) => (
   <Text style={[styles.sectionHeader, { color: theme.colors.text }]}>
     {title}
@@ -530,9 +517,7 @@ export default function DashboardScreen({ navigation }) {
   const { theme } = useTheme();
   const route = useRoute();
   const targetRefs = useRef({});
-  // MODIFICATION: Use a ref for the DraggableFlatList
   const flatListRef = useRef(null);
-
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [profile, setProfile] = useState(null);
@@ -544,10 +529,9 @@ export default function DashboardScreen({ navigation }) {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [expenseToDelete, setExpenseToDelete] = useState(null);
   const [activeTab, setActiveTab] = useState("expenses");
-
-  // MODIFICATION: Add state for layout editing and component order
   const [isEditMode, setIsEditMode] = useState(false);
   const [componentOrder, setComponentOrder] = useState(DEFAULT_ORDER);
+  const [tagline, setTagline] = useState("");
 
   const TRANSACTION_THEME = useMemo(
     () => ({
@@ -563,53 +547,46 @@ export default function DashboardScreen({ navigation }) {
   }, []);
 
   const fetchData = useCallback(async () => {
-    // ... (fetchData logic remains the same)
     try {
       if (!session?.user?.id) return;
-      const [
-        profileRes,
-        expensesRes,
-        budgetsRes,
-        remindersRes,
-        incomesRes,
-        investmentsRes,
-      ] = await Promise.all([
-        supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", session.user.id)
-          .single(),
-        supabase
-          .from("expenses")
-          .select("*")
-          .eq("user_id", session.user.id)
-          .order("date", { ascending: false }),
-        supabase.from("budgets").select("*").eq("user_id", session.user.id),
-        supabase
-          .from("payment_reminders")
-          .select("*")
-          .eq("user_id", session.user.id)
-          .eq("is_active", true)
-          .order("next_due_date", { ascending: true }),
-        supabase
-          .from("side_incomes")
-          .select("*")
-          .eq("user_id", session.user.id)
-          .order("date", { ascending: false }),
-        supabase
-          .from("investments")
-          .select("*")
-          .eq("user_id", session.user.id)
-          .order("date", { ascending: false }),
-      ]);
-      if (profileRes.data) setProfile(profileRes.data);
-      if (expensesRes.data) setExpenses(expensesRes.data);
-      if (budgetsRes.data) setBudgets(budgetsRes.data);
-      if (remindersRes.data) setReminders(remindersRes.data);
-      if (incomesRes.data) setIncomes(incomesRes.data);
-      if (investmentsRes.data) setInvestments(investmentsRes.data);
-    } catch (error) {
-      console.error("Error fetching data:", error.message);
+      const { data: profileData } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", session.user.id)
+        .single();
+      const { data: expensesData } = await supabase
+        .from("expenses")
+        .select("*")
+        .eq("user_id", session.user.id)
+        .order("date", { ascending: false });
+      const { data: budgetsData } = await supabase
+        .from("budgets")
+        .select("*")
+        .eq("user_id", session.user.id);
+      const { data: remindersData } = await supabase
+        .from("payment_reminders")
+        .select("*")
+        .eq("user_id", session.user.id)
+        .eq("is_active", true)
+        .order("next_due_date", { ascending: true });
+      const { data: incomesData } = await supabase
+        .from("side_incomes")
+        .select("*")
+        .eq("user_id", session.user.id)
+        .order("date", { ascending: false });
+      const { data: investmentsData } = await supabase
+        .from("investments")
+        .select("*")
+        .eq("user_id", session.user.id)
+        .order("date", { ascending: false });
+      setProfile(profileData || null);
+      setExpenses(expensesData || []);
+      setBudgets(budgetsData || []);
+      setReminders(remindersData || []);
+      setIncomes(incomesData || []);
+      setInvestments(investmentsData || []);
+    } catch (err) {
+      console.error("Error fetching dashboard data:", err.message);
     }
   }, [session]);
 
@@ -620,11 +597,21 @@ export default function DashboardScreen({ navigation }) {
   }, [fetchData]);
 
   const handleDelete = useCallback(async () => {
-    // ... (handleDelete logic remains the same)
     if (!expenseToDelete) return;
-    setExpenses((prev) => prev.filter((exp) => exp.id !== expenseToDelete.id));
-    await supabase.from("expenses").delete().eq("id", expenseToDelete.id);
-    setExpenseToDelete(null);
+    try {
+      setExpenses((prev) =>
+        prev.filter((exp) => exp.id !== expenseToDelete.id)
+      );
+      const { error } = await supabase
+        .from("expenses")
+        .delete()
+        .eq("id", expenseToDelete.id);
+      if (error) throw error;
+    } catch (err) {
+      setExpenses((prev) => [...prev, expenseToDelete]);
+    } finally {
+      setExpenseToDelete(null);
+    }
   }, [expenseToDelete]);
 
   const completeOnboarding = async () => {
@@ -636,17 +623,10 @@ export default function DashboardScreen({ navigation }) {
     useCallback(() => {
       const initialize = async () => {
         setLoading(true);
-
-        // MODIFICATION: Load layout from AsyncStorage
         try {
           const savedLayout = await AsyncStorage.getItem(LAYOUT_STORAGE_KEY);
-          if (savedLayout) {
-            setComponentOrder(JSON.parse(savedLayout));
-          }
-        } catch (e) {
-          console.error("Failed to load layout from storage.", e);
-        }
-
+          if (savedLayout) setComponentOrder(JSON.parse(savedLayout));
+        } catch (e) {}
         await fetchData();
         setLoading(false);
         const hasCompleted = await AsyncStorage.getItem(ONBOARDING_FLAG_KEY);
@@ -654,18 +634,21 @@ export default function DashboardScreen({ navigation }) {
           setShowOnboarding(true);
           navigation.setParams({ showOnboarding: undefined });
         }
+        // 🎯 generate tagline once when screen loads
+        const randomTagline =
+          TAGLINES[Math.floor(Math.random() * TAGLINES.length)];
+        setTagline(randomTagline);
       };
       initialize();
     }, [fetchData, route.params?.showOnboarding, navigation])
   );
 
   const { monthlyTotal, todayTotal } = useMemo(() => {
-    // ... (memoized calculation remains the same)
     const now = new Date();
     const todayStr = now.toISOString().slice(0, 10);
     let monthly = 0,
       today = 0;
-    for (const exp of expenses) {
+    expenses.forEach((exp) => {
       const expDate = new Date(exp.date);
       if (
         expDate.getMonth() === now.getMonth() &&
@@ -673,12 +656,11 @@ export default function DashboardScreen({ navigation }) {
       )
         monthly += Number(exp.amount) || 0;
       if (exp.date === todayStr) today += Number(exp.amount) || 0;
-    }
+    });
     return { monthlyTotal: monthly, todayTotal: today };
   }, [expenses]);
 
   const budgetProgress = useMemo(() => {
-    // ... (memoized calculation remains the same)
     const getSpent = (category) =>
       expenses
         .filter((exp) => exp.category === category)
@@ -687,16 +669,22 @@ export default function DashboardScreen({ navigation }) {
   }, [budgets, expenses]);
 
   const budgetPairs = useMemo(() => {
-    // ... (memoized calculation remains the same)
     const pairs = [];
-    for (let i = 0; i < budgetProgress.length; i += 2) {
+    for (let i = 0; i < budgetProgress.length; i += 2)
       pairs.push(budgetProgress.slice(i, i + 2));
-    }
     return pairs;
   }, [budgetProgress]);
 
+  const resetLayout = async () => {
+    setComponentOrder(DEFAULT_ORDER);
+    await AsyncStorage.setItem(
+      LAYOUT_STORAGE_KEY,
+      JSON.stringify(DEFAULT_ORDER)
+    );
+    setIsEditMode(false);
+  };
+
   const renderTransactionList = () => {
-    // ... (renderTransactionList logic remains the same)
     const dataMap = {
       expenses: expenses.slice(0, 5),
       income: incomes.slice(0, 5),
@@ -742,7 +730,6 @@ export default function DashboardScreen({ navigation }) {
     );
   };
 
-  // MODIFICATION: Map of components to render based on key
   const componentsMap = useMemo(
     () => ({
       stats: (
@@ -930,13 +917,18 @@ export default function DashboardScreen({ navigation }) {
     ]
   );
 
-  // MODIFICATION: Render item function for DraggableFlatList
+  const toggleVisibility = async (key) => {
+    const updated = componentOrder.map((c) =>
+      c.key === key ? { ...c, isVisible: !c.isVisible } : c
+    );
+    setComponentOrder(updated);
+    await AsyncStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(updated));
+  };
+
   const renderDashboardItem = useCallback(
     ({ item, drag, isActive }) => {
       const componentToRender = componentsMap[item.key];
-
-      if (!componentToRender) return null; // Don't render if component is null/false
-
+      if (!componentToRender) return null;
       return (
         <ScaleDecorator>
           <View
@@ -946,15 +938,29 @@ export default function DashboardScreen({ navigation }) {
             ]}
           >
             {isEditMode && (
-              <TouchableOpacity
-                onLongPress={drag}
-                disabled={isActive}
-                style={styles.dragHandle}
-              >
-                <GripVertical size={24} color={theme.colors.textSecondary} />
-              </TouchableOpacity>
+              <View style={styles.editControls}>
+                <TouchableOpacity
+                  onLongPress={drag}
+                  disabled={isActive}
+                  style={styles.dragHandle}
+                >
+                  <GripVertical size={22} color={theme.colors.textSecondary} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => toggleVisibility(item.key)}
+                  style={styles.visibilityToggle}
+                >
+                  {item.isVisible ? (
+                    <EyeOff size={20} color={theme.colors.error} />
+                  ) : (
+                    <Eye size={20} color={theme.colors.success} />
+                  )}
+                </TouchableOpacity>
+              </View>
             )}
-            <View style={{ flex: 1 }}>{componentToRender}</View>
+            {item.isVisible && (
+              <View style={{ flex: 1 }}>{componentToRender}</View>
+            )}
           </View>
         </ScaleDecorator>
       );
@@ -975,41 +981,49 @@ export default function DashboardScreen({ navigation }) {
     );
 
   return (
-    // MODIFICATION: Wrap the screen in GestureHandlerRootView
     <GestureHandlerRootView style={{ flex: 1 }}>
       <View
         style={[styles.container, { backgroundColor: theme.colors.background }]}
       >
         <DraggableFlatList
           ref={flatListRef}
-          data={componentOrder.filter((item) => item.isVisible)}
+          data={componentOrder}
           renderItem={renderDashboardItem}
           keyExtractor={(item) => item.key}
           onDragEnd={async ({ data }) => {
             setComponentOrder(data);
-            try {
-              await AsyncStorage.setItem(
-                LAYOUT_STORAGE_KEY,
-                JSON.stringify(data)
-              );
-            } catch (e) {
-              console.error("Failed to save layout.", e);
-            }
+            await AsyncStorage.setItem(
+              LAYOUT_STORAGE_KEY,
+              JSON.stringify(data)
+            );
           }}
-          // MODIFICATION: Add ListHeaderComponent for the static header
           ListHeaderComponent={
             <View style={styles.header}>
-              <View style={styles.headerContent}>
+              <View style={styles.headerLeft}>
                 <Text
                   style={[styles.welcomeText, { color: theme.colors.text }]}
                 >
-                  Good Morning, {profile?.full_name || "User"}!
+                  Hi, {profile?.full_name || "User"}!
+                </Text>
+                <Text
+                  style={[
+                    styles.subText,
+                    { color: theme.colors.textSecondary },
+                  ]}
+                >
+                  {tagline}
                 </Text>
               </View>
-              <View
-                style={styles.headerActions}
-                ref={(ref) => setTargetRef("header-actions", ref)}
-              >
+
+              <View style={styles.headerRight}>
+                {isEditMode && (
+                  <TouchableOpacity
+                    onPress={resetLayout}
+                    style={styles.resetButton}
+                  >
+                    <Text style={styles.resetButtonText}>Reset</Text>
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity
                   onPress={() => setIsEditMode(!isEditMode)}
                   style={[
@@ -1057,7 +1071,6 @@ export default function DashboardScreen({ navigation }) {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         />
-
         <FloatingTaskbar
           theme={theme}
           navigation={navigation}
@@ -1067,7 +1080,7 @@ export default function DashboardScreen({ navigation }) {
           isVisible={showOnboarding}
           onComplete={completeOnboarding}
           targetRefs={targetRefs.current}
-          scrollViewRef={flatListRef} // MODIFICATION: Pass flatListRef
+          scrollViewRef={flatListRef}
         />
         <Alert
           open={!!expenseToDelete}
@@ -1086,37 +1099,59 @@ export default function DashboardScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  // ... (Your existing styles remain mostly the same)
   container: { flex: 1, backgroundColor: "#F9FBFC" },
   scrollContent: { paddingBottom: 100, paddingTop: 20 },
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
-  // Redesigned Header
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: Math.max(screenWidth * 0.05, 16),
-    paddingTop: Math.max(screenHeight * 0.0, 45), // Increased top padding
+    paddingTop: Math.max(screenHeight * 0.0, 45),
     paddingBottom: Math.max(screenHeight * 0.03, 18),
-    backgroundColor: "transparent", // Make header blend with background
   },
   headerContent: { flex: 1 },
-  welcomeText: {
-    fontSize: Math.max(Math.min(screenWidth * 0.06, 26), 18), // Larger font size
-    fontWeight: "800", // Bolder
-    letterSpacing: -0.5,
+  headerLeft: {
+    flex: 1,
+    paddingRight: 12,
   },
-  headerActions: {
+
+  headerRight: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    gap: 10,
   },
+
+  welcomeText: {
+    fontSize: Math.max(Math.min(screenWidth * 0.06, 26), 18),
+    fontWeight: "800",
+    letterSpacing: -0.5,
+  },
+  subText: {
+    fontSize: 14,
+    fontWeight: "500",
+    marginTop: 4,
+  },
+  headerActions: { flexDirection: "row", alignItems: "center", gap: 12 },
   headerIconContainer: {
     width: 44,
     height: 44,
     borderRadius: 22,
     justifyContent: "center",
     alignItems: "center",
+  },
+  resetButton: {
+    backgroundColor: "red",
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  resetButtonText: {
+    color: "#FFF",
+    fontWeight: "700",
+    fontSize: 12,
   },
   statisticsContainer: {
     flexDirection: "column",
@@ -1173,11 +1208,10 @@ const styles = StyleSheet.create({
     paddingVertical: 24,
     fontStyle: "italic",
   },
-  // Budget Carousel Styles
   budgetCarouselItemContainer: {
     flexDirection: "row",
     justifyContent: "space-between",
-    paddingVertical: 4, // Add vertical padding to show shadow
+    paddingVertical: 4,
   },
   budgetGridItem: {
     borderRadius: 16,
@@ -1188,28 +1222,15 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 10,
   },
-  budgetItemCategory: {
-    fontSize: 14,
-    fontWeight: "600",
-    marginBottom: 8,
-  },
-  budgetItemRemaining: {
-    fontSize: 22,
-    fontWeight: "800",
-    letterSpacing: -0.5,
-  },
-  budgetItemLabel: {
-    fontSize: 12,
-    marginBottom: 12,
-  },
+  budgetItemCategory: { fontSize: 14, fontWeight: "600", marginBottom: 8 },
+  budgetItemRemaining: { fontSize: 22, fontWeight: "800", letterSpacing: -0.5 },
+  budgetItemLabel: { fontSize: 12, marginBottom: 12 },
   budgetItemProgressBarTrack: {
     height: 6,
     borderRadius: 3,
     overflow: "hidden",
   },
-  budgetItemProgressBarFill: {
-    height: "100%",
-  },
+  budgetItemProgressBarFill: { height: "100%" },
   tabContainer: {
     flexDirection: "row",
     borderRadius: 12,
@@ -1223,12 +1244,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   tabText: { fontSize: 14, fontWeight: "600" },
-
-  // --- Redesigned Onboarding Styles ---
-  onboardingOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(15, 23, 42, 0.85)",
-  },
+  onboardingOverlay: { flex: 1, backgroundColor: "rgba(15, 23, 42, 0.85)" },
   onboardingHighlight: {
     position: "absolute",
     borderRadius: 16,
@@ -1249,7 +1265,7 @@ const styles = StyleSheet.create({
     top: "50%",
     left: 20,
     right: 20,
-    transform: [{ translateY: -100 }], // Adjust based on tooltip height
+    transform: [{ translateY: -100 }],
   },
   onboardingSkip: {
     position: "absolute",
@@ -1295,16 +1311,8 @@ const styles = StyleSheet.create({
     borderLeftColor: "transparent",
     borderRightColor: "transparent",
   },
-  tooltipArrowUp: {
-    // For tooltips at the bottom, arrow points up
-    borderBottomWidth: 10,
-  },
-  tooltipArrowDown: {
-    // For tooltips at the top, arrow points down
-    borderTopWidth: 10,
-  },
-
-  // Styles for SimpleReminderCard
+  tooltipArrowUp: { borderBottomWidth: 10 },
+  tooltipArrowDown: { borderTopWidth: 10 },
   simpleCard: {
     borderRadius: 16,
     elevation: 2,
@@ -1314,7 +1322,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     overflow: "hidden",
     borderWidth: 1,
-    height: 80, // Set a fixed height for consistency in the carousel
+    height: 80,
   },
   simpleCardDate: {
     paddingHorizontal: 16,
@@ -1322,10 +1330,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderLeftWidth: 5,
   },
-  simpleCardDay: {
-    fontSize: 24,
-    fontWeight: "800",
-  },
+  simpleCardDay: { fontSize: 24, fontWeight: "800" },
   simpleCardMonth: {
     fontSize: 12,
     fontWeight: "700",
@@ -1338,23 +1343,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     justifyContent: "center",
   },
-  simpleCardTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    marginBottom: 6,
-  },
-  simpleCardAmount: {
-    fontSize: 16,
-    fontWeight: "800",
-  },
-
-  // MODIFICATION: Add styles for draggable items
-  draggableItemContainer: {
-    flexDirection: "row",
+  simpleCardTitle: { fontSize: 16, fontWeight: "700", marginBottom: 6 },
+  simpleCardAmount: { fontSize: 16, fontWeight: "800" },
+  draggableItemContainer: { flexDirection: "row", alignItems: "center" },
+  editControls: { flexDirection: "row", alignItems: "center", marginRight: 8 },
+  dragHandle: {
+    paddingHorizontal: 8,
+    justifyContent: "center",
     alignItems: "center",
   },
-  dragHandle: {
-    paddingHorizontal: 10,
+  visibilityToggle: {
+    paddingHorizontal: 6,
     justifyContent: "center",
     alignItems: "center",
   },
