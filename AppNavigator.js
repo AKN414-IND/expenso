@@ -3,7 +3,6 @@ import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { ActivityIndicator, View } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import { useAuth } from "./context/AuthContext";
 import { navigationRef } from "./navigation";
@@ -60,7 +59,6 @@ export default function AppNavigator() {
   }
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
       <NavigationContainer ref={navigationRef}>
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           {!hasCompletedOnboarding ? (
@@ -98,6 +96,5 @@ export default function AppNavigator() {
           )}
         </Stack.Navigator>
       </NavigationContainer>
-    </GestureHandlerRootView>
   );
 }

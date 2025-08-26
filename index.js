@@ -1,5 +1,4 @@
-// index.js
-import 'react-native-gesture-handler'; // MUST be first import
+import 'react-native-gesture-handler'; 
 import React from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { registerRootComponent } from 'expo';
@@ -14,5 +13,4 @@ function Root() {
   );
 }
 
-// Works for Expo Go and native builds
 registerRootComponent(Root);
