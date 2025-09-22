@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -26,9 +26,7 @@ import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import Toast from "react-native-toast-message";
 import { useTheme } from "../context/ThemeContext";
-// Recommendation: For amount fields, consider using a library like 'react-native-currency-input'.
-// It provides formatting and validation out of the box, improving user experience and data consistency.
-// import CurrencyInput from 'react-native-currency-input';
+import { useRoute } from "@react-navigation/native";
 
 const { width, height } = Dimensions.get("window");
 
@@ -184,7 +182,12 @@ const CategoryModal = ({ visible, onClose, onSelect, theme }) => (
 export default function AIExpenseScreen({ navigation }) {
   const { session } = useAuth();
   const { theme } = useTheme();
-  const [activeTab, setActiveTab] = useState("ai");
+  const route = useRoute();
+  const { transaction, screen } = route.params || {};
+
+  const [activeTab, setActiveTab] = useState("manual");
+  
+  const [editingTransaction, setEditingTransaction] = useState(transaction);
 
   // State for AI Scanner
   const [image, setImage] = useState(null);
@@ -208,6 +211,24 @@ export default function AIExpenseScreen({ navigation }) {
 
   const tabAnim = useRef(new Animated.Value(0)).current;
 
+  useEffect(() => {
+    if (editingTransaction) {
+      if (screen === 'expenses') {
+        setActiveTab('manual');
+        setTitle(editingTransaction.title);
+        setAmount(String(editingTransaction.amount));
+        const initialCategory = CATEGORIES.find(c => c.id === editingTransaction.category);
+        setCategory(initialCategory);
+        setDate(new Date(editingTransaction.date));
+      } else if (screen === 'income') {
+        setActiveTab('income');
+        setIncomeSource(editingTransaction.source);
+        setIncomeAmount(String(editingTransaction.amount));
+        setDate(new Date(editingTransaction.date));
+      }
+    }
+  }, [editingTransaction, screen]);
+  
   useEffect(() => {
     Animated.timing(tabAnim, {
       toValue: activeTab === "ai" ? 0 : activeTab === "manual" ? 1 : 2,
@@ -334,7 +355,7 @@ export default function AIExpenseScreen({ navigation }) {
       };
     } else {
       // Income
-      table = "side_incomes";
+      table = "income";
       successMessage = "Income Saved!";
       if (!incomeSource.trim() || !incomeAmount) {
         Toast.show({
@@ -353,10 +374,15 @@ export default function AIExpenseScreen({ navigation }) {
     }
 
     try {
-      const { error } = await supabase
-        .from(table)
-        .insert([{ ...dataToSave, user_id: session.user.id }]);
-      if (error) throw error;
+        let error;
+        if(editingTransaction) {
+            ({ error } = await supabase.from(table).update(dataToSave).eq('id', editingTransaction.id));
+            successMessage = `${activeTab === 'expenses' ? 'Expense' : 'Income'} Updated!`;
+        } else {
+            ({ error } = await supabase.from(table).insert([{ ...dataToSave, user_id: session.user.id }]));
+        }
+
+        if (error) throw error;
 
       Toast.show({ type: "success", text1: "Success!", text2: successMessage });
       resetForm();
@@ -377,6 +403,7 @@ export default function AIExpenseScreen({ navigation }) {
     setDate(new Date());
     setIncomeSource("");
     setIncomeAmount("");
+    setEditingTransaction(null);
   };
 
   const handleDateChange = (event, selectedDate) => {
@@ -602,7 +629,7 @@ export default function AIExpenseScreen({ navigation }) {
           <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: theme.colors.text }]}>
-          Add Entry
+          {editingTransaction ? 'Edit' : 'Add'} Entry
         </Text>
         <TouchableOpacity onPress={resetForm}>
           <Ionicons name="refresh" size={24} color={theme.colors.primary} />
@@ -668,7 +695,7 @@ export default function AIExpenseScreen({ navigation }) {
             <ActivityIndicator color="#fff" />
           ) : (
             <Text style={styles.actionButtonText}>
-              Save {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}
+              {editingTransaction ? 'Update' : 'Save'} {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}
             </Text>
           )}
         </TouchableOpacity>
