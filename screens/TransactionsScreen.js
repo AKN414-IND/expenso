@@ -10,6 +10,7 @@ import {
   RefreshControl,
   Dimensions,
   Modal,
+  Switch,
 } from "react-native";
 import {
   ArrowLeft,
@@ -553,6 +554,7 @@ export default function TransactionsScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState("expenses");
   const [data, setData] = useState({ expenses: [], income: [] });
+  const [showAll, setShowAll] = useState(false);
 
   const [filters, setFilters] = useState({
     searchQuery: "",
@@ -580,7 +582,7 @@ export default function TransactionsScreen({ navigation }) {
     },
     income: {
       title: "Income",
-      table: "side_incomes",
+      table: "income",
       data: data.income,
       titleKey: "source",
       categoryKey: "source",
@@ -595,10 +597,34 @@ export default function TransactionsScreen({ navigation }) {
   const fetchData = useCallback(async () => {
     try {
       const userId = session.user.id;
+
+      const now = new Date();
+      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+      const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+      const expensesQuery = supabase
+        .from("expenses")
+        .select("*")
+        .eq("user_id", userId);
+      const incomeQuery = supabase
+        .from("income")
+        .select("*")
+        .eq("user_id", userId);
+
+      if (!showAll) {
+        expensesQuery
+          .gte("date", firstDay.toISOString().split("T")[0])
+          .lte("date", lastDay.toISOString().split("T")[0]);
+        incomeQuery
+          .gte("date", firstDay.toISOString().split("T")[0])
+          .lte("date", lastDay.toISOString().split("T")[0]);
+      }
+
       const [expensesRes, incomesRes] = await Promise.all([
-        supabase.from("expenses").select("*").eq("user_id", userId),
-        supabase.from("side_incomes").select("*").eq("user_id", userId),
+        expensesQuery,
+        incomeQuery,
       ]);
+
       if (expensesRes.error) throw expensesRes.error;
       if (incomesRes.error) throw incomesRes.error;
       setData({
@@ -616,7 +642,7 @@ export default function TransactionsScreen({ navigation }) {
     } finally {
       setLoading(false);
     }
-  }, [session.user.id]);
+  }, [session.user.id, showAll]);
 
   useEffect(() => {
     fetchData();
@@ -869,6 +895,20 @@ export default function TransactionsScreen({ navigation }) {
             })}
           </Text>
         </View>
+        <View style={styles.showAllContainer}>
+          <Text style={{ color: theme.colors.textSecondary }}>
+            Show All Transactions
+          </Text>
+          <Switch
+            value={showAll}
+            onValueChange={setShowAll}
+            trackColor={{
+              false: "#767577",
+              true: theme.colors.primary,
+            }}
+            thumbColor={"#f4f3f4"}
+          />
+        </View>
       </View>
 
       {/* Search + Filter */}
@@ -1024,17 +1064,33 @@ const createStyles = (theme) =>
     },
     tabText: { fontSize: 14, fontWeight: "600" },
 
-    summaryCard: { margin: 16, borderWidth: 1, borderRadius: 16, padding: 16 },
+    summaryCard: {
+      marginHorizontal: 20,
+      marginTop: 20,
+      borderRadius: 16,
+      padding: 20,
+      elevation: 3,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 5,
+    },
     summaryItem: { alignItems: "center" },
     summaryLabel: { fontSize: 12, marginBottom: 6 },
     summaryAmount: { fontSize: 22, fontWeight: "700" },
+    showAllContainer: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginTop: 20,
+    },
 
     searchContainer: {
       flexDirection: "row",
       alignItems: "center",
-      paddingHorizontal: 16,
-      marginBottom: 8,
-      gap: 10,
+      paddingHorizontal: 20,
+      paddingTop: 20,
+      paddingBottom: 10,
+      gap: 12,
     },
     searchBar: {
       flex: 1,
@@ -1076,7 +1132,7 @@ const createStyles = (theme) =>
     activeFilterText: { color: "#fff", fontSize: 12, fontWeight: "600" },
     removeFilterText: { color: "#fff", fontWeight: "700" },
 
-    listContainer: { padding: 16 },
+    listContainer: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 20 },
 
     card: { borderWidth: 1, borderRadius: 16, padding: 14, marginBottom: 12 },
     cardHeader: { flexDirection: "row", alignItems: "center" },
