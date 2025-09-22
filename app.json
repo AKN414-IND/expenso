@@ -35,6 +35,9 @@
         "projectId": "ffcd4a17-0d3d-4421-87b1-ffcad1deb8f4"
       }
     },
-    "owner": "arunknair2003"
+    "owner": "arunknair2003",
+    "plugins": [
+      "expo-secure-store"
+    ]
   }
 }

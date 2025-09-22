@@ -1,3 +1,4 @@
+// screens/DashboardScreen.js
 import React, {
   useEffect,
   useState,
@@ -570,7 +571,7 @@ export default function DashboardScreen({ navigation }) {
         .eq("is_active", true)
         .order("next_due_date", { ascending: true });
       const { data: incomesData } = await supabase
-        .from("side_incomes")
+        .from("income")
         .select("*")
         .eq("user_id", session.user.id)
         .order("date", { ascending: false });
@@ -634,7 +635,6 @@ export default function DashboardScreen({ navigation }) {
           setShowOnboarding(true);
           navigation.setParams({ showOnboarding: undefined });
         }
-        // 🎯 generate tagline once when screen loads
         const randomTagline =
           TAGLINES[Math.floor(Math.random() * TAGLINES.length)];
         setTagline(randomTagline);
