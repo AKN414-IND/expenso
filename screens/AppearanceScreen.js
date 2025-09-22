@@ -1,4 +1,3 @@
-// screens/AppearanceScreen.js
 import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform } from "react-native";
 import { useTheme } from "../context/ThemeContext";
@@ -14,7 +13,6 @@ const themeOptions = [
 ];
 
 const ThemeCard = ({ themeKey, name, selected, onPress, baseTheme }) => {
-  // Use a temporary theme object for styling the card preview
   const previewTheme = {
     ...baseTheme,
     colors: {
@@ -24,7 +22,7 @@ const ThemeCard = ({ themeKey, name, selected, onPress, baseTheme }) => {
           themeKey === 'sunset' ? { background: '#fdf8f2', primary: '#f97316', surface: '#ffffff' } :
           themeKey === 'classic' ? { background: '#f8fafc', primary: '#3b82f6', surface: '#ffffff' } :
           themeKey === 'neon' ? { background: '#0c0a0e', primary: '#7c3aed', surface: '#1f1c25' } :
-          { background: '#f5f7fa', primary: '#127f73', surface: '#ffffff' }) // Light
+          { background: '#f5f7fa', primary: '#127f73', surface: '#ffffff' }) 
     }
   };
   
